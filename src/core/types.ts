@@ -9,8 +9,8 @@ export type MappingSystemId = 'carto' | 'ensite' | 'opal';
 /** 不整脈シナリオ */
 export type ArrhythmiaId = 'af' | 'afl_cti' | 'avnrt' | 'wpw';
 
-/** 心腔 */
-export type ChamberId = 'LA' | 'RA' | 'LV' | 'RV' | 'CS';
+/** 心腔（BIATRIAL = LA と RA を連結した 1 つのメッシュ） */
+export type ChamberId = 'LA' | 'RA' | 'LV' | 'RV' | 'CS' | 'BIATRIAL';
 
 /** アブレーションのエネルギー */
 export type EnergyId = 'rf' | 'cryo' | 'pfa';
@@ -21,7 +21,7 @@ export type GeometryMode = 'acquire' | 'preset';
 export interface Vec3 { x: number; y: number; z: number }
 
 /** EGM パネルのチャンネル群（並び順・配色の単位） */
-export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'abl' | 'rv';
+export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'map' | 'abl' | 'rv';
 
 /** 体表 ECG の誘導数（12 誘導は Phase 7） */
 export type EcgLeadCount = 1 | 3 | 12;
@@ -41,6 +41,25 @@ export interface SurfaceMesh {
   /** 解剖ラベル（PV 口、CTI、Koch 三角、弁輪など）。頂点 → ラベル ID */
   regionOfVertex: Uint8Array;
   regionNames: string[];
+  /** 複数の心腔をまとめたメッシュの内訳（頂点・三角形の範囲） */
+  parts?: MeshPart[];
+  /** 心房間の連結（三角形をもたない隣接辺。伝播にだけ効く） */
+  bridges?: InterAtrialBridge[];
+}
+
+export interface MeshPart {
+  chamber: ChamberId;
+  vertexStart: number;
+  vertexCount: number;
+  /** indices 配列内の開始位置と長さ（三角形数 × 3） */
+  indexStart: number;
+  indexCount: number;
+}
+
+export interface InterAtrialBridge {
+  name: 'bachmann' | 'fossa_rim' | 'cs_musculature';
+  /** [RA の頂点, LA の頂点] の組 */
+  pairs: [number, number][];
 }
 
 /** 頂点ごとの電気生理状態（セルオートマトン） */
@@ -85,11 +104,10 @@ export interface Electrode {
 
 /**
  * カテーテルの信号源。
- *  - mesh: 表示中の心腔メッシュ上に置かれ、φ モデルで EGM を計算する
- *  - synthetic: 房室伝導モデルのタイミングからテンプレート合成（His・RV）
- *  - outside: 表示中の心腔にない（例: LA 症例の HRA）。EGM は平坦
+ *  - mesh: 心房メッシュ上に置かれ、φ モデルで EGM を計算する（His は H・V を合成で加える）
+ *  - synthetic: 房室伝導モデルのタイミングからテンプレート合成（RV。心室はメッシュを持たない）
  */
-export type CatheterSource = 'mesh' | 'synthetic' | 'outside';
+export type CatheterSource = 'mesh' | 'synthetic';
 
 export interface Catheter {
   id: string;
@@ -99,6 +117,8 @@ export interface Catheter {
   /** 対になる双極チャンネル（電極 index の組） */
   bipoles: [number, number][];
   source: CatheterSource;
+  /** 置かれているか（自由配置のカテーテルは置くまで EGM を出さない） */
+  placed: boolean;
 }
 
 /** 固定長リングバッファ（実装は core/egm/RingBuffer.ts） */
@@ -146,11 +166,17 @@ export type TachycardiaState =
   | 'terminated'
   | 'noninducible';
 
+/** 解剖寸法のセット（core/geometry/parametric/dimensions.ts） */
+export type AnatomyDimensionSet = 'normal' | 'afRemodeled';
+
 /** シナリオ（不整脈ごとの基質定義と判定ロジック） */
 export interface ArrhythmiaScenario {
   id: ArrhythmiaId;
   label: string;
+  /** 主に表示する心腔（シミュレーションは常に両心房） */
   chambers: ChamberId[];
+  /** 使う解剖寸法（AF は afRemodeled、それ以外は normal） */
+  anatomy: AnatomyDimensionSet;
   /** メッシュに基質（遅伝導路、副伝導路、PV トリガーなど）を設定する */
   setupSubstrate(mesh: SurfaceMesh, tissue: TissueState): void;
   /** 誘発プロトコル（期外刺激・バースト）に対して頻拍が始まるかを返す */

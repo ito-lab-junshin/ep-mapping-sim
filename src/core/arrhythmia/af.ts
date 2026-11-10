@@ -11,6 +11,7 @@ export const afScenario: ArrhythmiaScenario = {
   id: 'af',
   label: '心房細動（PVI）',
   chambers: ['LA'],
+  anatomy: 'afRemodeled',
   setupSubstrate: () => { /* TODO */ },
   tryInduce: () => false,
   isCured: () => false,

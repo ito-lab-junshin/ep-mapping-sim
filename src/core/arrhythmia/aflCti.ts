@@ -11,6 +11,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   id: 'afl_cti',
   label: '通常型心房粗動（CTI）',
   chambers: ['RA'],
+  anatomy: 'normal',
   setupSubstrate: () => { /* TODO */ },
   tryInduce: () => false,
   isCured: () => false,

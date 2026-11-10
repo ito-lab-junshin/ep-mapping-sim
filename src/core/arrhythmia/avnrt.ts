@@ -11,6 +11,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
   id: 'avnrt',
   label: 'AVNRT（遅伝導路）',
   chambers: ['RA'],
+  anatomy: 'normal',
   setupSubstrate: () => { /* TODO */ },
   tryInduce: () => false,
   isCured: () => false,

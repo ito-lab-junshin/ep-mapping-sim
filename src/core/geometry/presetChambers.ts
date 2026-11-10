@@ -3,10 +3,8 @@ import { buildNeighbors } from './buildNeighbors';
 import { weldVertices } from './weldVertices';
 
 /**
- * プリセット心腔メッシュ（開発初期用の楕円体）。
- * TODO(Phase 2): 解剖学的 LA（4 本の PV 口・LAA・僧帽弁輪）と RA（CTI・Koch 三角・
- *   三尖弁輪・CS 口）をもつ glTF を src/data/ に置き、ここで読み込む。
- *   領域ラベル（regionOfVertex）はメッシュ側の頂点カラーまたは別ファイルで与える。
+ * 楕円体メッシュ（単体テスト用の簡易形状）。
+ * 解剖メッシュは parametric/atria.ts（ChamberLoader 経由）を使う。
  */
 export function makeEllipsoidChamber(
   chamber: ChamberId,
@@ -47,6 +45,3 @@ export function makeEllipsoidChamber(
     regionNames: ['atrial_myocardium'],
   };
 }
-
-export const PRESET_LA = () => makeEllipsoidChamber('LA', { x: 22, y: 20, z: 24 });
-export const PRESET_RA = () => makeEllipsoidChamber('RA', { x: 24, y: 26, z: 22 });

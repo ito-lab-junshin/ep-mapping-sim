@@ -11,6 +11,7 @@ export const wpwScenario: ArrhythmiaScenario = {
   id: 'wpw',
   label: 'WPW・副伝導路',
   chambers: ['LA'],
+  anatomy: 'normal',
   setupSubstrate: () => { /* TODO */ },
   tryInduce: () => false,
   isCured: () => false,
