@@ -39,7 +39,8 @@ npm run build    # tsc -b && vite build
 ## 現在の状態
 
 - Phase 0 完了：雛形・CI（GitHub Pages）・設計書・楕円体メッシュ上のセルオートマトン・テーマ切り替え。
-- 次は **Phase 1（EGM パネル）**。`src/core/egm/EgmGenerator.ts` の出力を `src/ui/EgmPanel.tsx` の Canvas に描く。
+- Phase 1 完了：φ モデルの EGM（`src/core/egm`）、房室伝導（`src/core/conduction`）、体表 ECG（`src/core/ecg`、1・3 誘導、T 波あり）、`SimulationEngine`（`src/core/sim`）、EGM パネル（スイープ・ゲイン・フリーズ・キャリパー）、スライダーによるカテーテル配置。
+- 次は **Phase 2（カテーテル配置・パラメトリック解剖メッシュ）**。Phase 1 の仮実装（`src/core/geometry/landmarks.ts`、His の合成、LA 症例の HRA「心腔外」、スライダー配置）を置き換える。
 
 ## 決定済み事項（再確認不要）
 
