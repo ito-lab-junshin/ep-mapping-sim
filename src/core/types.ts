@@ -20,6 +20,15 @@ export type GeometryMode = 'acquire' | 'preset';
 
 export interface Vec3 { x: number; y: number; z: number }
 
+/** EGM パネルのチャンネル群（並び順・配色の単位） */
+export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'abl' | 'rv';
+
+/** 体表 ECG の誘導数（12 誘導は Phase 7） */
+export type EcgLeadCount = 1 | 3 | 12;
+
+/** 体表 ECG の誘導（Phase 1 は I・II・V1） */
+export type EcgLead = 'I' | 'II' | 'V1';
+
 /**
  * 心臓表面メッシュ。頂点ごとに電気生理パラメータを持ち、
  * セルオートマトンの「セル」= 頂点 として扱う。
@@ -70,7 +79,17 @@ export interface Electrode {
   position: Vec3;
   /** 接触している頂点 index（-1 = 非接触、血中） */
   contactVertex: number;
+  /** 心内膜面からの距離 mm（≦ 2 mm で接触とみなす） */
+  heightMm: number;
 }
+
+/**
+ * カテーテルの信号源。
+ *  - mesh: 表示中の心腔メッシュ上に置かれ、φ モデルで EGM を計算する
+ *  - synthetic: 房室伝導モデルのタイミングからテンプレート合成（His・RV）
+ *  - outside: 表示中の心腔にない（例: LA 症例の HRA）。EGM は平坦
+ */
+export type CatheterSource = 'mesh' | 'synthetic' | 'outside';
 
 export interface Catheter {
   id: string;
@@ -79,15 +98,29 @@ export interface Catheter {
   electrodes: Electrode[];
   /** 対になる双極チャンネル（電極 index の組） */
   bipoles: [number, number][];
+  source: CatheterSource;
 }
 
-/** 心内心電図 1 チャンネル */
+/** 固定長リングバッファ（実装は core/egm/RingBuffer.ts） */
+export interface SampleBuffer {
+  readonly capacity: number;
+  readonly length: number;
+  push(x: number): void;
+  /** 古い順の i 番目（0 = 最古） */
+  at(i: number): number;
+  clear(): void;
+}
+
+/** 心内心電図 1 チャンネル（体表 ECG もここに含める） */
 export interface EgmChannel {
-  id: string;         // 例: "CS 9-10", "ABL d", "HIS p"
+  id: string;         // 例: "CS 9-10", "ABL d", "HIS p", "II"
+  /** 体表 ECG は 'ecg' */
   catheterId: string;
-  mode: 'bipolar' | 'unipolar';
-  /** 直近 N サンプルのリングバッファ（mV） */
-  buffer: Float32Array;
+  group: ChannelGroup;
+  mode: 'bipolar' | 'unipolar' | 'surface';
+  /** 直近 N サンプル（mV）。サンプル間隔は SimulationEngine.sampleMs */
+  buffer: SampleBuffer;
+  /** チャンネル固有の倍率（表示ゲインに掛ける） */
   gain: number;
 }
 

@@ -1,5 +1,6 @@
 import type { SurfaceMesh, ChamberId } from '../types';
 import { buildNeighbors } from './buildNeighbors';
+import { weldVertices } from './weldVertices';
 
 /**
  * プリセット心腔メッシュ（開発初期用の楕円体）。
@@ -33,11 +34,13 @@ export function makeEllipsoidChamber(
       indices.push(a, b, a + 1, b, b + 1, a + 1);
     }
   }
-  const idx = Uint32Array.from(indices);
-  const vertexCount = positions.length / 3;
+  // 極・継ぎ目の重複頂点をまとめる（継ぎ目が伝導ブロック線にならないように）
+  const welded = weldVertices(positions, indices);
+  const idx = welded.indices;
+  const vertexCount = welded.positions.length / 3;
   return {
     chamber,
-    positions: Float32Array.from(positions),
+    positions: welded.positions,
     indices: idx,
     neighbors: buildNeighbors(vertexCount, idx),
     regionOfVertex: new Uint8Array(vertexCount), // 0 = 一般心房筋
