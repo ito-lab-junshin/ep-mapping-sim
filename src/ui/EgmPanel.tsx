@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SYSTEMS, type SystemTheme } from '../systems';
 import { useSim } from '../state/store';
-import { useEngine } from '../state/engine';
+import { catheterAvailable, useEngine } from '../state/engine';
 import { ecgLeadsFor } from '../core/ecg/SurfaceEcg';
 import { SWEEP_SPEEDS_MM_S, caliper, msPerPx, visibleSamples, type SweepSpeed } from '../core/egm/display';
 import type { EgmChannel, ChannelGroup } from '../core/types';
@@ -11,8 +11,10 @@ import type { SimulationEngine } from '../core/sim/SimulationEngine';
 const LABEL_W = 76;
 /** 1 mV あたりの振れ幅（行の高さに対する比、ゲイン 1 のとき） */
 const ROW_SCALE_PER_MV: Record<ChannelGroup, number> = {
-  ecg: 0.55, hra: 0.3, his: 0.45, cs: 0.3, abl: 0.3, rv: 0.2,
+  ecg: 0.55, hra: 0.3, his: 0.45, cs: 0.3, map: 0.3, abl: 0.3, rv: 0.2,
 };
+/** 1 行の最小の高さ px（これを下回る行数になったら縦スクロール） */
+const MIN_ROW_PX = 18;
 /** 時間目盛の間隔 ms */
 const GRID_MS = 200;
 
@@ -20,7 +22,8 @@ interface Snapshot { endTime: number; data: Float32Array[] }
 
 /**
  * 心内心電図パネル。
- * 1 枚の Canvas 2D に、体表 ECG → HRA → HIS → CS 9-10…1-2 → ABL d/p → RV の順でスクロール描画する。
+ * 1 枚の Canvas 2D に、体表 ECG → HRA → HIS → CS 9-10…1-2 → 環状／多極 → ABL d/p → RV の順でスクロール描画する。
+ * 置かれていないカテーテルと、テーマで使えないカテーテルのチャンネルは表示しない。
  * 描画は requestAnimationFrame でエンジンのリングバッファを直接読み、React の再描画は起こさない。
  * フリーズ中（シミュレーションは継続）にクリックで 2 点キャリパーを置き、間隔 ms を測る。
  */
@@ -32,10 +35,16 @@ export function EgmPanel() {
   const snapshot = useRef<Snapshot | null>(null);
   const [calipers, setCalipers] = useState<number[]>([]);
 
+  const placementTick = useSim((s) => s.placementTick);
   const rows = useMemo(() => {
     const leads = ecgLeadsFor(ecgLeadCount);
-    return engine.channels.filter((c) => (c.group === 'ecg' ? (leads as string[]).includes(c.id) : true));
-  }, [engine, ecgLeadCount]);
+    return engine.channels.filter((c) => {
+      if (c.group === 'ecg') return (leads as string[]).includes(c.id);
+      const spec = engine.spec(c.catheterId);
+      return !!spec && spec.catheter.placed && catheterAvailable(spec, theme);
+    });
+    // placementTick：カテーテルを置いた・外したときに行を作り直す
+  }, [engine, ecgLeadCount, theme, placementTick]);
 
   // フリーズした瞬間のバッファを写し取る
   useEffect(() => {
@@ -108,7 +117,9 @@ export function EgmPanel() {
         </span>
         <span className="egm-note">教育用モデル：実機の波形・アルゴリズムではありません</span>
       </div>
-      <canvas ref={canvasRef} className="egm-canvas" onClick={onClick} />
+      <div className="egm-scroll">
+        <canvas ref={canvasRef} className="egm-canvas" onClick={onClick} style={{ minHeight: rows.length * MIN_ROW_PX }} />
+      </div>
     </section>
   );
 }
@@ -148,15 +159,6 @@ function drawPanel(
     const color = theme.colors.egmTrace[ch.group];
     ctx.fillStyle = color;
     ctx.fillText(ch.id, 8, yc);
-
-    const cath = engine.catheter(ch.catheterId);
-    if (cath?.source === 'outside') {
-      ctx.fillStyle = theme.colors.text;
-      ctx.globalAlpha = 0.45;
-      ctx.fillText('未配置（心腔外）', LABEL_W + 12, yc);
-      ctx.globalAlpha = 1;
-      return;
-    }
 
     const idx = engine.channels.indexOf(ch);
     const data = snap?.data[idx];

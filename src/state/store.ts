@@ -1,17 +1,9 @@
 import { create } from 'zustand';
 import type { ArrhythmiaId, EcgLeadCount, EnergyId, GeometryMode, MappingSystemId, TachycardiaState } from '../core/types';
 import type { SweepSpeed } from '../core/egm/display';
-import { CS_DEFAULT_INSERTION_DEG } from '../core/catheter/catalog';
-import { CONTACT_HEIGHT_MM } from '../core/params';
 
-/** Phase 1 のスライダー配置（Phase 2 で raycast 配置に置き換える） */
-export interface CatheterSliders {
-  csInsertionDeg: number;
-  csHeightMm: number;
-  ablAzimuthDeg: number;
-  ablElevationDeg: number;
-  ablHeightMm: number;
-}
+/** 3D ビューの表示モード（Phase 3 で LAT・ボルテージを追加） */
+export type MeshView = 'propagation' | 'regions';
 
 interface SimState {
   system: MappingSystemId;
@@ -28,7 +20,17 @@ interface SimState {
   gain: number;
   /** EGM フリーズ（計測用。シミュレーションは止めない） */
   frozen: boolean;
-  catheters: CatheterSliders;
+  /** 操作対象のカテーテル（3D 上のクリック・ドラッグ・ホイールが効く） */
+  activeCatheter: string | null;
+  /** 3D ビューでドラッグ中か */
+  dragging: boolean;
+  /** 症例の主な心房でない方の表示 */
+  otherAtrium: 'translucent' | 'hidden';
+  meshView: MeshView;
+  /** マウスを乗せている領域（表示用） */
+  hoveredRegion: string | null;
+  /** カテーテル配置が変わるたびに増える（UI の再描画用） */
+  placementTick: number;
   setSystem: (s: MappingSystemId) => void;
   setArrhythmia: (a: ArrhythmiaId) => void;
   setEnergy: (e: EnergyId) => void;
@@ -39,17 +41,13 @@ interface SimState {
   setSweepSpeed: (s: SweepSpeed) => void;
   setGain: (g: number) => void;
   setFrozen: (f: boolean) => void;
-  setCatheters: (p: Partial<CatheterSliders>) => void;
+  setActiveCatheter: (id: string | null) => void;
+  setDragging: (d: boolean) => void;
+  setOtherAtrium: (o: 'translucent' | 'hidden') => void;
+  setMeshView: (v: MeshView) => void;
+  setHoveredRegion: (r: string | null) => void;
+  bumpPlacement: () => void;
 }
-
-/** 心腔によって中隔の方位が違うため、ABL の既定は「中隔の反対＝側壁」 */
-export const DEFAULT_CATHETERS: CatheterSliders = {
-  csInsertionDeg: CS_DEFAULT_INSERTION_DEG,
-  csHeightMm: CONTACT_HEIGHT_MM,
-  ablAzimuthDeg: 180,
-  ablElevationDeg: 10,
-  ablHeightMm: CONTACT_HEIGHT_MM,
-};
 
 export const useSim = create<SimState>((set) => ({
   system: 'carto',
@@ -62,9 +60,14 @@ export const useSim = create<SimState>((set) => ({
   sweepSpeed: 100,
   gain: 1,
   frozen: false,
-  catheters: DEFAULT_CATHETERS,
+  activeCatheter: null,
+  dragging: false,
+  otherAtrium: 'translucent',
+  meshView: 'propagation',
+  hoveredRegion: null,
+  placementTick: 0,
   setSystem: (system) => set({ system }),
-  setArrhythmia: (arrhythmia) => set({ arrhythmia, tachycardia: 'sinus' }),
+  setArrhythmia: (arrhythmia) => set({ arrhythmia, tachycardia: 'sinus', activeCatheter: null }),
   setEnergy: (energy) => set({ energy }),
   setGeometryMode: (geometryMode) => set({ geometryMode }),
   setTachycardia: (tachycardia) => set({ tachycardia }),
@@ -73,5 +76,10 @@ export const useSim = create<SimState>((set) => ({
   setSweepSpeed: (sweepSpeed) => set({ sweepSpeed }),
   setGain: (gain) => set({ gain }),
   setFrozen: (frozen) => set({ frozen }),
-  setCatheters: (p) => set((s) => ({ catheters: { ...s.catheters, ...p } })),
+  setActiveCatheter: (activeCatheter) => set({ activeCatheter }),
+  setDragging: (dragging) => set({ dragging }),
+  setOtherAtrium: (otherAtrium) => set({ otherAtrium }),
+  setMeshView: (meshView) => set({ meshView }),
+  setHoveredRegion: (hoveredRegion) => set((s) => (s.hoveredRegion === hoveredRegion ? s : { hoveredRegion })),
+  bumpPlacement: () => set((s) => ({ placementTick: s.placementTick + 1 })),
 }));

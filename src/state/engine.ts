@@ -1,36 +1,41 @@
-import { useEffect } from 'react';
-import type { ChamberId } from '../core/types';
+import type { AnatomyDimensionSet } from '../core/types';
 import { SimulationEngine } from '../core/sim/SimulationEngine';
-import { PRESET_LA, PRESET_RA } from '../core/geometry/presetChambers';
-import { ablPlacement, csPlacement } from '../core/catheter/catalog';
+import { loadParametricSync } from '../core/geometry/ChamberLoader';
+import type { Placement } from '../core/catheter/placement';
+import type { CatheterSpec } from '../core/catheter/catalog';
+import type { SystemTheme } from '../systems';
 import { SCENARIOS } from '../core/arrhythmia';
 import { useSim } from './store';
 
 /**
- * 心腔ごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
+ * 解剖寸法セットごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
+ * AF は afRemodeled、それ以外は normal（シナリオの anatomy）。
  * 3D ビューが tick() で進め、EGM パネルが同じインスタンスのバッファを読む。
  */
-const engines = new Map<ChamberId, SimulationEngine>();
+const engines = new Map<AnatomyDimensionSet, SimulationEngine>();
 
-export function getEngine(chamber: ChamberId): SimulationEngine {
-  let e = engines.get(chamber);
+export function getEngine(set: AnatomyDimensionSet): SimulationEngine {
+  let e = engines.get(set);
   if (!e) {
-    e = new SimulationEngine(chamber === 'RA' ? PRESET_RA() : PRESET_LA());
-    engines.set(chamber, e);
+    e = new SimulationEngine(loadParametricSync(set));
+    engines.set(set, e);
   }
   return e;
 }
 
-/** 選択中の症例のエンジン。スライダーの配置を反映する */
+/** 選択中の症例のエンジン */
 export function useEngine(): SimulationEngine {
-  const chamber = useSim((s) => SCENARIOS[s.arrhythmia].chambers[0]);
-  const c = useSim((s) => s.catheters);
-  const engine = getEngine(chamber);
-  useEffect(() => {
-    const l = engine.landmarks;
-    engine.setPlacement('cs', csPlacement(l, c.csInsertionDeg, c.csHeightMm));
-    // ABL の方位はスライダー上「中隔からの角度」として扱い、心腔の向きの違いを吸収する
-    engine.setPlacement('abl', ablPlacement(l.septalAzimuthDeg + l.posteriorSign * c.ablAzimuthDeg, c.ablElevationDeg, c.ablHeightMm));
-  }, [engine, c]);
-  return engine;
+  const set = useSim((s) => SCENARIOS[s.arrhythmia].anatomy);
+  return getEngine(set);
+}
+
+/** カテーテルを置き直し、UI に知らせる */
+export function placeCatheter(engine: SimulationEngine, id: string, placement: Placement | null) {
+  engine.setPlacement(id, placement);
+  useSim.getState().bumpPlacement();
+}
+
+/** テーマの機能フラグで使えるカテーテルか（多極スプライン／グリッド） */
+export function catheterAvailable(spec: CatheterSpec, theme: SystemTheme): boolean {
+  return !spec.requires || theme.features[spec.requires];
 }
