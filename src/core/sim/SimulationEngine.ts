@@ -2,14 +2,16 @@ import type { Catheter, EcgLead, EgmChannel, SurfaceMesh } from '../types';
 import { CellularAutomaton } from '../propagation/CellularAutomaton';
 import { EgmGenerator } from '../egm/EgmGenerator';
 import { RingBuffer } from '../egm/RingBuffer';
-import { farFieldV, hisSpike, localV, syntheticA } from '../egm/templates';
+import { farFieldV, hisSpike, localV } from '../egm/templates';
 import { AvConduction } from '../conduction/AvConduction';
 import { SurfaceEcg } from '../ecg/SurfaceEcg';
-import { landmarksFor, type ChamberLandmarks } from '../geometry/landmarks';
-import { vertexTowards } from '../geometry/meshUtils';
-import { placeElectrodes, type Placement } from '../catheter/placement';
+import type { BiatrialModel } from '../geometry/parametric/atria';
+import { MeshQuery } from '../geometry/MeshQuery';
+import { buildGuidedPaths, nearestS, type GuidedPath, type GuidedPathId } from '../catheter/guidedPaths';
+import { placeFree, placeOnPath, type Placement } from '../catheter/placement';
 import { catheterGroup, defaultCatheters, type CatheterSpec } from '../catheter/catalog';
 import { EGM_HISTORY_MS, SAMPLE_MS, SINUS_CYCLE_MS, TEMPLATE_AMPLITUDE_MV } from '../params';
+import { scale } from '../geometry/parametric/sdf';
 
 export interface EngineOptions {
   sinusCycleMs?: number;
@@ -20,21 +22,23 @@ const ECG_LEADS: EcgLead[] = ['I', 'II', 'V1'];
 
 /**
  * 1 症例ぶんのシミュレーション（UI 非依存）。
- * セルオートマトン・洞結節タイマー・房室伝導・EGM／体表 ECG のサンプリングをまとめて進める。
+ * 両心房メッシュ上のセルオートマトン・洞結節タイマー・房室伝導・EGM／体表 ECG のサンプリングを進める。
  * 描画側は tick() で進め、channels のバッファを直接読む。
  */
 export class SimulationEngine {
   readonly sampleMs = SAMPLE_MS;
+  readonly mesh: SurfaceMesh;
   readonly ca: CellularAutomaton;
   readonly egm: EgmGenerator;
   readonly av = new AvConduction();
   readonly ecg = new SurfaceEcg();
-  readonly landmarks: ChamberLandmarks;
+  readonly query: MeshQuery;
+  readonly paths: Record<GuidedPathId, GuidedPath>;
   readonly sinusVertex: number;
   readonly avNodeVertex: number;
   readonly specs: CatheterSpec[];
   readonly channels: EgmChannel[] = [];
-  /** 配置が変わるたびに増える（3D 表示の更新用） */
+  /** 配置が変わるたびに増える（3D・UI の更新用） */
   placementVersion = 0;
   sinusCycleMs: number;
 
@@ -43,12 +47,14 @@ export class SimulationEngine {
   private lastNodeActivation = -1;
   private sampler: (() => number)[] = [];
 
-  constructor(readonly mesh: SurfaceMesh, opts: EngineOptions = {}) {
-    this.ca = new CellularAutomaton(mesh);
-    this.egm = new EgmGenerator(mesh, this.ca.tissue);
-    this.landmarks = landmarksFor(mesh.chamber);
-    this.sinusVertex = vertexTowards(mesh, this.landmarks.sinusEntry);
-    this.avNodeVertex = vertexTowards(mesh, this.landmarks.avNode);
+  constructor(readonly model: BiatrialModel, opts: EngineOptions = {}) {
+    this.mesh = model.mesh;
+    this.ca = new CellularAutomaton(this.mesh);
+    this.egm = new EgmGenerator(this.mesh, this.ca.tissue);
+    this.query = new MeshQuery(this.mesh);
+    this.paths = buildGuidedPaths(model, this.query);
+    this.sinusVertex = model.anatomy.anchors.sinusNode.vertex;
+    this.avNodeVertex = model.anatomy.anchors.avNode.vertex;
     this.sinusCycleMs = opts.sinusCycleMs ?? SINUS_CYCLE_MS;
     const capacity = Math.ceil((opts.historyMs ?? EGM_HISTORY_MS) / SAMPLE_MS);
 
@@ -57,9 +63,12 @@ export class SimulationEngine {
       this.sampler.push(() => this.ecg.sample(this.time, lead, this.av.vTimes));
     }
 
-    this.specs = defaultCatheters(this.landmarks);
+    this.specs = defaultCatheters(model);
     for (const spec of this.specs) {
-      if (spec.placement && spec.layoutMm) spec.catheter.electrodes = placeElectrodes(mesh, spec.placement, spec.layoutMm);
+      if (spec.placement?.kind === 'path' && spec.pathId && Number.isNaN(spec.placement.s)) {
+        spec.placement = { ...spec.placement, s: this.paths[spec.pathId].defaultS };
+      }
+      this.applyPlacement(spec);
       for (const ch of spec.channels) {
         this.channels.push({
           id: ch.id, catheterId: spec.catheter.id, group: catheterGroup(spec.catheter.kind),
@@ -74,15 +83,41 @@ export class SimulationEngine {
 
   get catheters(): Catheter[] { return this.specs.map((s) => s.catheter); }
 
-  catheter(id: string): Catheter | undefined { return this.specs.find((s) => s.catheter.id === id)?.catheter; }
+  spec(id: string): CatheterSpec | undefined { return this.specs.find((s) => s.catheter.id === id); }
 
-  /** mesh 上のカテーテルを置き直す */
-  setPlacement(catheterId: string, placement: Placement) {
-    const spec = this.specs.find((s) => s.catheter.id === catheterId);
-    if (!spec || spec.catheter.source !== 'mesh' || !spec.layoutMm) return;
+  catheter(id: string): Catheter | undefined { return this.spec(id)?.catheter; }
+
+  /** カテーテルを置く（null で取り外す）。RV（合成）には何もしない */
+  setPlacement(catheterId: string, placement: Placement | null) {
+    const spec = this.spec(catheterId);
+    if (!spec || spec.mode === 'synthetic') return;
+    if (placement && (placement.kind === 'path') !== (spec.mode === 'path')) throw new Error(`placement kind mismatch for ${catheterId}`);
     spec.placement = placement;
-    spec.catheter.electrodes = placeElectrodes(this.mesh, placement, spec.layoutMm);
+    this.applyPlacement(spec);
     this.placementVersion++;
+  }
+
+  /** 経路カテーテルを、3D 上の点に最も近い経路位置へ動かす（ドラッグ操作用） */
+  dragOnPath(catheterId: string, point: { x: number; y: number; z: number }) {
+    const spec = this.spec(catheterId);
+    if (!spec?.pathId || spec.placement?.kind !== 'path') return;
+    this.setPlacement(catheterId, { ...spec.placement, s: nearestS(this.paths[spec.pathId], point) });
+  }
+
+  private applyPlacement(spec: CatheterSpec) {
+    const c = spec.catheter;
+    const p = spec.placement;
+    if (spec.mode === 'synthetic') return;
+    if (!p) { c.placed = false; return; }
+    if (p.kind === 'path' && spec.pathId) {
+      const path = this.paths[spec.pathId];
+      // His：遠位電極を三尖弁輪の縁に置き、近位電極は弁輪から心房側（中隔）へ並べる
+      const away = spec.pathId === 'his' ? scale(this.model.anatomy.ra.tricuspid.axis, -1) : undefined;
+      c.electrodes = placeOnPath(this.query, path, spec.layoutMm ?? [], p, away);
+    } else if (p.kind === 'free') {
+      c.electrodes = placeFree(this.query, this.model, c.kind, p, spec.layoutMm ?? []);
+    }
+    c.placed = true;
   }
 
   /** 実時間 dtMs ぶん進める（内部は sampleMs 刻み） */
@@ -125,20 +160,6 @@ export class SimulationEngine {
   private makeSampler(spec: CatheterSpec, pair: [number, number]): () => number {
     const cath = spec.catheter;
     const amp = TEMPLATE_AMPLITUDE_MV;
-    if (cath.source === 'outside') return () => 0;
-
-    if (cath.kind === 'his_quadripolar') {
-      // Phase 2 で RA 連結後に置き換える仮実装：房室結節部位のタイミングから A・H・V を合成
-      const a = pair[0] === 0 ? amp.his.d : amp.his.p;
-      return () => {
-        const now = this.time;
-        let s = 0;
-        for (const tA of AvConduction.recent(this.av.aTimes, now, 100)) s += a.a * syntheticA(now - tA);
-        for (const h of AvConduction.recent(this.av.hTimes, now, 50)) s += a.h * hisSpike(now - h);
-        for (const v of this.recentV()) s += a.v * farFieldV(now - v);
-        return s;
-      };
-    }
 
     if (cath.kind === 'rv_quadripolar') {
       return () => {
@@ -149,9 +170,23 @@ export class SimulationEngine {
       };
     }
 
+    if (cath.kind === 'his_quadripolar') {
+      // A：Koch 三角のメッシュから φ モデル、H・V：房室伝導のタイミングから合成
+      const hv = pair[0] === 0 ? amp.his.d : amp.his.p;
+      return () => {
+        if (!cath.placed) return 0;
+        const now = this.time;
+        let s = this.egm.bipolar(cath, pair, now);
+        for (const h of AvConduction.recent(this.av.hTimes, now, 50)) s += hv.h * hisSpike(now - h);
+        for (const v of this.recentV()) s += hv.v * farFieldV(now - v);
+        return s;
+      };
+    }
+
     const group = catheterGroup(cath.kind);
     const ffv = group === 'hra' ? amp.farFieldV.hra : group === 'cs' ? amp.farFieldV.cs : amp.farFieldV.abl;
     return () => {
+      if (!cath.placed) return 0;
       const now = this.time;
       let s = this.egm.bipolar(cath, pair, now);
       for (const v of this.recentV()) s += ffv * farFieldV(now - v);

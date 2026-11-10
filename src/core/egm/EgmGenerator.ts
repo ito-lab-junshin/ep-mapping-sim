@@ -5,6 +5,7 @@ import { actionPotential } from './templates';
  * 心内心電図（EGM）生成 — φ モデル（電流源密度近似、docs/DESIGN.md §6）。
  *
  *  1. 各頂点の膜電位 Vm を「活性化からの経過時間」に対する活動電位テンプレートで与える。
+ *     電流源は活性化から 16 ms 以内の頂点とその隣接（波面付近）に限る（心房の再分極は省く）。
  *  2. メッシュ上の余接（cotangent）ラプラシアンで、頂点ごとの膜電流（電流源）Iₘ を求める。
  *       Iₘ,ᵥ ∝ ½ Σᵤ (cot α + cot β)(Vmᵤ − Vmᵥ) × (voltageᵥ / 2.5)
  *     波面の前方は湧き出し（＋）、後方は吸い込み（−）になり、Σ Iₘ ≈ 0。
@@ -21,6 +22,8 @@ import { actionPotential } from './templates';
  * 振幅較正 K は「接触・電極間隔 2 mm の双極で正常心房 ≈ 1〜2 mV」になるよう決めた教育用近似。
  */
 export const PHI_GAIN = 2.0;
+/** 電流源とみなす「活性化からの時間」の上限 ms（立ち上がり 6 ms + 余裕） */
+const FRONT_WINDOW_MS = 16;
 /** 1/r の発散を防ぐ最小距離 mm */
 const MIN_R_MM = 0.5;
 /** 余接重みの上限（細長い三角形での発散防止） */
@@ -36,10 +39,12 @@ export class EgmGenerator {
   private vm: Float32Array;
   private source: Float32Array;
   private active: Int32Array;
+  private recent: Uint8Array;
   private activeCount = 0;
   private computedAt = NaN;
 
-  constructor(readonly mesh: SurfaceMesh, readonly tissue: TissueState) {
+  /** frontOnly = false で全頂点を電流源の候補にする（検証用） */
+  constructor(readonly mesh: SurfaceMesh, readonly tissue: TissueState, readonly opts: { frontOnly?: boolean } = {}) {
     const n = mesh.positions.length / 3;
     const weights = cotangentWeights(mesh);
     this.nbStart = new Int32Array(n + 1);
@@ -53,6 +58,7 @@ export class EgmGenerator {
     this.vm = new Float32Array(n);
     this.source = new Float32Array(n);
     this.active = new Int32Array(n);
+    this.recent = new Uint8Array(n);
   }
 
   /** 時刻 now の電流源分布を計算する（同じ now では再計算しない） */
@@ -65,10 +71,19 @@ export class EgmGenerator {
       const la = t.lastActivation[v];
       this.vm[v] = la < 0 ? 0 : actionPotential(now - la, t.erp[v] * 0.8);
     }
+    // 立ち上がり（脱分極）の直後の頂点だけを電流源の候補にする。心房の再分極（Ta 波）は
+    // 小さく、EGM・体表 ECG の教育目的では省いてよい。電流源が波面付近に限られ、計算量が大きく減る。
+    for (let v = 0; v < n; v++) {
+      const la = t.lastActivation[v];
+      this.recent[v] = this.opts.frontOnly === false || (la >= 0 && now - la < FRONT_WINDOW_MS) ? 1 : 0;
+    }
     this.activeCount = 0;
     for (let v = 0; v < n; v++) {
       // 興奮しない頂点（病変・瘢痕）は電流源にならず、そこへ向かう電流もない（no-flux 境界）
       if (t.viability[v] <= 0) { this.source[v] = 0; continue; }
+      let near = this.recent[v] === 1;
+      for (let k = this.nbStart[v]; !near && k < this.nbStart[v + 1]; k++) near = this.recent[this.nbIndex[k]] === 1;
+      if (!near) { this.source[v] = 0; continue; }
       const vv = this.vm[v];
       let s = 0;
       for (let k = this.nbStart[v]; k < this.nbStart[v + 1]; k++) {

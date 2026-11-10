@@ -22,6 +22,19 @@ export const ABLATION_TIP_LENGTH_MM = 3.5;
 export const RING_WIDTH_MM = 1;            // リング電極の幅
 export const ABLATION_SHAFT_TILT_DEG = 45; // 壁に対するアブレーションカテーテルの傾き
 
+/** Phase 2 で追加したカテーテル寸法（すべて仮定値・教育用近似） */
+export const CIRCULAR = {
+  electrodes: 10,
+  defaultDiameterMm: 20,
+  diameterRangeMm: [15, 25] as const,
+};
+/** 多極スプライン（PentaRay 風）：5 本 × 4 電極。中心からの距離 mm（電極間隔 2-6-2） */
+export const MULTISPLINE = { splines: 5, offsetsMm: [4, 6, 12, 14] as const };
+/** グリッド型（HD Grid 風）：4 × 4 電極、等間隔 */
+export const GRID = { rows: 4, cols: 4, spacingMm: 3 };
+/** CS 電極の心外膜側へのずれ（CS 内腔の位置）と、弁輪から心房側への距離 mm */
+export const CS_PATH = { epicardialOffsetMm: 1.5, aboveAnnulusMm: 3, defaultInsertionMm: 46 };
+
 /** 心内膜面からの距離 mm（教育用近似） */
 export const CONTACT_HEIGHT_MM = 1;      // 接触時の既定
 export const CONTACT_THRESHOLD_MM = 2;   // これ以下を「接触」と判定
@@ -38,8 +51,8 @@ export const EGM_HISTORY_MS = 15000;     // 25 mm/s でも画面幅以上を保�
 export const TEMPLATE_AMPLITUDE_MV = {
   /** 心房カテーテルの双極に乗る心室遠隔電位 */
   farFieldV: { hra: 0.08, cs: 0.6, abl: 0.3 },
-  /** His 4 極（d = 1-2、p = 3-4） */
-  his: { d: { a: 0.3, h: 0.35, v: 1.0 }, p: { a: 0.8, h: 0.15, v: 0.6 } },
+  /** His 4 極（d = 1-2、p = 3-4）の H・V。A はメッシュから φ モデルで計算する */
+  his: { d: { h: 0.35, v: 1.0 }, p: { h: 0.15, v: 0.6 } },
   /** RV 心尖の局所 V（QRS 開始から 15 ms） */
   rv: { v: 3.0, delayMs: 15 },
 } as const;

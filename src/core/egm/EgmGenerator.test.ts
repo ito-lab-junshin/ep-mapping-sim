@@ -106,3 +106,20 @@ describe('EgmGenerator（φ モデル）', () => {
     expect((low.max - low.min) / (normal.max - normal.min)).toBeCloseTo(0.2, 1);
   });
 });
+
+describe('EgmGenerator の高速化（電流源を波面付近に限る）', () => {
+  it('接触した双極電位のピークは、全頂点を使う場合と 5 % 以内で一致する', () => {
+    const run = (frontOnly: boolean) => {
+      const mesh = makeEllipsoidChamber('LA', { x: R, y: R, z: R }, 48);
+      const ca = new CellularAutomaton(mesh);
+      const egm = new EgmGenerator(mesh, ca.tissue, { frontOnly });
+      ca.stimulate(vertexTowards(mesh, { x: -1, y: 0, z: 0 }));
+      const a = inside({ x: 0, y: 0, z: -1 }, 1, { x: 1, y: 0, z: 0 }), b = inside({ x: 0, y: 0, z: -1 }, 1, { x: -1, y: 0, z: 0 });
+      let peak = 0;
+      for (let t = 0; t < 120; t += 2) { ca.step(2); peak = Math.max(peak, Math.abs(egm.unipolarAt(a, ca.time) - egm.unipolarAt(b, ca.time))); }
+      return peak;
+    };
+    const fast = run(true), full = run(false);
+    expect(Math.abs(fast - full) / full).toBeLessThan(0.05);
+  });
+});

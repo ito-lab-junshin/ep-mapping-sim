@@ -1,106 +1,134 @@
-import type { Electrode, SurfaceMesh, Vec3 } from '../types';
-import { centroid, nearestVertex, raycastFromInside } from '../geometry/meshUtils';
-import { CONTACT_THRESHOLD_MM } from '../params';
+import type { CatheterKind, Electrode, Vec3 } from '../types';
+import type { BiatrialModel } from '../geometry/parametric/atria';
+import { MeshQuery, tangent } from '../geometry/MeshQuery';
+import { add, cross, dist, dot, norm, scale, sub, v3 } from '../geometry/parametric/sdf';
+import { PV_OSTIUM, PV_SLEEVE, REGIONS } from '../geometry/regions';
+import { ABLATION_SHAFT_TILT_DEG, CIRCULAR, CONTACT_THRESHOLD_MM, GRID, MULTISPLINE } from '../params';
+import { pointAt, type GuidedPath } from './guidedPaths';
 
 /**
- * Phase 1 のカテーテル配置（スライダー操作用）。
- * Phase 2 でマウスの raycast による配置に置き換える。
+ * カテーテル配置（docs/DESIGN.md §10）。
+ *  - path：CS・His・HRA は経路に沿って動かす（s = 経路上の位置 mm）
+ *  - free：ABL・環状・多極は表面上の任意の点に置く（raycast で得た点）
+ * heightMm は「押し込み」の逆（大きいほど壁から離れる）。接触判定は実際の電極−表面距離で行う。
  */
+export type Placement =
+  | { kind: 'path'; s: number; heightMm: number }
+  | { kind: 'free'; point: Vec3; heightMm: number; rotationDeg: number; diameterMm?: number };
 
-/** 弁輪・CS のように壁に沿って寝かせる配置 */
-export interface ArcPlacement {
-  kind: 'arc';
-  /** 電極 1（遠位）の方位角 deg */
-  distalAzimuthDeg: number;
-  elevationDeg: number;
-  /** 遠位→近位へ進む方位角の符号 */
-  proximalSign: 1 | -1;
-  heightMm: number;
+/** 電極位置から接触を判定して Electrode を作る */
+export function electrodeAt(q: MeshQuery, id: string, position: Vec3): Electrode {
+  const hit = q.closestPoint(position);
+  return { id, position, heightMm: hit.distance, contactVertex: hit.distance <= CONTACT_THRESHOLD_MM ? hit.vertex : -1 };
 }
 
-/** アブレーションカテーテルのように先端を壁に当てる配置 */
-export interface TipPlacement {
-  kind: 'tip';
-  azimuthDeg: number;
-  elevationDeg: number;
-  heightMm: number;
-  /** シャフトの傾き（0 = 壁に垂直） */
-  tiltDeg: number;
-}
-
-export type Placement = ArcPlacement | TipPlacement;
-
-const rad = (d: number) => (d * Math.PI) / 180;
-
-function direction(azDeg: number, elDeg: number): Vec3 {
-  const az = rad(azDeg), el = rad(elDeg);
-  return { x: Math.cos(el) * Math.cos(az), y: Math.sin(el), z: Math.cos(el) * Math.sin(az) };
-}
-
-function surfaceAt(mesh: SurfaceMesh, c: Vec3, azDeg: number, elDeg: number) {
-  const hit = raycastFromInside(mesh, c, direction(azDeg, elDeg));
-  if (!hit) throw new Error('placement ray missed the mesh');
-  return hit;
-}
-
-function makeElectrode(mesh: SurfaceMesh, id: string, surface: Vec3, pos: Vec3, heightMm: number): Electrode {
-  const contact = heightMm <= CONTACT_THRESHOLD_MM ? nearestVertex(mesh, surface).vertex : -1;
-  return { id, position: pos, contactVertex: contact, heightMm };
+/** 表面上の点 p から内側（−法線）へ h mm */
+function inward(q: MeshQuery, p: Vec3, h: number): Vec3 {
+  const hit = q.closestPoint(p);
+  return sub(hit.point, scale(hit.normal, h));
 }
 
 /**
- * 壁に沿って電極を並べる。gapsMm[i] は電極 i と i+1 の中心間距離。
- * 電極は心内膜面から heightMm だけ心腔内側に置く。
+ * 経路上の配置。gaps[i] は電極 i と i+1 の中心間距離。
+ * awayFromPath を与えると（His）、遠位電極だけ経路上に置き、近位電極は表面をその向きへ歩いて置く。
  */
-export function placeArc(mesh: SurfaceMesh, p: ArcPlacement, gapsMm: readonly number[]): Electrode[] {
-  const c = centroid(mesh);
+export function placeOnPath(q: MeshQuery, path: GuidedPath, gaps: readonly number[], p: { s: number; heightMm: number }, awayFromPath?: Vec3): Electrode[] {
   const out: Electrode[] = [];
-  let az = p.distalAzimuthDeg;
-  for (let i = 0; i <= gapsMm.length; i++) {
-    const hit = surfaceAt(mesh, c, az, p.elevationDeg);
-    const pos = {
-      x: hit.point.x - hit.normal.x * p.heightMm,
-      y: hit.point.y - hit.normal.y * p.heightMm,
-      z: hit.point.z - hit.normal.z * p.heightMm,
-    };
-    out.push(makeElectrode(mesh, String(i + 1), hit.point, pos, p.heightMm));
-    if (i < gapsMm.length) {
-      const ringR = Math.max(1, Math.hypot(hit.point.x - c.x, hit.point.z - c.z));
-      az += p.proximalSign * (gapsMm[i] / ringR) * (180 / Math.PI);
-    }
+  if (awayFromPath) {
+    const distal = q.closestPoint(pointAt(path, p.s));
+    out.push(electrodeAt(q, '1', sub(distal.point, scale(distal.normal, p.heightMm))));
+    let acc = 0;
+    gaps.forEach((g, i) => {
+      acc += g;
+      const hit = q.walk(distal.point, awayFromPath, acc);
+      out.push(electrodeAt(q, String(i + 2), sub(hit.point, scale(hit.normal, p.heightMm))));
+    });
+    return out;
+  }
+  let s = p.s;
+  for (let i = 0; i <= gaps.length; i++) {
+    const pt = pointAt(path, s);
+    out.push(electrodeAt(q, String(i + 1), path.onSurface ? inward(q, pt, p.heightMm) : pt));
+    if (i < gaps.length) s += path.proximalDirection * gaps[i];
   }
   return out;
 }
 
-/**
- * 先端を壁に当てたカテーテル。offsetsMm は先端電極から各電極中心までのシャフト上の距離。
- * シャフトは壁の法線から tiltDeg 傾け、方位角が増える向きに倒す。
- */
-export function placeTip(mesh: SurfaceMesh, p: TipPlacement, offsetsMm: readonly number[]): Electrode[] {
-  const c = centroid(mesh);
-  const hit = surfaceAt(mesh, c, p.azimuthDeg, p.elevationDeg);
-  const n = hit.normal;
-  // 接線: 方位角の増える向き（水平）を法線に直交化
-  const az = rad(p.azimuthDeg);
-  let tx = -Math.sin(az), ty = 0, tz = Math.cos(az);
-  const dn = tx * n.x + ty * n.y + tz * n.z;
-  tx -= dn * n.x; ty -= dn * n.y; tz -= dn * n.z;
-  const tl = Math.hypot(tx, ty, tz) || 1;
-  tx /= tl; ty /= tl; tz /= tl;
-  const tilt = rad(p.tiltDeg);
-  // 先端から心腔内へ向かうシャフト方向
-  const sx = -n.x * Math.cos(tilt) + tx * Math.sin(tilt);
-  const sy = -n.y * Math.cos(tilt) + ty * Math.sin(tilt);
-  const sz = -n.z * Math.cos(tilt) + tz * Math.sin(tilt);
-  const tip = { x: hit.point.x - n.x * p.heightMm, y: hit.point.y - n.y * p.heightMm, z: hit.point.z - n.z * p.heightMm };
-  return offsetsMm.map((o, i) => {
-    const d = o - offsetsMm[0];
-    const pos = { x: tip.x + sx * d, y: tip.y + sy * d, z: tip.z + sz * d };
-    const h = i === 0 ? p.heightMm : p.heightMm + d * Math.cos(tilt);
-    return makeElectrode(mesh, String(i + 1), hit.point, pos, h);
-  });
+/** 接平面の基底（rotationDeg だけ法線まわりに回す） */
+function tangentFrame(n: Vec3, rotationDeg: number): [Vec3, Vec3] {
+  const t0 = tangent(v3(0, 1, 0.01), n);
+  const b0 = cross(n, t0);
+  const a = (rotationDeg * Math.PI) / 180;
+  const t = add(scale(t0, Math.cos(a)), scale(b0, Math.sin(a)));
+  return [t, cross(n, t)];
 }
 
-export function placeElectrodes(mesh: SurfaceMesh, p: Placement, layoutMm: readonly number[]): Electrode[] {
-  return p.kind === 'arc' ? placeArc(mesh, p, layoutMm) : placeTip(mesh, p, layoutMm);
+/** 自由配置（ABL・環状・多極） */
+export function placeFree(
+  q: MeshQuery, model: BiatrialModel, kind: CatheterKind,
+  p: { point: Vec3; heightMm: number; rotationDeg: number; diameterMm?: number },
+  ablationOffsetsMm: readonly number[],
+): Electrode[] {
+  const hit = q.closestPoint(p.point);
+  const n = hit.normal;
+  const [t, b] = tangentFrame(n, p.rotationDeg);
+
+  if (kind === 'ablation_tip') {
+    const tilt = (ABLATION_SHAFT_TILT_DEG * Math.PI) / 180;
+    const shaft = add(scale(n, -Math.cos(tilt)), scale(t, Math.sin(tilt)));
+    const tip = sub(hit.point, scale(n, p.heightMm));
+    return ablationOffsetsMm.map((o, i) => electrodeAt(q, String(i + 1), add(tip, scale(shaft, o - ablationOffsetsMm[0]))));
+  }
+
+  if (kind === 'circular_mapping') {
+    const diameter = p.diameterMm ?? CIRCULAR.defaultDiameterMm;
+    const region = REGIONS[model.mesh.regionOfVertex[hit.vertex]];
+    const pv = model.anatomy.la.pvs.find((v) => region === PV_SLEEVE[v.name] || region === PV_OSTIUM[v.name]);
+    const out: Electrode[] = [];
+    if (pv) {
+      // PV 内：PV の軸を中心とする輪。輪が PV より小さければ壁から浮く（非接触）
+      const axial = Math.max(-2, Math.min(model.dimensions.pv.sleeveLength - 3, dot(sub(hit.point, pv.ostium), pv.frame.axis)));
+      const center = add(pv.ostium, scale(pv.frame.axis, axial));
+      for (let i = 0; i < CIRCULAR.electrodes; i++) {
+        const a = (2 * Math.PI * i) / CIRCULAR.electrodes + (p.rotationDeg * Math.PI) / 180;
+        const dir = norm(add(scale(pv.frame.u, Math.cos(a)), scale(pv.frame.v, Math.sin(a))));
+        const wall = q.closestPoint(add(center, scale(add(scale(pv.frame.u, Math.cos(a) * pv.frame.ru), scale(pv.frame.v, Math.sin(a) * pv.frame.rv)), 1)));
+        const wallR = dist(wall.point, center);
+        const r = Math.max(0, Math.min(diameter / 2, wallR - p.heightMm));
+        out.push(electrodeAt(q, String(i + 1), add(center, scale(dir, r))));
+      }
+      return out;
+    }
+    // 心房本体：壁に沿って平らに置く
+    for (let i = 0; i < CIRCULAR.electrodes; i++) {
+      const a = (2 * Math.PI * i) / CIRCULAR.electrodes;
+      const target = add(hit.point, add(scale(t, Math.cos(a) * diameter / 2), scale(b, Math.sin(a) * diameter / 2)));
+      out.push(electrodeAt(q, String(i + 1), inward(q, target, p.heightMm)));
+    }
+    return out;
+  }
+
+  if (kind === 'multispline') {
+    const out: Electrode[] = [];
+    for (let sp = 0; sp < MULTISPLINE.splines; sp++) {
+      const a = (2 * Math.PI * sp) / MULTISPLINE.splines;
+      const dir = add(scale(t, Math.cos(a)), scale(b, Math.sin(a)));
+      MULTISPLINE.offsetsMm.forEach((o, k) => {
+        const w = q.walk(hit.point, dir, o);
+        out.push(electrodeAt(q, `${String.fromCharCode(65 + sp)}${k + 1}`, sub(w.point, scale(w.normal, p.heightMm))));
+      });
+    }
+    return out;
+  }
+
+  if (kind === 'grid') {
+    const out: Electrode[] = [];
+    for (let r = 0; r < GRID.rows; r++) for (let c = 0; c < GRID.cols; c++) {
+      const target = add(hit.point, add(scale(t, (c - (GRID.cols - 1) / 2) * GRID.spacingMm), scale(b, (r - (GRID.rows - 1) / 2) * GRID.spacingMm)));
+      out.push(electrodeAt(q, `${String.fromCharCode(65 + r)}${c + 1}`, inward(q, target, p.heightMm)));
+    }
+    return out;
+  }
+
+  throw new Error(`free placement not supported for ${kind}`);
 }
