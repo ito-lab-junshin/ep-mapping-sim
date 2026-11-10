@@ -1,4 +1,4 @@
-import type { MappingSystemId } from '../core/types';
+import type { ChannelGroup, MappingSystemId } from '../core/types';
 
 /**
  * マッピングシステムごとの「見た目」と「固有機能フラグ」。
@@ -18,6 +18,8 @@ export interface SystemTheme {
     text: string;
     accent: string;
     egmGrid: string;
+    /** EGM パネルの波形色（チャンネル群ごと） */
+    egmTrace: Record<ChannelGroup, string>;
     /** 活性化マップのカラースケール（早→遅） */
     activationRamp: string[];
     /** ボルテージマップ（低電位→正常） */
@@ -51,6 +53,7 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
     colors: {
       background: '#1b1f27', panel: '#262b36', text: '#e8eaf0', accent: '#f5c542',
       egmGrid: '#2f3542',
+      egmTrace: { ecg: '#e8eaf0', hra: '#ffd166', his: '#f5f5f5', cs: '#3cd13c', abl: '#ff5a5a', rv: '#4fc3f7' },
       activationRamp: ['#ff2a2a', '#ffb000', '#f2f200', '#3cd13c', '#1ea8ff', '#8a3cff'],
       voltageRamp: ['#ff2a2a', '#ffb000', '#f2f200', '#3cd13c', '#9b5cff'],
       meshDefault: '#7f8699', lesion: '#ff3b3b',
@@ -68,6 +71,7 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
     colors: {
       background: '#0f1a2b', panel: '#162338', text: '#e6eef8', accent: '#39b6ff',
       egmGrid: '#1f3350',
+      egmTrace: { ecg: '#ffffff', hra: '#ffff33', his: '#ff66ff', cs: '#33ff66', abl: '#ff4d4d', rv: '#39b6ff' },
       activationRamp: ['#ffffff', '#ff4d4d', '#ffa500', '#ffff33', '#33ff66', '#3399ff', '#9933ff'],
       voltageRamp: ['#9a9a9a', '#ff4d4d', '#ffff33', '#33ff66', '#b366ff'],
       meshDefault: '#8b94a7', lesion: '#ff5a36',
@@ -85,6 +89,7 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
     colors: {
       background: '#101418', panel: '#1a2027', text: '#eef2f5', accent: '#38d39f',
       egmGrid: '#263038',
+      egmTrace: { ecg: '#eef2f5', hra: '#ffe81a', his: '#c39bff', cs: '#3ddc84', abl: '#ff3355', rv: '#1ab3ff' },
       activationRamp: ['#ff3355', '#ff9f1a', '#ffe81a', '#3ddc84', '#1ab3ff', '#7a5cff'],
       voltageRamp: ['#ff3355', '#ff9f1a', '#ffe81a', '#3ddc84', '#7a5cff'],
       meshDefault: '#7d8893', lesion: '#ff4d6d',
