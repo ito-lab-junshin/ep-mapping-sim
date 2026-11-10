@@ -1,9 +1,18 @@
 import { create } from 'zustand';
-import type { ArrhythmiaId, EcgLeadCount, EnergyId, GeometryMode, MappingSystemId, TachycardiaState } from '../core/types';
+import type { ArrhythmiaId, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
+import { MAP_DEFAULTS } from '../core/params';
 import type { SweepSpeed } from '../core/egm/display';
 
-/** 3D ビューの表示モード（Phase 3 で LAT・ボルテージを追加） */
-export type MeshView = 'propagation' | 'regions';
+export const DEFAULT_MAP_SETTINGS: MapSettings = {
+  woiBeforeMs: MAP_DEFAULTS.woiBeforeMs,
+  woiAfterMs: MAP_DEFAULTS.woiAfterMs,
+  woiManual: false,
+  referenceChannel: MAP_DEFAULTS.referenceChannel,
+  latMethod: 'bipolarPeak',
+  fillThresholdMm: MAP_DEFAULTS.fillThresholdMm,
+  voltageScarMv: MAP_DEFAULTS.voltageScarMv,
+  voltageNormalMv: MAP_DEFAULTS.voltageNormalMv,
+};
 
 interface SimState {
   system: MappingSystemId;
@@ -26,7 +35,16 @@ interface SimState {
   dragging: boolean;
   /** 症例の主な心房でない方の表示 */
   otherAtrium: 'translucent' | 'hidden';
-  meshView: MeshView;
+  /** 3D ビューの表示モード */
+  mapType: MapType;
+  mapSettings: MapSettings;
+  /** 多極カテーテルの 1 拍ごとの自動取得 */
+  autoAcquire: boolean;
+  showPoints: boolean;
+  /** 取得点が変わるたびに増える（補間の再計算用） */
+  mapVersion: number;
+  /** 直近の取得の結果（表示用） */
+  acquireMessage: string;
   /** マウスを乗せている領域（表示用） */
   hoveredRegion: string | null;
   /** カテーテル配置が変わるたびに増える（UI の再描画用） */
@@ -44,7 +62,11 @@ interface SimState {
   setActiveCatheter: (id: string | null) => void;
   setDragging: (d: boolean) => void;
   setOtherAtrium: (o: 'translucent' | 'hidden') => void;
-  setMeshView: (v: MeshView) => void;
+  setMapType: (t: MapType) => void;
+  setMapSettings: (p: Partial<MapSettings>) => void;
+  setAutoAcquire: (a: boolean) => void;
+  setShowPoints: (s: boolean) => void;
+  bumpMap: (message?: string) => void;
   setHoveredRegion: (r: string | null) => void;
   bumpPlacement: () => void;
 }
@@ -63,7 +85,12 @@ export const useSim = create<SimState>((set) => ({
   activeCatheter: null,
   dragging: false,
   otherAtrium: 'translucent',
-  meshView: 'propagation',
+  mapType: 'live',
+  mapSettings: DEFAULT_MAP_SETTINGS,
+  autoAcquire: false,
+  showPoints: true,
+  mapVersion: 0,
+  acquireMessage: '',
   hoveredRegion: null,
   placementTick: 0,
   setSystem: (system) => set({ system }),
@@ -79,7 +106,11 @@ export const useSim = create<SimState>((set) => ({
   setActiveCatheter: (activeCatheter) => set({ activeCatheter }),
   setDragging: (dragging) => set({ dragging }),
   setOtherAtrium: (otherAtrium) => set({ otherAtrium }),
-  setMeshView: (meshView) => set({ meshView }),
+  setMapType: (mapType) => set({ mapType }),
+  setMapSettings: (p) => set((s) => ({ mapSettings: { ...s.mapSettings, ...p } })),
+  setAutoAcquire: (autoAcquire) => set({ autoAcquire }),
+  setShowPoints: (showPoints) => set({ showPoints }),
+  bumpMap: (message) => set((s) => ({ mapVersion: s.mapVersion + 1, acquireMessage: message ?? s.acquireMessage })),
   setHoveredRegion: (hoveredRegion) => set((s) => (s.hoveredRegion === hoveredRegion ? s : { hoveredRegion })),
   bumpPlacement: () => set((s) => ({ placementTick: s.placementTick + 1 })),
 }));

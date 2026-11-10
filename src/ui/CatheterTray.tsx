@@ -8,7 +8,7 @@ import { catheterGroup, type CatheterSpec } from '../core/catheter/catalog';
 export function Slider(props: { label: string; value: number; min: number; max: number; step?: number; unit: string; onChange: (v: number) => void }) {
   return (
     <label className="slider">
-      <span>{props.label}<b>{Number.isInteger(props.step ?? 1) ? Math.round(props.value) : props.value.toFixed(1)} {props.unit}</b></span>
+      <span>{props.label}<b>{Number.isInteger(props.step ?? 1) ? Math.round(props.value) : props.value.toFixed((props.step ?? 1) < 0.1 ? 2 : 1)} {props.unit}</b></span>
       <input type="range" min={props.min} max={props.max} step={props.step ?? 1} value={props.value}
         onChange={(e) => props.onChange(Number(e.target.value))} />
     </label>

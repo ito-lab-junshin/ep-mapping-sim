@@ -1,18 +1,20 @@
 import { useEffect, useMemo } from 'react';
 import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
-import type { MeshPart } from '../core/types';
+import type { MapType, MeshPart } from '../core/types';
 import type { SimulationEngine } from '../core/sim/SimulationEngine';
 import type { SystemTheme } from '../systems';
 import { REGIONS, REGION_LABEL_JA } from '../core/geometry/regions';
-import { useSim, type MeshView } from '../state/store';
-import { placeCatheter } from '../state/engine';
+import { useSim } from '../state/store';
+import { getPoints, placeCatheter } from '../state/engine';
+import { finiteRange, latColor, voltageColor } from '../core/mapping/colorScale';
+import { replayPhase, wavefrontIntensity } from '../core/mapping/propagationReplay';
 import { CONTACT_HEIGHT_MM } from '../core/params';
 
 interface Props {
   engine: SimulationEngine;
   theme: SystemTheme;
-  view: MeshView;
+  view: MapType;
   /** 主に表示する心房（他方は半透明か非表示） */
   focus: MeshPart['chamber'];
 }
@@ -22,14 +24,29 @@ const regionColor = (id: number) => new THREE.Color().setHSL(((id * 0.618034) % 
 
 /**
  * 両心房メッシュを描画する。シミュレーションは SimulationEngine（Scene が tick）にあり、ここでは描画と
- * マウス操作（raycast によるカテーテル配置）だけを行う。
- *  - 伝播：直近の活性化を activationRamp で着色
- *  - 領域：解剖ラベルごとに色分けし、マウスを乗せた領域名を表示
- * TODO(Phase 3): LAT / ボルテージ表示。
+ * マウス操作（raycast によるカテーテル配置）だけを行う。色はすべてテーマから取る。
+ *  - live：実時間の伝播（直近の活性化を activationRamp で着色）
+ *  - lat：取得点から補間した LAT（最早 → 最遅を activationRamp の先頭 → 末尾）
+ *  - voltage：補間した電位（閾値未満は scar、閾値以上は voltageRamp の末尾）
+ *  - propagation：LAT マップの繰り返し再生（波面を wavefront 色で）
+ *  - regions：解剖ラベルごとに色分けし、マウスを乗せた領域名を表示
+ * 取得点から到達距離より遠い頂点は noData 色。
  */
 export function ChamberMesh({ engine, theme, view, focus }: Props) {
   const mesh = engine.mesh;
   const otherAtrium = useSim((s) => s.otherAtrium);
+  const mapVersion = useSim((s) => s.mapVersion);
+  const settings = useSim((s) => s.mapSettings);
+
+  // 補間（取得点・到達距離が変わったときだけ計算し直す）
+  const maps = useMemo(() => {
+    const pc = getPoints(engine);
+    const lat = pc.interpolate('lat', settings.fillThresholdMm);
+    const volt = pc.interpolate('voltage', settings.fillThresholdMm);
+    const latRange = finiteRange(pc.points.map((p) => p.latMs ?? Number.NaN));
+    return { lat, volt, latRange };
+    // mapVersion：点を足した・消したときに作り直す
+  }, [engine, settings.fillThresholdMm, mapVersion]);
 
   // 頂点属性は両心房で共有し、心房ごとに index の範囲だけ変える
   const { position, color } = useMemo(() => ({
@@ -50,12 +67,27 @@ export function ChamberMesh({ engine, theme, view, focus }: Props) {
   const base = useMemo(() => new THREE.Color(theme.colors.meshDefault), [theme]);
   const lesion = useMemo(() => new THREE.Color(theme.colors.lesion), [theme]);
 
-  useFrame(() => {
+  const noData = useMemo(() => new THREE.Color(theme.colors.noData), [theme]);
+  const wave = useMemo(() => new THREE.Color(theme.colors.wavefront), [theme]);
+
+  useFrame((state) => {
     const t = engine.ca.tissue;
     const now = engine.time;
     const tmp = new THREE.Color();
+    const setRgb = (rgb: [number, number, number]) => tmp.setRGB(rgb[0], rgb[1], rgb[2]);
+    const { lat, volt, latRange } = maps;
+    const phase = latRange ? replayPhase(state.clock.elapsedTime * 1000, latRange.min, latRange.max) : 0;
     for (let v = 0; v < t.phase.length; v++) {
-      if (t.viability[v] <= 0) tmp.copy(lesion);
+      if (view === 'lat' || view === 'propagation') {
+        const x = lat[v];
+        if (Number.isNaN(x) || !latRange) tmp.copy(noData);
+        else if (view === 'lat') setRgb(latColor(x, latRange.min, latRange.max, theme.colors.activationRamp));
+        else tmp.copy(base).multiplyScalar(0.55).lerp(wave, wavefrontIntensity(x, phase));
+      } else if (view === 'voltage') {
+        const x = volt[v];
+        if (Number.isNaN(x)) tmp.copy(noData);
+        else setRgb(voltageColor(x, settings.voltageScarMv, settings.voltageNormalMv, theme.colors.voltageRamp, theme.colors.scar));
+      } else if (t.viability[v] <= 0) tmp.copy(lesion);
       else if (view === 'regions') tmp.copy(regionColor(mesh.regionOfVertex[v]));
       else {
         const age = now - t.lastActivation[v];

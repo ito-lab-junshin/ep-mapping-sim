@@ -1,7 +1,8 @@
 import { SYSTEMS } from '../systems';
 import { SCENARIOS } from '../core/arrhythmia';
 import { ENERGY_LABEL } from '../core/ablation/LesionModel';
-import { useSim, type MeshView } from '../state/store';
+import { useSim } from '../state/store';
+import { MapControls } from './MapControls';
 import { CatheterTray } from './CatheterTray';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, EnergyId, MappingSystemId } from '../core/types';
@@ -46,13 +47,10 @@ export function ControlPanel() {
         </select>
       </label>
 
+      <h2>マップ（mapping）</h2>
+      <MapControls />
+
       <h2>3D 表示</h2>
-      <label>表示モード
-        <select value={s.meshView} onChange={(e) => s.setMeshView(e.target.value as MeshView)}>
-          <option value="propagation">伝播（propagation）</option>
-          <option value="regions">解剖領域ラベル</option>
-        </select>
-      </label>
       <label>もう一方の心房
         <select value={s.otherAtrium} onChange={(e) => s.setOtherAtrium(e.target.value as 'translucent' | 'hidden')}>
           <option value="translucent">半透明で表示</option>

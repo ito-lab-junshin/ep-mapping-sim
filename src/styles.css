@@ -52,3 +52,19 @@ html, body, #root { margin: 0; height: 100%; }
   .layout { grid-template-columns: 1fr; grid-template-rows: auto 50vh 360px; }
   .panel { grid-row: auto; }
 }
+
+.panel .row { display: flex; gap: 8px; }
+.panel .row button { flex: 1; }
+.panel .check { flex-direction: row; align-items: center; gap: 6px; }
+.panel button.link { border: none; background: none; padding: 0 4px; text-decoration: underline; cursor: pointer; color: inherit; font-size: inherit; }
+.panel .map-message { opacity: 0.85; }
+.map-controls { display: flex; flex-direction: column; gap: 10px; }
+.legend { position: absolute; right: 12px; top: 12px; padding: 8px 10px; border-radius: 6px; font-size: 11px; opacity: 0.92; max-width: 240px; pointer-events: none; }
+.legend-title { font-weight: 600; font-size: 12px; margin-bottom: 6px; }
+.legend-body { display: flex; gap: 8px; height: 140px; }
+.legend-bar-wrap { display: flex; flex-direction: column; width: 14px; }
+.legend-bar { flex: 1; border-radius: 3px; }
+.legend-scar { height: 14px; margin-top: 2px; border-radius: 3px; }
+.legend-labels { display: flex; flex-direction: column; justify-content: space-between; }
+.legend-foot { margin-top: 6px; line-height: 1.5; opacity: 0.8; }
+.legend-nodata { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }

@@ -26,10 +26,26 @@ export interface SystemTheme {
     voltageRamp: string[];
     meshDefault: string;
     lesion: string;
+    /** ボルテージマップの瘢痕（閾値未満） */
+    scar: string;
+    /** マップの「データなし」（取得点から到達距離より遠い） */
+    noData: string;
+    /** 伝播アニメーションの波面 */
+    wavefront: string;
+    /** 取得点の既定色（マップ表示でない時） */
+    point: string;
   };
+  /** 取得点の印の形と大きさ（mm） */
+  pointMarker: { shape: 'sphere' | 'box' | 'octahedron'; sizeMm: number };
   terms: {
     geometryAcquire: string;   // 例: FAM / Fast Anatomical Map
     activationMap: string;     // 例: LAT map
+    voltageMap: string;
+    propagationMap: string;
+    /** 取得点の呼び方 */
+    mapPoint: string;
+    /** 補間の到達距離（fill threshold 相当） */
+    fillThreshold: string;
     lesionTag: string;         // 例: Visitag / AutoMark / Lesion Tag
     localImpedance?: string;   // 例: DirectSense
   };
@@ -57,8 +73,13 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
       activationRamp: ['#ff2a2a', '#ffb000', '#f2f200', '#3cd13c', '#1ea8ff', '#8a3cff'],
       voltageRamp: ['#ff2a2a', '#ffb000', '#f2f200', '#3cd13c', '#9b5cff'],
       meshDefault: '#7f8699', lesion: '#ff3b3b',
+      scar: '#8c8c8c', noData: '#4a4f5c', wavefront: '#ff2a2a', point: '#f5f5f5',
     },
-    terms: { geometryAcquire: 'FAM（高速解剖マップ）', activationMap: 'LAT マップ', lesionTag: 'VisiTag 風タグ' },
+    pointMarker: { shape: 'sphere', sizeMm: 0.9 },
+    terms: {
+      geometryAcquire: 'FAM（高速解剖マップ）', activationMap: 'LAT マップ', lesionTag: 'VisiTag 風タグ',
+      voltageMap: 'ボルテージマップ（bipolar）', propagationMap: '伝播マップ（propagation）', mapPoint: '取得点', fillThreshold: '補間の到達距離（fill threshold）',
+    },
     features: {
       contactForce: true, localImpedance: false, ablationIndex: true, autoLesionTag: true,
       omnipolarEgm: false, hdGridLikeCatheter: false, multisplineCatheter: true, voltageThresholdSlider: true,
@@ -75,8 +96,13 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
       activationRamp: ['#ffffff', '#ff4d4d', '#ffa500', '#ffff33', '#33ff66', '#3399ff', '#9933ff'],
       voltageRamp: ['#9a9a9a', '#ff4d4d', '#ffff33', '#33ff66', '#b366ff'],
       meshDefault: '#8b94a7', lesion: '#ff5a36',
+      scar: '#9a9a9a', noData: '#3d4a60', wavefront: '#ffffff', point: '#ffd24d',
     },
-    terms: { geometryAcquire: '高密度収集（HD）', activationMap: 'LAT マップ', lesionTag: 'AutoMark 風タグ' },
+    pointMarker: { shape: 'box', sizeMm: 1.1 },
+    terms: {
+      geometryAcquire: '高密度収集（HD）', activationMap: 'LAT マップ', lesionTag: 'AutoMark 風タグ',
+      voltageMap: 'ボルテージマップ（peak-to-peak）', propagationMap: 'ウェーブフロント表示', mapPoint: 'マッピング点', fillThreshold: '補間の到達距離（interpolation）',
+    },
     features: {
       contactForce: true, localImpedance: false, ablationIndex: false, autoLesionTag: true,
       omnipolarEgm: true, hdGridLikeCatheter: true, multisplineCatheter: false, voltageThresholdSlider: true,
@@ -93,8 +119,13 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
       activationRamp: ['#ff3355', '#ff9f1a', '#ffe81a', '#3ddc84', '#1ab3ff', '#7a5cff'],
       voltageRamp: ['#ff3355', '#ff9f1a', '#ffe81a', '#3ddc84', '#7a5cff'],
       meshDefault: '#7d8893', lesion: '#ff4d6d',
+      scar: '#8e8e8e', noData: '#3a434c', wavefront: '#38d39f', point: '#e0f7ef',
     },
-    terms: { geometryAcquire: 'ジオメトリ収集', activationMap: 'アクティベーションマップ', lesionTag: '病変タグ', localImpedance: 'DirectSense 風 局所インピーダンス' },
+    pointMarker: { shape: 'octahedron', sizeMm: 1.0 },
+    terms: {
+      geometryAcquire: 'ジオメトリ収集', activationMap: 'アクティベーションマップ', lesionTag: '病変タグ', localImpedance: 'DirectSense 風 局所インピーダンス',
+      voltageMap: 'ボルテージマップ', propagationMap: 'プロパゲーション表示', mapPoint: 'ビート', fillThreshold: '補間の到達距離',
+    },
     features: {
       contactForce: false, localImpedance: true, ablationIndex: false, autoLesionTag: true,
       omnipolarEgm: false, hdGridLikeCatheter: false, multisplineCatheter: true, voltageThresholdSlider: true,
