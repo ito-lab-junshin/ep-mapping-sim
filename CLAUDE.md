@@ -42,7 +42,8 @@ npm run build    # tsc -b && vite build
 - Phase 1 完了：φ モデルの EGM（`src/core/egm`）、房室伝導（`src/core/conduction`）、体表 ECG（`src/core/ecg`、1・3 誘導、T 波あり）、`SimulationEngine`（`src/core/sim`）、EGM パネル（スイープ・ゲイン・フリーズ・キャリパー）、スライダーによるカテーテル配置。
 - Phase 2 完了：パラメトリック両心房メッシュ（`src/core/geometry/parametric`、寸法は `dimensions.ts` の normal／afRemodeled）、領域ラベル（`regions.ts`）、心房間の連結、`ChamberLoader`・`MeshQuery`、カテーテル配置（経路：CS・His・HRA、自由：ABL・環状・多極、`src/core/catheter`）、3D 上のクリック・ドラッグ・ホイール操作。クライオバルーン・PFA の配置は Phase 5。
 - Phase 2 の追補：セルオートマトンをイベント駆動＋三角形更新にして数値誤差を 5 % 以内に修正。一般心房筋 1.0 mm/ms（P 波幅 < 120 ms）。異方性伝導（`fiber` / `cvLongitudinal`）と連結ごとの伝導速度の仕組みを追加（洞調律では優先伝導路なし。分界稜の異方性は Phase 4 の AFL で設定）。
-- 次は **Phase 3（マップ表示：伝播／LAT／ボルテージ・テーマ完全対応）**。
+- Phase 3 完了：マッピング（`src/core/mapping`：点の取得・LAT/電位の注釈・方向非依存 EGM・補間・色・伝播再生・WOI の規則）、マップ表示（LAT／ボルテージ／伝播アニメーション）、カラーバー、取得点、マップの設定、テーマの用語・色・取得点の印の完全対応。
+- 次は **Phase 4（4 シナリオ：基質・誘発・根治判定・刺激プロトコル）**。
 
 ## 決定済み事項（再確認不要）
 
