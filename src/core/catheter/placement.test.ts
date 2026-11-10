@@ -62,11 +62,12 @@ describe('自由配置カテーテル（ABL・環状・多極）', () => {
     expect(small.every((e) => e.contactVertex < 0)).toBe(true);
   });
 
-  it('多極スプライン・グリッド：壁に沿って広がり、押し込めば全電極が接触する', () => {
+  it('多極スプライン・グリッド：開口から離れた壁（LA 後壁）に広げると、押し込めば全電極が接触する', () => {
+    const posterior = laBodyPointTowards(model, { x: 0.3, y: 0.2, z: -1 });
     for (const kind of ['multispline', 'grid'] as const) {
-      const es = placeFree(q, model, kind, { point: lateral, heightMm: 1, rotationDeg: 0 }, []);
+      const es = placeFree(q, model, kind, { point: posterior, heightMm: 1, rotationDeg: 0 }, []);
       expect(es.every((e) => e.contactVertex >= 0), kind).toBe(true);
-      const lifted = placeFree(q, model, kind, { point: lateral, heightMm: 5, rotationDeg: 0 }, []);
+      const lifted = placeFree(q, model, kind, { point: posterior, heightMm: 5, rotationDeg: 0 }, []);
       expect(lifted.every((e) => e.contactVertex < 0), kind).toBe(true);
     }
   });
@@ -80,5 +81,20 @@ describe('既定配置', () => {
     if (p.kind !== 'free') throw new Error('abl must be free');
     const es = placeFree(q, model, 'ablation_tip', p, ablationOffsetsMm());
     expect(es.map((e) => e.contactVertex >= 0)).toEqual([true, false, false, false]);
+  });
+});
+
+describe('開口（弁輪）にかかる配置', () => {
+  it('僧帽弁輪の縁に置いた多極・グリッドの電極は重ならず、開口の上の電極は非接触になる', () => {
+    const rimV = model.anatomy.rims.mitral[0];
+    const point = q.position(rimV);
+    for (const kind of ['multispline', 'grid'] as const) {
+      const es = placeFree(q, model, kind, { point, heightMm: 1, rotationDeg: 0 }, []);
+      // どの 2 電極も 0.5 mm 以上離れている
+      for (let i = 0; i < es.length; i++) for (let j = i + 1; j < es.length; j++) {
+        expect(dist(es[i].position, es[j].position), `${kind} ${i}-${j}`).toBeGreaterThan(0.5);
+      }
+      expect(es.some((e) => e.contactVertex < 0), kind).toBe(true);
+    }
   });
 });

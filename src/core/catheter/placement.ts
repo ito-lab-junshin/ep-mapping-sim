@@ -22,9 +22,14 @@ export function electrodeAt(q: MeshQuery, id: string, position: Vec3): Electrode
   return { id, position, heightMm: hit.distance, contactVertex: hit.distance <= CONTACT_THRESHOLD_MM ? hit.vertex : -1 };
 }
 
-/** 表面上の点 p から内側（−法線）へ h mm */
-function inward(q: MeshQuery, p: Vec3, h: number): Vec3 {
+/**
+ * 表面上の点 p から内側（−法線）へ h mm。
+ * p が開口（弁輪・静脈）の上にある（最近点が開口の縁）ときは、壁に沿わず p の位置に浮かせる
+ * （縁に吸い寄せると複数の電極が重なり、双極電位が 0 になってしまうため）。
+ */
+function inward(q: MeshQuery, p: Vec3, h: number, normal?: Vec3): Vec3 {
   const hit = q.closestPoint(p);
+  if (normal && hit.distance > 1 && q.atOpening(hit)) return sub(p, scale(normal, h));
   return sub(hit.point, scale(hit.normal, h));
 }
 
@@ -103,7 +108,7 @@ export function placeFree(
     for (let i = 0; i < CIRCULAR.electrodes; i++) {
       const a = (2 * Math.PI * i) / CIRCULAR.electrodes;
       const target = add(hit.point, add(scale(t, Math.cos(a) * diameter / 2), scale(b, Math.sin(a) * diameter / 2)));
-      out.push(electrodeAt(q, String(i + 1), inward(q, target, p.heightMm)));
+      out.push(electrodeAt(q, String(i + 1), inward(q, target, p.heightMm, n)));
     }
     return out;
   }
@@ -115,7 +120,11 @@ export function placeFree(
       const dir = add(scale(t, Math.cos(a)), scale(b, Math.sin(a)));
       MULTISPLINE.offsetsMm.forEach((o, k) => {
         const w = q.walk(hit.point, dir, o);
-        out.push(electrodeAt(q, `${String.fromCharCode(65 + sp)}${k + 1}`, sub(w.point, scale(w.normal, p.heightMm))));
+        // 開口の縁で止まったら、残りは縁から直進して開口の上に浮かせる（非接触）
+        const rest = o - w.traveled;
+        const onWall = sub(w.point, scale(w.normal, p.heightMm));
+        const pos = rest > 0.5 ? add(onWall, scale(w.direction, rest)) : onWall;
+        out.push(electrodeAt(q, `${String.fromCharCode(65 + sp)}${k + 1}`, pos));
       });
     }
     return out;
@@ -125,7 +134,7 @@ export function placeFree(
     const out: Electrode[] = [];
     for (let r = 0; r < GRID.rows; r++) for (let c = 0; c < GRID.cols; c++) {
       const target = add(hit.point, add(scale(t, (c - (GRID.cols - 1) / 2) * GRID.spacingMm), scale(b, (r - (GRID.rows - 1) / 2) * GRID.spacingMm)));
-      out.push(electrodeAt(q, `${String.fromCharCode(65 + r)}${c + 1}`, inward(q, target, p.heightMm)));
+      out.push(electrodeAt(q, `${String.fromCharCode(65 + r)}${c + 1}`, inward(q, target, p.heightMm, n)));
     }
     return out;
   }

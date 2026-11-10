@@ -20,6 +20,8 @@ export interface SurfaceHit {
 export class MeshQuery {
   private vertexTris: number[][];
   readonly vertexNormals: Float32Array;
+  /** 開口（弁輪・静脈の端・CS 口）の縁の頂点 */
+  readonly boundary = new Set<number>();
 
   constructor(readonly mesh: SurfaceMesh) {
     const n = mesh.positions.length / 3;
@@ -38,6 +40,21 @@ export class MeshQuery {
       const l = Math.hypot(this.vertexNormals[3 * v], this.vertexNormals[3 * v + 1], this.vertexNormals[3 * v + 2]) || 1;
       this.vertexNormals[3 * v] /= l; this.vertexNormals[3 * v + 1] /= l; this.vertexNormals[3 * v + 2] /= l;
     }
+    // 1 つの三角形にしか属さない辺の端点 = 開口の縁
+    const edgeCount = new Map<number, number>();
+    for (let t = 0; t < idx.length; t += 3) {
+      for (let e = 0; e < 3; e++) {
+        const a = idx[t + e], b = idx[t + ((e + 1) % 3)];
+        const k = a < b ? a * n + b : b * n + a;
+        edgeCount.set(k, (edgeCount.get(k) ?? 0) + 1);
+      }
+    }
+    for (const [k, c] of edgeCount) if (c === 1) { this.boundary.add(Math.floor(k / n)); this.boundary.add(k % n); }
+  }
+
+  /** 最近点が開口の縁にあるか（その先は開口＝表面がない） */
+  atOpening(hit: SurfaceHit): boolean {
+    return this.boundary.has(hit.vertex);
   }
 
   position(v: number): Vec3 {
@@ -94,9 +111,9 @@ export class MeshQuery {
 
   /**
    * 表面に沿って start から方向 dir へ distance mm 進んだ点（0.5 mm 刻みで射影しながら進む）。
-   * 開口の縁に達したら止まる（最近点が動かなくなる）。
+   * 開口（弁輪・静脈）の縁に達したら止まる。traveled は実際に表面を進めた距離、direction は最後の進行方向。
    */
-  walk(start: Vec3, dir: Vec3, distance: number): SurfaceHit {
+  walk(start: Vec3, dir: Vec3, distance: number): SurfaceHit & { traveled: number; direction: Vec3 } {
     let hit = this.closestPoint(start);
     let d = tangent(dir, hit.normal);
     const step = 0.5;
@@ -104,12 +121,13 @@ export class MeshQuery {
     while (moved < distance - 1e-9) {
       const s = Math.min(step, distance - moved);
       const next = this.closestPoint(add(hit.point, scale(d, s)));
-      if (len(sub(next.point, hit.point)) < s * 0.2) break; // 縁で止まった
+      // 開口の縁で止まった（凹みで一時的に動かないだけなら、そのまま進める）
+      if (len(sub(next.point, hit.point)) < s * 0.2 && this.atOpening(next)) break;
       d = tangent(d, next.normal);
       hit = next;
       moved += s;
     }
-    return hit;
+    return { ...hit, traveled: moved, direction: d };
   }
 }
 

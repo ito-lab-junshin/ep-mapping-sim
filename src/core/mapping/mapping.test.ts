@@ -209,3 +209,23 @@ describe('カテーテルからの点の取得', () => {
     expect(d).toBeLessThan(25);
   }, 60_000);
 });
+
+describe('方向非依存 EGM（エンジン上）', () => {
+  it('双極で見かけの低電位（< 0.5 mV）が出る部位でも、方向非依存 EGM では出ない', () => {
+    const model = loadParametricSync('afRemodeled');
+    const q = new SimulationEngine(model).query;
+    const laV = model.mesh.bridges!.find((b) => b.name === 'bachmann')!.pairs[0][1];
+    const p = model.mesh.positions;
+    const target = q.walk({ x: p[3 * laV], y: p[3 * laV + 1], z: p[3 * laV + 2] }, { x: 1, y: 0, z: 0 }, 6).point;
+    const low = (omni: boolean) => {
+      const eng = new SimulationEngine(model);
+      eng.setPlacement('grid', { kind: 'free', point: target, heightMm: 1, rotationDeg: 0 });
+      eng.tick(1000);
+      const r = acquirePoints(eng, 'grid', SETTINGS, { omnipolar: omni, rhythm: 'sinus' });
+      expect(r.points.length).toBeGreaterThan(0);
+      return r.points.filter((x) => x.voltageMv < 0.5).length;
+    };
+    expect(low(false)).toBeGreaterThan(0);
+    expect(low(true)).toBe(0);
+  });
+});
