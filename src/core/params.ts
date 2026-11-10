@@ -50,7 +50,7 @@ export const EGM_HISTORY_MS = 15000;     // 25 mm/s でも画面幅以上を保�
 /** EGM テンプレート振幅 mV（合成成分。教育用近似） */
 export const TEMPLATE_AMPLITUDE_MV = {
   /** 心房カテーテルの双極に乗る心室遠隔電位 */
-  farFieldV: { hra: 0.08, cs: 0.6, abl: 0.3 },
+  farFieldV: { hra: 0.08, cs: 0.6, abl: 0.3, map: 0.05 },
   /** His 4 極（d = 1-2、p = 3-4）の H・V。A はメッシュから φ モデルで計算する */
   his: { d: { h: 0.35, v: 1.0 }, p: { h: 0.15, v: 0.6 } },
   /** RV 心尖の局所 V（QRS 開始から 15 ms） */
@@ -75,4 +75,26 @@ export const CONDUCTION = {
   bachmannLongitudinalCv: 0,
   /** 心房間の連結。優先伝導路を入れない方針のため、いずれも一般心房筋と同じ */
   bridgeCv: { bachmann: 1.0, fossa_rim: 1.0, cs_musculature: 1.0 },
+};
+
+/**
+ * マップ（Phase 3）の既定値。いずれも UI で変更でき、仮定値（教育用近似）。
+ * docs/DESIGN.md §4.2・§6・§8.2 と一致させること。
+ */
+export const MAP_DEFAULTS = {
+  /** 補間の到達距離（fill threshold 相当）mm と範囲 */
+  fillThresholdMm: 10,
+  fillThresholdRangeMm: [5, 30] as const,
+  /** 関心窓（WOI）：基準チャンネルの興奮からの範囲 ms */
+  woiBeforeMs: -150,
+  woiAfterMs: 100,
+  /** ボルテージ閾値 mV：心房の双極電位で広く用いられる慣用値（出典未確認の仮定値） */
+  voltageScarMv: 0.1,
+  voltageNormalMv: 0.5,
+  /** 基準チャンネル */
+  referenceChannel: 'CS 9-10',
+  /** 単極電位の履歴の長さ ms（LAT の −dV/dt 用） */
+  unipolarHistoryMs: 1500,
+  /** 自動取得で、既存の点からこの距離 mm 以内なら取り直さない */
+  autoMinSpacingMm: 1.5,
 };

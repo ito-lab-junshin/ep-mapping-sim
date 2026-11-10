@@ -202,3 +202,42 @@ export interface PacingProtocol {
   extraStimuliMs?: number[]; // S2, S3...
   burstBeats?: number;
 }
+
+/** 3D ビューの表示モード */
+export type MapType = 'live' | 'lat' | 'voltage' | 'propagation' | 'regions';
+
+/** LAT の取り方：双極の最大振幅／単極の最大下降点（−dV/dt 最大） */
+export type LatMethod = 'bipolarPeak' | 'unipolarDvdt';
+
+/** マップの設定（docs/DESIGN.md §6） */
+export interface MapSettings {
+  /** 関心窓（WOI）：基準チャンネルの興奮からの範囲 ms */
+  woiBeforeMs: number;
+  woiAfterMs: number;
+  /** true：ユーザーが WOI を手動で決めた（頻拍時の自動切り替えをしない） */
+  woiManual: boolean;
+  referenceChannel: string;
+  latMethod: LatMethod;
+  /** 補間の到達距離（fill threshold 相当）mm */
+  fillThresholdMm: number;
+  /** ボルテージ閾値 mV（これ未満 = 瘢痕、これ超 = 正常） */
+  voltageScarMv: number;
+  voltageNormalMv: number;
+}
+
+/** マップの取得点 */
+export interface MapPoint {
+  id: number;
+  /** 表面上の位置と最寄り頂点 */
+  position: Vec3;
+  vertex: number;
+  /** 基準チャンネルの興奮からの局所活性化時刻 ms（WOI 内に興奮がなければ null） */
+  latMs: number | null;
+  /** 電位 mV（双極または方向非依存の peak-to-peak） */
+  voltageMv: number;
+  catheterId: string;
+  /** 'bipolar'：隣り合う 2 電極、'omnipolar'：3 電極の方向非依存 */
+  signal: 'bipolar' | 'omnipolar';
+  /** 取得した拍の基準時刻（シミュレーション時刻 ms） */
+  referenceTime: number;
+}

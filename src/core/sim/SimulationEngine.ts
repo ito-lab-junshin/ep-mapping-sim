@@ -11,7 +11,7 @@ import { MeshQuery } from '../geometry/MeshQuery';
 import { buildGuidedPaths, nearestS, type GuidedPath, type GuidedPathId } from '../catheter/guidedPaths';
 import { placeFree, placeOnPath, type Placement } from '../catheter/placement';
 import { catheterGroup, defaultCatheters, type CatheterSpec } from '../catheter/catalog';
-import { EGM_HISTORY_MS, SAMPLE_MS, SINUS_CYCLE_MS, TEMPLATE_AMPLITUDE_MV } from '../params';
+import { EGM_HISTORY_MS, MAP_DEFAULTS, SAMPLE_MS, SINUS_CYCLE_MS, TEMPLATE_AMPLITUDE_MV } from '../params';
 import { scale } from '../geometry/parametric/sdf';
 
 export interface EngineOptions {
@@ -47,6 +47,10 @@ export class SimulationEngine {
   private lastSinus = -Infinity;
   private lastNodeActivation = -1;
   private sampler: (() => number)[] = [];
+  /** 現在のサンプルでの、電極ごとの単極電位 mV（メッシュ上に置かれたカテーテル） */
+  private uni = new Map<string, Float32Array>();
+  /** マッピングに使うカテーテル（環状・多極・ABL）の、電極ごとの単極電位の履歴 */
+  private uniHistory = new Map<string, RingBuffer[]>();
 
   constructor(readonly model: BiatrialModel, opts: EngineOptions = {}) {
     this.mesh = model.mesh;
@@ -66,6 +70,13 @@ export class SimulationEngine {
     }
 
     this.specs = defaultCatheters(model);
+    const uniCap = Math.ceil(MAP_DEFAULTS.unipolarHistoryMs / SAMPLE_MS);
+    for (const spec of this.specs) {
+      if (spec.catheter.source === 'mesh') this.uni.set(spec.catheter.id, new Float32Array(spec.catheter.electrodes.length));
+      if (catheterGroup(spec.catheter.kind) === 'map' || spec.catheter.kind === 'ablation_tip') {
+        this.uniHistory.set(spec.catheter.id, spec.catheter.electrodes.map(() => new RingBuffer(uniCap)));
+      }
+    }
     for (const spec of this.specs) {
       if (spec.placement?.kind === 'path' && spec.pathId && Number.isNaN(spec.placement.s)) {
         spec.placement = { ...spec.placement, s: this.paths[spec.pathId].defaultS };
@@ -154,7 +165,23 @@ export class SimulationEngine {
       this.av.atrialArrival(node);
     }
 
+    // 電極ごとの単極電位を 1 回だけ計算し、双極チャンネルはその差で作る
+    for (const spec of this.specs) {
+      const c = spec.catheter;
+      const u = this.uni.get(c.id);
+      if (!u) continue;
+      const hist = this.uniHistory.get(c.id);
+      for (let e = 0; e < c.electrodes.length; e++) {
+        u[e] = c.placed ? this.egm.unipolarAt(c.electrodes[e].position, ca.time) : 0;
+        hist?.[e].push(u[e]);
+      }
+    }
     for (let i = 0; i < this.channels.length; i++) this.channels[i].buffer.push(this.sampler[i]());
+  }
+
+  /** 電極の単極電位の履歴（環状・多極・ABL のみ。サンプル間隔 sampleMs、最後が現在） */
+  unipolarHistory(catheterId: string, electrode: number): RingBuffer | undefined {
+    return this.uniHistory.get(catheterId)?.[electrode];
   }
 
   private recentV(windowMs = 200) { return AvConduction.recent(this.av.vTimes, this.time, windowMs); }
@@ -178,7 +205,8 @@ export class SimulationEngine {
       return () => {
         if (!cath.placed) return 0;
         const now = this.time;
-        let s = this.egm.bipolar(cath, pair, now);
+        const u = this.uni.get(cath.id)!;
+        let s = u[pair[0]] - u[pair[1]];
         for (const h of AvConduction.recent(this.av.hTimes, now, 50)) s += hv.h * hisSpike(now - h);
         for (const v of this.recentV()) s += hv.v * farFieldV(now - v);
         return s;
@@ -186,11 +214,12 @@ export class SimulationEngine {
     }
 
     const group = catheterGroup(cath.kind);
-    const ffv = group === 'hra' ? amp.farFieldV.hra : group === 'cs' ? amp.farFieldV.cs : amp.farFieldV.abl;
+    const ffv = group === 'hra' ? amp.farFieldV.hra : group === 'cs' ? amp.farFieldV.cs : group === 'map' ? amp.farFieldV.map : amp.farFieldV.abl;
+    const u = this.uni.get(cath.id)!;
     return () => {
       if (!cath.placed) return 0;
       const now = this.time;
-      let s = this.egm.bipolar(cath, pair, now);
+      let s = u[pair[0]] - u[pair[1]];
       for (const v of this.recentV()) s += ffv * farFieldV(now - v);
       return s;
     };
@@ -204,5 +233,6 @@ export class SimulationEngine {
     this.lastSinus = -Infinity;
     this.lastNodeActivation = -1;
     for (const ch of this.channels) ch.buffer.clear();
+    for (const h of this.uniHistory.values()) for (const b of h) b.clear();
   }
 }
