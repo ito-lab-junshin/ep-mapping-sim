@@ -41,12 +41,15 @@ npm run build    # tsc -b && vite build
 - Phase 0 完了：雛形・CI（GitHub Pages）・設計書・楕円体メッシュ上のセルオートマトン・テーマ切り替え。
 - Phase 1 完了：φ モデルの EGM（`src/core/egm`）、房室伝導（`src/core/conduction`）、体表 ECG（`src/core/ecg`、1・3 誘導、T 波あり）、`SimulationEngine`（`src/core/sim`）、EGM パネル（スイープ・ゲイン・フリーズ・キャリパー）、スライダーによるカテーテル配置。
 - Phase 2 完了：パラメトリック両心房メッシュ（`src/core/geometry/parametric`、寸法は `dimensions.ts` の normal／afRemodeled）、領域ラベル（`regions.ts`）、心房間の連結、`ChamberLoader`・`MeshQuery`、カテーテル配置（経路：CS・His・HRA、自由：ABL・環状・多極、`src/core/catheter`）、3D 上のクリック・ドラッグ・ホイール操作。クライオバルーン・PFA の配置は Phase 5。
+- Phase 2 の追補：セルオートマトンをイベント駆動＋三角形更新にして数値誤差を 5 % 以内に修正。一般心房筋 1.0 mm/ms（P 波幅 < 120 ms）。異方性伝導（`fiber` / `cvLongitudinal`）と連結ごとの伝導速度の仕組みを追加（洞調律では優先伝導路なし。分界稜の異方性は Phase 4 の AFL で設定）。
 - 次は **Phase 3（マップ表示：伝播／LAT／ボルテージ・テーマ完全対応）**。
 
 ## 決定済み事項（再確認不要）
 
 - 解剖メッシュ：まずパラメトリック自作（設計書 §9.1）。glTF ローダは Phase 7。
-- 解剖寸法：AF シナリオは afRemodeled、それ以外は normal。出典を一次資料で確認できない値は「仮定値（教育用近似）」と書き、推測で出典名を書かない。
+- 解剖寸法：AF シナリオは afRemodeled、それ以外は normal。
+- 伝導：一般心房筋 1.0 mm/ms、洞調律では優先伝導路なし。ボルテージ閾値の既定は 0.1 mV・0.5 mV（慣用値・出典未確認）。
+- マップ：カテーテルで取得した点からの補間。補間の到達距離（fill threshold 相当）は UI で変更可能。方向非依存 EGM は Phase 3、接触圧・局所インピーダンスは Phase 5。出典を一次資料で確認できない値は「仮定値（教育用近似）」と書き、推測で出典名を書かない。
 - 体表 ECG：誘導数を 1／3／12 から選択可能。Phase 1 で 1・3 誘導、12 誘導は Phase 7（それまで「準備中」表示）。
 - 刺激プロトコル：教科書的既定値（S1 600 ms × 8、S2 は 10 ms 刻み。設計書 §5.6）。
 

@@ -1,4 +1,5 @@
 import type { SurfaceMesh, TissueState } from '../types';
+import { CONDUCTION } from '../params';
 
 /**
  * 心臓表面メッシュ上の簡易セルオートマトン。
@@ -38,7 +39,7 @@ export class CellularAutomaton {
       phase: new Uint8Array(n),
       timer: new Float32Array(n),
       lastActivation: new Float32Array(n).fill(-1),
-      conductionVelocity: new Float32Array(n).fill(opts?.cv ?? 0.8), // mm/ms（心房筋の目安）
+      conductionVelocity: new Float32Array(n).fill(opts?.cv ?? CONDUCTION.atrialCv), // mm/ms（§4.2 一般心房筋）
       erp: new Float32Array(n).fill(opts?.erp ?? 250),
       fiber: new Float32Array(n * 3),
       cvLongitudinal: new Float32Array(n),

@@ -109,3 +109,15 @@ describe('寸法セット', () => {
     expect(cs[1]).toBeGreaterThan(cs[0]);
   });
 });
+
+describe('P 波幅（§4.2：一般心房筋の伝導速度の調整目標）', () => {
+  it('normal の体表 ECG II の P 波幅は 120 ms 未満', () => {
+    const eng = atrialOnly(300);
+    const ii = ch(eng, 'II').buffer;
+    let first = -1, last = -1;
+    for (let i = 0; i < ii.length; i++) if (Math.abs(ii.at(i)) > 0.005) { if (first < 0) first = i; last = i; }
+    const width = (last - first) * eng.sampleMs;
+    expect(width).toBeGreaterThan(70);
+    expect(width).toBeLessThan(120);
+  });
+});

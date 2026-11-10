@@ -18,7 +18,7 @@ export function gaussSum(t: number, parts: readonly (readonly [number, number, n
 
 /**
  * 心房筋の活動電位（正規化 0〜1）。dt = 活性化からの経過 ms、apd = 活動電位持続 ms。
- * 立ち上がりは 6 ms の smoothstep（メッシュ辺 ≈ 3 mm を CV 0.8 mm/ms で約 4 ms で
+ * 立ち上がりは 6 ms の smoothstep（メッシュ辺 ≈ 2〜3 mm を CV 1.0 mm/ms で約 2〜3 ms で
  * 渡るため、隣接頂点の立ち上がりが重なり、EGM が頂点ごとのギザギザにならない）。
  */
 export const AP_UPSTROKE_MS = 6;
