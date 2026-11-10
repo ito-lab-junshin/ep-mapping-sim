@@ -60,6 +60,8 @@ export interface InterAtrialBridge {
   name: 'bachmann' | 'fossa_rim' | 'cs_musculature';
   /** [RA の頂点, LA の頂点] の組 */
   pairs: [number, number][];
+  /** 連結の伝導速度 mm/ms（遅延 = 頂点間距離 / この値） */
+  cvMmPerMs: number;
 }
 
 /** 頂点ごとの電気生理状態（セルオートマトン） */
@@ -74,6 +76,13 @@ export interface TissueState {
   conductionVelocity: Float32Array;
   /** 有効不応期 ms */
   erp: Float32Array;
+  /**
+   * 線維方向（頂点ごとの単位ベクトル [x,y,z]、長さ 3n）。0 ベクトルは等方性。
+   * 優先伝導路（分界稜・Bachmann 束）で使う
+   */
+  fiber: Float32Array;
+  /** 線維方向（長軸方向）の伝導速度 mm/ms。0 は等方性（conductionVelocity のみ） */
+  cvLongitudinal: Float32Array;
   /** 組織の生存度 0〜1（0 = 完全病変、伝導しない） */
   viability: Float32Array;
   /** 双極電位の振幅スケール mV（ボルテージマップ用） */

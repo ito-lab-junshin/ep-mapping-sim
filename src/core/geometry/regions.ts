@@ -4,7 +4,7 @@
  */
 export const REGIONS = [
   // 左房
-  'la_body', 'la_septum', 'la_roof', 'la_posterior', 'la_anterior', 'laa', 'mitral_annulus',
+  'la_body', 'la_septum', 'la_roof', 'la_posterior', 'la_anterior', 'laa', 'mitral_annulus', 'bachmann_bundle',
   'lspv_sleeve', 'lipv_sleeve', 'rspv_sleeve', 'ripv_sleeve',
   'lspv_ostium', 'lipv_ostium', 'rspv_ostium', 'ripv_ostium',
   // 右房
@@ -19,7 +19,7 @@ export const REGION_ID: Record<RegionName, number> = Object.fromEntries(REGIONS.
 /** 画面表示用の日本語名（専門用語は英語併記） */
 export const REGION_LABEL_JA: Record<RegionName, string> = {
   la_body: 'LA 本体', la_septum: 'LA 中隔', la_roof: 'LA 天蓋（roof）', la_posterior: 'LA 後壁', la_anterior: 'LA 前壁',
-  laa: '左心耳（LAA）', mitral_annulus: '僧帽弁輪',
+  laa: '左心耳（LAA）', mitral_annulus: '僧帽弁輪', bachmann_bundle: 'Bachmann 束',
   lspv_sleeve: 'LSPV', lipv_sleeve: 'LIPV', rspv_sleeve: 'RSPV', ripv_sleeve: 'RIPV',
   lspv_ostium: 'LSPV 口', lipv_ostium: 'LIPV 口', rspv_ostium: 'RSPV 口', ripv_ostium: 'RIPV 口',
   ra_body: 'RA 本体', ra_septum: 'RA 中隔', fossa_ovalis: '卵円窩', sinus_node: '洞結節', crista_terminalis: '分界稜',

@@ -1,5 +1,6 @@
 import type { Catheter, EcgLead, EgmChannel, SurfaceMesh } from '../types';
 import { CellularAutomaton } from '../propagation/CellularAutomaton';
+import { applyPreferentialPathways } from '../propagation/preferentialPathways';
 import { EgmGenerator } from '../egm/EgmGenerator';
 import { RingBuffer } from '../egm/RingBuffer';
 import { farFieldV, hisSpike, localV } from '../egm/templates';
@@ -50,6 +51,7 @@ export class SimulationEngine {
   constructor(readonly model: BiatrialModel, opts: EngineOptions = {}) {
     this.mesh = model.mesh;
     this.ca = new CellularAutomaton(this.mesh);
+    applyPreferentialPathways(this.mesh, this.ca.tissue);
     this.egm = new EgmGenerator(this.mesh, this.ca.tissue);
     this.query = new MeshQuery(this.mesh);
     this.paths = buildGuidedPaths(model, this.query);

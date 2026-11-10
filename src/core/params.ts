@@ -56,3 +56,24 @@ export const TEMPLATE_AMPLITUDE_MV = {
   /** RV 心尖の局所 V（QRS 開始から 15 ms） */
   rv: { v: 3.0, delayMs: 15 },
 } as const;
+
+/**
+ * 優先伝導路と心房間の連結の伝導速度 mm/ms。
+ * P 波幅の目標値から逆算した仮定値（教育用近似）：洞結節刺激から両心房の全頂点が興奮し終わるまで
+ * normal 90〜110 ms・afRemodeled 110〜130 ms、体表 ECG の P 波幅 < 120 ms（心電図の P 波正常上限）。
+ * docs/DESIGN.md §4.2 の表と一致させること。
+ */
+export const CONDUCTION = {
+  /** 一般心房筋（§4.2 の既定値） */
+  atrialCv: 0.8,
+  /**
+   * 分界稜の長軸方向（上下）。横方向は一般心房筋と同じ。0 = 等方性（優先伝導路なし）。
+   * 保留中：目標値（normal 90〜110 ms）は一般心房筋 0.8 mm/ms のままでは満たせないため、
+   * 値はユーザーの判断待ち（暫定で無効）
+   */
+  cristaLongitudinalCv: 0,
+  /** Bachmann 束の LA 側の帯の長軸方向（左右）。0 = 等方性。保留中（同上） */
+  bachmannLongitudinalCv: 0,
+  /** 心房間の連結（予定：Bachmann 束が最も速く、卵円窩縁・CS 筋束はそれより遅い）。保留中のため一般心房筋と同じ */
+  bridgeCv: { bachmann: 0.8, fossa_rim: 0.8, cs_musculature: 0.8 },
+};

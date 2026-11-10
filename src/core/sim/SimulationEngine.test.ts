@@ -76,7 +76,9 @@ describe('SimulationEngine（両心房・洞調律）', () => {
     eng.setPlacement('ms', { kind: 'free', point: laBodyPointTowards(model, { x: 1, y: -0.35, z: 0 }), heightMm: 1, rotationDeg: 0 });
     expect(eng.placementVersion).toBe(v0 + 1);
     eng.tick(800);
-    expect(peakAmp(eng, 'MS A1-2')).toBeGreaterThan(0.3);
+    // 双極電位は波面の向きで小さくなりうるので、全スプラインの最大で見る
+    const ms = eng.channels.filter((c) => c.catheterId === 'ms').map((c) => peakAmp(eng, c.id));
+    expect(Math.max(...ms)).toBeGreaterThan(0.5);
     eng.setPlacement('ms', null);
     expect(eng.catheter('ms')!.placed).toBe(false);
   });

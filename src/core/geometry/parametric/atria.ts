@@ -2,6 +2,7 @@ import type { ChamberId, InterAtrialBridge, MeshPart, SurfaceMesh, Vec3 } from '
 import { buildNeighbors } from '../buildNeighbors';
 import { REGIONS, REGION_ID, PV_NAMES, PV_OSTIUM, PV_SLEEVE, type PvName, type RegionName } from '../regions';
 import { DIMENSION_SETS, LAYOUT, MESH_GRID_MM, type AnatomyDimensions, type DimensionSetId } from './dimensions';
+import { CONDUCTION } from '../../params';
 import {
   add, dist, dot, ellipsoid, norm, projectToSurface, scale, smoothUnion, sub, tube, tubeFrame, v3,
   type Sdf, type TubeFrame,
@@ -117,6 +118,9 @@ function rimOf(m: RawMesh, o: Opening, boundary: Set<number>): number[] {
   return [...boundary].filter((v) => Math.abs(axialDistance(o, pos(m, v))) < 2.5 && radialDistance(o, pos(m, v)) < o.radius * 1.7);
 }
 
+/** Bachmann 束の LA 側の帯の半幅 mm。仮定値（教育用近似） */
+const BACHMANN_BAND_HALF_WIDTH_MM = 4;
+
 function segmentDistance(p: Vec3, a: Vec3, b: Vec3): number {
   const ab = sub(b, a);
   const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / (dot(ab, ab) || 1)));
@@ -168,7 +172,7 @@ function buildLeftAtrium(D: AnatomyDimensions) {
     return 'la_body';
   };
 
-  return { mesh, sdf, center: c, radii: r, pvs, mitral, openings, label };
+  return { mesh, sdf, center: c, radii: r, pvs, mitral, openings, label, laaOstium: laaO };
 }
 
 // ───────────────────────── 右房 ─────────────────────────
@@ -284,7 +288,7 @@ export function buildBiatrialModel(set: DimensionSetId = 'normal'): BiatrialMode
     const raPatch = patch(ra.mesh, raP(raAnchor));
     const laPatch = patch(la.mesh, laP(laAnchor));
     const pairs: [number, number][] = raPatch.map((rv) => [nLa + rv, nearestVertex(la.mesh, raP(rv), laPatch)]);
-    return { name, pairs };
+    return { name, pairs, cvMmPerMs: CONDUCTION.bridgeCv[name] };
   };
   // Bachmann 束：RA 前上方の中隔寄りと、LA の前上方の半分のうち最も近い点
   const bbRa = vertexTowards(ra.mesh, ra.center, ORIENT.bachmannRa);
@@ -305,11 +309,21 @@ export function buildBiatrialModel(set: DimensionSetId = 'normal'): BiatrialMode
   const cs = makeBridge('cs_musculature', csRa, nearestVertex(la.mesh, raP(csRa), laAll));
   const bridges = [bachmann, fossa, cs];
 
+  // Bachmann 束の LA 側：連結点から LA 前壁を左心耳の基部へ向かう帯
+  const bbLa = bachmann.pairs.length ? bachmann.pairs[0][1] : -1;
+  if (bbLa >= 0) {
+    const a = laP(bbLa), b = la.laaOstium;
+    for (let v = 0; v < nLa; v++) {
+      const p = laP(v);
+      const r = REGIONS[region[v]];
+      if (r === 'laa' || r.includes('pv')) continue;
+      if (segmentDistance(p, a, b) < BACHMANN_BAND_HALF_WIDTH_MM && dot(sub(p, la.center), v3(0, 0, 1)) > 0) region[v] = REGION_ID.bachmann_bundle;
+    }
+  }
+
+  // 心房間の連結は隣接リストに入れず、bridges として別に持つ（連結ごとの伝導速度で伝える）
   const n = nLa + nRa;
-  const base = buildNeighbors(n, indices);
-  const extra: Set<number>[] = Array.from({ length: n }, () => new Set());
-  for (const b of bridges) for (const [a, c] of b.pairs) { extra[a].add(c); extra[c].add(a); }
-  const neighbors = base.map((nb, v) => (extra[v].size ? Int32Array.from(new Set([...nb, ...extra[v]])) : nb));
+  const neighbors = buildNeighbors(n, indices);
 
   const parts: MeshPart[] = [
     { chamber: 'LA' as ChamberId, vertexStart: 0, vertexCount: nLa, indexStart: 0, indexCount: la.mesh.indices.length },

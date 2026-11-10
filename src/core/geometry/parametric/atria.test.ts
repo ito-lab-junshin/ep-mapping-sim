@@ -117,12 +117,8 @@ describe('両心房の伝播', () => {
 
   it('Bachmann 束を切ると LA の最早興奮が遅れる', () => {
     const firstLa = (cutBachmann: boolean) => {
-      const m = { ...mesh, neighbors: mesh.neighbors.map((x) => x) };
-      if (cutBachmann) {
-        const bb = mesh.bridges!.find((b) => b.name === 'bachmann')!;
-        const drop = new Set(bb.pairs.flatMap(([a, b]) => [`${a}-${b}`, `${b}-${a}`]));
-        m.neighbors = m.neighbors.map((nb, v) => Int32Array.from([...nb].filter((u) => !drop.has(`${v}-${u}`))));
-      }
+      // 心房間の連結は bridges として別に持つので、Bachmann 束だけを取り除く
+      const m = cutBachmann ? { ...mesh, bridges: mesh.bridges!.filter((b) => b.name !== 'bachmann') } : mesh;
       const ca = new CellularAutomaton(m);
       ca.stimulate(anatomy.anchors.sinusNode.vertex);
       for (let i = 0; i < 200; i++) ca.step(2);
