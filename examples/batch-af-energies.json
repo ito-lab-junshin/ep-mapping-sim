@@ -1,0 +1,12 @@
+{
+  "name": "AF：3 エネルギーの PVI",
+  "scenario": "af",
+  "conditions": [
+    { "id": "rf", "ablation": { "energy": "rf", "powerW": 30, "durationS": 30, "spacingMm": 5 } },
+    { "id": "rf-gap", "ablation": { "energy": "rf", "powerW": 30, "durationS": 30, "spacingMm": 9 } },
+    { "id": "cryo", "ablation": { "energy": "cryo", "push01": 1, "misalignDeg": 0 } },
+    { "id": "cryo-poor", "ablation": { "energy": "cryo", "push01": 0.6, "misalignDeg": 10 } },
+    { "id": "pfa1", "ablation": { "energy": "pfa", "shape": "basket", "applications": 1 } },
+    { "id": "pfa2", "ablation": { "energy": "pfa", "shape": "basket", "applications": 2 } }
+  ]
+}

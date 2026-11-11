@@ -79,6 +79,7 @@
 | `MapSettings` | マップの設定：WOI（`woiBeforeMs`・`woiAfterMs`・手動設定か `woiManual`）、基準チャンネル、LAT の取り方、補間の到達距離 `fillThresholdMm`、ボルテージ閾値 `voltageScarMv`・`voltageNormalMv` |
 | `GeometryAcquisition`（`src/core/geometry/acquisition.ts`） | 収集モード（§9.2）：頂点ごとの収集済みの印、記録した電極の位置、被覆率、表示する三角形（3 頂点とも収集済み） |
 | `LearningGoal` / `GoalContext` / `LearningEvent` / `GoalTracker`（`src/core/learning`） | 学習ゴール（id・説明・手がかり・達成の判定 `achieved(ctx)`・1 つずつ確認する項目 `items`（`GoalItem`。例：PV ごとの entrance block。一度 ok になった項目は確認済みのまま）・途中経過 `progress`）。判定の材料はエンジン・取得点・学習の出来事（刺激プロトコルの終了：部位・結果・接触・環状カテーテルの PV と隔離の有無／設問への回答）。`GoalTracker` は一度達成したゴールを達成のまま残す |
+| `ParamOverrides` / `BatchConfig` / `BatchRow` / `CaseState`（`src/core/research`） | 研究用：パラメータの上書き（キー → 数値か配列）、一括実行の条件と 1 行の結果、症例の状態（パラメータ・配置・頂点ごとの貫壁性・病変タグ） |
 | `Tutorial` / `TutorialStep` / `TutorialContext`（`src/core/learning/tutorials.ts`） | チュートリアルの手順（題名・指示・ヒント・強調する操作欄・任意か・完了の判定）。`advanceTutorial` が完了した手順を順にとばす |
 | `MapPoint` | 取得点：表面上の位置と最寄り頂点、基準からの LAT（判定不能なら null）、電位 mV、カテーテル、信号の種類（`bipolar`／`omnipolar`）、基準時刻 |
 
@@ -179,6 +180,11 @@
 ### 4.3 研究用途への拡張口
 
 `CellularAutomaton` の公開 API は `stimulate()` / `step()` / `reset()` のみ。将来この層を反応拡散モデル（FitzHugh–Nagumo、Aliev–Panfilov）に置き換えられるようにする。
+
+**Phase 7 で実装した拡張口**（`src/core/research`、使い方は `docs/RESEARCH.md`）：
+- パラメータの上書き：「グループ名.項目」のキー（例：`AFL_SUBSTRATE.raCv`）で `params.ts` の値を一時的に変える（`withParams`）。エンジンは作るときに値を読む
+- 一括実行：`npm run batch -- 条件.json 結果.csv`（Node、vite-node）。条件（パラメータの組。`sweep` の直積も可）ごとに、誘発の成否・頻拍の周期長・洞調律 1 拍の両心房の総興奮時間（P 波幅の指標）・通電の条件（症例ごとの標準の通電）と病変の中心の貫壁性・PVI の完了・通電後の誘発を 1 行の CSV に出す。先頭に実行時の設定をコメント行で残す
+- 症例の状態の書き出し・読み込み（ブラウザ）：パラメータ・カテーテルの配置・病変を JSON に
 
 ---
 

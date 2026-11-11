@@ -1,0 +1,10 @@
+{
+  "name": "AFL：RA の伝導速度と CTI の線（30 W と 40 W）",
+  "scenario": "afl_cti",
+  "sweep": { "AFL_SUBSTRATE.raCv": [0.5, 0.6, 0.8] },
+  "conditions": [
+    { "id": "rf30", "ablation": { "energy": "rf", "powerW": 30, "durationS": 30 } },
+    { "id": "rf40", "ablation": { "energy": "rf", "powerW": 40, "durationS": 45 } }
+  ],
+  "induction": { "observeMs": 1000 }
+}

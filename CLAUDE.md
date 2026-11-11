@@ -15,6 +15,7 @@ npm run dev      # http://localhost:5173
 npm run test     # vitest（src/core の単体テスト）
 npm run lint     # tsc --noEmit
 npm run build    # tsc -b && vite build
+npm run batch -- 条件.json 結果.csv   # 研究用の一括実行（docs/RESEARCH.md）
 ```
 
 変更のたびに `npm run lint && npm run test` を通してからコミットする。
@@ -48,6 +49,7 @@ npm run build    # tsc -b && vite build
 - Phase 6 完了：収集モード（`src/core/geometry/acquisition.ts`、収集した部分だけを表示し未収集は穴）、学習ゴール判定（`src/core/learning`：`LearningGoal`・`GoalTracker`・出来事）、PVI（RF）のチュートリアル（`tutorials.ts`・`TutorialPanel`）、ハロー 20 極（AFL で三尖弁輪に置く、旋回方向の設問）、環状カテーテル・ハローからの刺激（非接触は捕捉しない）。
 - Phase 7-1 完了：時計回りの通常型 AFL（別の症例 `afl_cti_cw`、低位外側 RA からのバースト）、AFL（両方向）・AVNRT・WPW のチュートリアル。
 - Phase 7-2 完了：12 誘導 ECG（心室の電気ベクトルのモデル、Einthoven の肢誘導、胸部誘導、左側自由壁の副伝導路のデルタ波は V1 陽性・I/aVL 陰性・下壁陽性）。
+- Phase 7-3 完了：研究用の拡張口（`src/core/research`：パラメータの上書き、`npm run batch` の一括実行 CSV、症例の状態の JSON。`docs/RESEARCH.md`）。
 - 次は **Phase 7（専門家レビュー反映・12 誘導 ECG・glTF ローダ・研究用拡張口・AFL／AVNRT／WPW の詳細なチュートリアル）**。
 
 ## 決定済み事項（再確認不要）

@@ -9,6 +9,7 @@ import { AblationConsole } from './AblationConsole';
 import { GeometryControls } from './GeometryControls';
 import { GoalList } from './GoalList';
 import { TutorialPanel } from './TutorialPanel';
+import { ResearchPanel } from './ResearchPanel';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
 
@@ -83,6 +84,9 @@ export function ControlPanel() {
       <button onClick={s.toggleRunning} style={{ borderColor: theme.colors.accent }}>
         {s.running ? '一時停止' : '再開'}
       </button>
+
+      <h2>研究用（JSON）</h2>
+      <ResearchPanel />
 
       <section data-tutorial="goals">
         <h2>この症例のゴール</h2>
