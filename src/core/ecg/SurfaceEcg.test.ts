@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SurfaceEcg, ecgLeadsFor, ECG_LEAD_OPTIONS, LEAD_VECTOR, ATRIAL_ECG_GAIN, PRECORDIAL_LEADS } from './SurfaceEcg';
+import { SurfaceEcg, ecgLeadsFor, ECG_LEAD_OPTIONS, LEAD_VECTOR, ATRIAL_ECG_GAIN, PRECORDIAL_LEADS, PROXIMITY_GAIN } from './SurfaceEcg';
 import { gaussSum } from '../egm/templates';
 import { QT_MS } from '../params';
 import type { VentricularBeat } from '../conduction/ConductionSystem';
@@ -75,15 +75,15 @@ describe('SurfaceEcg', () => {
     }
   });
 
-  it('His 経由：aVR は陰性、胸部誘導は V1 の rS から V6 の R へ移行し（移行帯は V3〜V5）、V6 に小さな中隔性 q', () => {
+  it('His 経由：aVR は陰性、胸部誘導は V1 の rS から V6 の R へ移行し、V6 に小さな中隔性 q', () => {
     const ecg = new SurfaceEcg();
     expect(peak(ecg, 'aVR', his(0))).toBeLessThan(-0.5);
     const main = PRECORDIAL_LEADS.map((l) => at(ecg, 43, l, his(0)));
     expect(main[0]).toBeLessThan(-0.5);
     expect(main[5]).toBeGreaterThan(0.5);
-    for (let i = 1; i < 6; i++) expect(main[i]).toBeGreaterThan(main[i - 1]);
-    const transition = main.findIndex((x) => x > 0);
-    expect(transition).toBeGreaterThanOrEqual(2); expect(transition).toBeLessThanOrEqual(4);
+    // 近接補正の前の投影（ベクトルと誘導の向きだけ）は V1 から V6 へ単調に増える
+    const raw = PRECORDIAL_LEADS.map((l) => main[PRECORDIAL_LEADS.indexOf(l)] / PROXIMITY_GAIN[l].qrs);
+    for (let i = 1; i < 6; i++) expect(raw[i]).toBeGreaterThan(raw[i - 1]);
     expect(at(ecg, 17, 'V6', his(0))).toBeLessThan(0);
     expect(at(ecg, 17, 'V1', his(0))).toBeGreaterThan(0.1);
   });
@@ -105,6 +105,23 @@ describe('SurfaceEcg', () => {
         expect(Math.abs(newPeak - oldPeak) / Math.abs(oldPeak), `${lead} ${from}`).toBeLessThan(0.15);
       }
     }
+  });
+
+  it('胸部誘導の近接補正：正常洞調律で V2〜V4 の R 波は 0.7〜2 mV、R 波は V1 から V5 まで漸増し、移行帯（R/S が 1 を超える）は V3〜V4。補正係数は正（極性は変わらない）', () => {
+    const ecg = new SurfaceEcg();
+    const rs = PRECORDIAL_LEADS.map((l) => {
+      let R = 0, S = 0;
+      for (let t = 0; t < 110; t++) { const x = at(ecg, t, l, his(0)); R = Math.max(R, x); S = Math.min(S, x); }
+      return { R, S: -S };
+    });
+    for (const i of [1, 2, 3]) { expect(rs[i].R).toBeGreaterThan(0.7); expect(rs[i].R).toBeLessThan(2); }
+    for (let i = 1; i < 5; i++) expect(rs[i].R).toBeGreaterThan(rs[i - 1].R);
+    const transition = rs.findIndex((x) => x.R > x.S);
+    expect(transition === 2 || transition === 3, `移行帯 V${transition + 1}`).toBe(true);
+    for (const g of Object.values(PROXIMITY_GAIN)) { expect(g.qrs).toBeGreaterThan(0); expect(g.t).toBeGreaterThan(0); }
+    // 心房成分（P 波・粗動波）には近接補正を掛けない
+    ecg.setAtrialDipole({ x: 0, y: 0, z: 100 });
+    expect(ecg.atrial('V2')).toBeCloseTo(ATRIAL_ECG_GAIN * 100);
   });
 
   it('左側自由壁の副伝導路のデルタ波：V1 で陽性、I・aVL で陰性、下壁誘導（II・III・aVF）で陽性', () => {

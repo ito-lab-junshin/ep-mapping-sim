@@ -50,11 +50,27 @@ export const LEAD_VECTOR: Record<EcgLead, Vec3> = {
   aVL: lin(1, I_VEC, -0.5, II_VEC),
   aVF: lin(-0.5, I_VEC, 1, II_VEC),
   V1: { x: -0.25, y: 0, z: 0.968 },
-  V2: unit(-0.05, 0, 1),
-  V3: unit(0.35, 0, 0.94),
-  V4: unit(0.6, -0.1, 0.8),
-  V5: unit(0.85, -0.1, 0.5),
-  V6: unit(1, -0.1, 0.1),
+  V2: unit(0, 0, 1),
+  V3: unit(0.309, 0, 0.951),
+  V4: unit(0.574, -0.1, 0.819),
+  V5: unit(0.866, -0.1, 0.5),
+  V6: unit(0.996, -0.1, 0.087),
+};
+
+/**
+ * 胸部誘導の近接補正（教育用の経験的補正）：胸部誘導は心臓に近く、近接電界の影響で電気ベクトルの投影より大きく出る。
+ * 誘導ごとに QRS（脱分極：QRS・デルタ波）と T 波（再分極）に別の係数を掛け、正常洞調律で V2〜V4 の R 波が 1〜2 mV 前後、
+ * R 波の漸増と移行帯（R ≒ S）が V3〜V4 になるよう合わせた。係数はすべて正なので極性は変わらない。
+ * 心房成分（P 波・粗動波）には掛けない。肢誘導は 1（補正なし）。値の調整はこの表だけで行う
+ */
+export const PROXIMITY_GAIN: Record<EcgLead, { qrs: number; t: number }> = {
+  I: { qrs: 1, t: 1 }, II: { qrs: 1, t: 1 }, III: { qrs: 1, t: 1 }, aVR: { qrs: 1, t: 1 }, aVL: { qrs: 1, t: 1 }, aVF: { qrs: 1, t: 1 },
+  V1: { qrs: 1.5, t: 1.5 },
+  V2: { qrs: 4, t: 5 },
+  V3: { qrs: 6, t: 3 },
+  V4: { qrs: 11, t: 3 },
+  V5: { qrs: 3.2, t: 2 },
+  V6: { qrs: 1.5, t: 1.5 },
 };
 
 /** 心房の電気ベクトル → mV の係数（洞調律の II の P 波のピーク ≈ 0.15 mV になるよう較正） */
@@ -67,20 +83,19 @@ const v = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
 
 /**
  * His 経由の QRS・T（QRS 開始から）。向きは I・II・V1 の振幅（中隔 −0.12/−0.05/+0.25：V5・V6 の中隔性 q が見えるよう I を深めた、主成分 0.7/1.1/−0.9、
- * 基部 −0.1/−0.2/0、T 0.2/0.3/−0.03：V1 の T は平坦に近く、V2 から陽性）を満たすように逆算した
+ * 基部 −0.1/−0.2/0、T 0.2/0.3/0：V1 の T は平坦、V2 から陽性）を満たすように逆算した。主成分の前後成分は、胸部誘導の移行帯が V3〜V4 になるよう前へ寄せた（V1 の S の大きさは近接補正で保つ）
  */
 const NORMAL: Component[] = [
   [17, 6, v(-0.12, -0.012, 0.227)],  // 中隔：左 → 右・前方（I・V6 の小さな q、V1 の r）
-  [43, 11, v(0.7, -0.866, -0.749)],  // 主成分：左下後方（I・II の R、V1 の S、V6 の R）
+  [43, 11, v(0.7, -0.866, -0.45)],   // 主成分：左下後方（I・II の R、V1 の S、V6 の R）。前後成分は移行帯が V3〜V4 になるよう調整
   [65, 7, v(-0.1, 0.173, -0.026)],   // 基部：右上方（II の s）
-  [T_PEAK_MS, 40, v(0.2, -0.231, 0.02)], // T 波
 ];
+/** His 経由の T 波（再分極） */
+const NORMAL_T: Component[] = [[T_PEAK_MS, 40, v(0.2, -0.231, 0.05)]];
 
 /** RV 心尖ペーシング（左脚ブロック型・上方軸：I 陽性、II 陰性、V1 陰性）と二次性の T */
-const PACED: Component[] = [
-  [50, 25, v(0.8, 1.501, -0.826)],
-  [T_PEAK_MS + 20, 50, v(-0.25, -0.433, 0.245)],
-];
+const PACED: Component[] = [[50, 25, v(0.8, 1.501, -0.826)]];
+const PACED_T: Component[] = [[T_PEAK_MS + 20, 50, v(-0.25, -0.433, 0.245)]];
 
 /**
  * デルタ波のベクトル（左側自由壁の副伝導路）：副伝導路の心室付着部（左側方）から離れる向き＝右・前方・下方。
@@ -110,39 +125,46 @@ export class SurfaceEcg {
     return ATRIAL_ECG_GAIN * dot(this.dipole, LEAD_VECTOR[lead]);
   }
 
-  /** 心室の電気ベクトル（mV 相当）：時刻 now での全拍の和 */
-  ventricularVector(now: number, beats: VentricularBeat[]): Vec3 {
-    const out = { x: 0, y: 0, z: 0 };
+  /** 心室の電気ベクトル（mV 相当）：時刻 now での全拍の和。qrs = 脱分極（QRS・デルタ波）、t = 再分極（T 波） */
+  ventricularVectors(now: number, beats: VentricularBeat[]): { qrs: Vec3; t: Vec3 } {
+    const qrs = { x: 0, y: 0, z: 0 }, t = { x: 0, y: 0, z: 0 };
     for (const b of beats) {
       const dt = now - b.time;
       if (dt < -30 || dt > QT_MS + 200) continue;
-      if (b.source === 'pace') { addComponents(out, dt, PACED); continue; }
+      if (b.source === 'pace') { addComponents(qrs, dt, PACED); addComponents(t, dt, PACED_T); continue; }
       if (b.source === 'ap') {
         const delta = Math.min(FULL_PREEXCITATION_MS, (b.hisArrival ?? b.time + FULL_PREEXCITATION_MS) - b.time);
         const amp = (delta / FULL_PREEXCITATION_MS + 0.3) / 1.3;
         // デルタ波：緩やかに立ち上がり、His 経由の QRS が始まるまで続く
         if (dt >= 0) {
           const k = amp * (dt < delta ? dt / delta : Math.exp(-(dt - delta) / 20));
-          out.x += k * DELTA_VECTOR.x; out.y += k * DELTA_VECTOR.y; out.z += k * DELTA_VECTOR.z;
+          qrs.x += k * DELTA_VECTOR.x; qrs.y += k * DELTA_VECTOR.y; qrs.z += k * DELTA_VECTOR.z;
         }
-        addComponents(out, dt - delta, NORMAL);
+        addComponents(qrs, dt - delta, NORMAL); addComponents(t, dt - delta, NORMAL_T);
         continue;
       }
-      addComponents(out, dt, NORMAL);
+      addComponents(qrs, dt, NORMAL); addComponents(t, dt, NORMAL_T);
     }
-    return out;
+    return { qrs, t };
+  }
+
+  /** 心室の電気ベクトルの和（QRS と T。近接補正の前） */
+  ventricularVector(now: number, beats: VentricularBeat[]): Vec3 {
+    const { qrs, t } = this.ventricularVectors(now, beats);
+    return { x: qrs.x + t.x, y: qrs.y + t.y, z: qrs.z + t.z };
   }
 
   /** 同じ時刻の 12 誘導で計算をくり返さないための記憶 */
-  private cache: { now: number; beats: VentricularBeat[]; n: number; vec: Vec3 } | null = null;
+  private cache: { now: number; beats: VentricularBeat[]; n: number; vec: { qrs: Vec3; t: Vec3 } } | null = null;
 
-  /** 心室成分 mV（QRS・デルタ波・T） */
+  /** 心室成分 mV（QRS・デルタ波・T）。胸部誘導は近接補正を掛ける */
   ventricular(now: number, lead: EcgLead, beats: VentricularBeat[]): number {
     const c = this.cache;
-    let vec: Vec3;
+    let vec: { qrs: Vec3; t: Vec3 };
     if (c && c.now === now && c.beats === beats && c.n === beats.length) vec = c.vec;
-    else { vec = this.ventricularVector(now, beats); this.cache = { now, beats, n: beats.length, vec }; }
-    return dot(vec, LEAD_VECTOR[lead]);
+    else { vec = this.ventricularVectors(now, beats); this.cache = { now, beats, n: beats.length, vec }; }
+    const g = PROXIMITY_GAIN[lead], L = LEAD_VECTOR[lead];
+    return g.qrs * dot(vec.qrs, L) + g.t * dot(vec.t, L);
   }
 
   sample(now: number, lead: EcgLead, beats: VentricularBeat[]): number {
