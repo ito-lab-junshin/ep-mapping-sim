@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "lint": "tsc --noEmit",
-    "batch": "vite-node scripts/batch.ts --"
+    "batch": "vite-node scripts/batch.ts --",
+    "export-gltf": "vite-node scripts/export-gltf.ts --"
   },
   "dependencies": {
     "@react-three/drei": "^9.117.3",

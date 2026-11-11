@@ -79,6 +79,7 @@
 | `MapSettings` | マップの設定：WOI（`woiBeforeMs`・`woiAfterMs`・手動設定か `woiManual`）、基準チャンネル、LAT の取り方、補間の到達距離 `fillThresholdMm`、ボルテージ閾値 `voltageScarMv`・`voltageNormalMv` |
 | `GeometryAcquisition`（`src/core/geometry/acquisition.ts`） | 収集モード（§9.2）：頂点ごとの収集済みの印、記録した電極の位置、被覆率、表示する三角形（3 頂点とも収集済み） |
 | `LearningGoal` / `GoalContext` / `LearningEvent` / `GoalTracker`（`src/core/learning`） | 学習ゴール（id・説明・手がかり・達成の判定 `achieved(ctx)`・1 つずつ確認する項目 `items`（`GoalItem`。例：PV ごとの entrance block。一度 ok になった項目は確認済みのまま）・途中経過 `progress`）。判定の材料はエンジン・取得点・学習の出来事（刺激プロトコルの終了：部位・結果・接触・環状カテーテルの PV と隔離の有無／設問への回答）。`GoalTracker` は一度達成したゴールを達成のまま残す |
+| `LabelFile`（`src/core/geometry/gltf/labels.ts`） | glTF の領域ラベル：`format`・`version`・`unit`・`chambers`・`regions`（全頂点の配列か index → 領域名の一部）・`anchors`・`lines`・`bridges` |
 | `ParamOverrides` / `BatchConfig` / `BatchRow` / `CaseState`（`src/core/research`） | 研究用：パラメータの上書き（キー → 数値か配列）、一括実行の条件と 1 行の結果、症例の状態（パラメータ・配置・頂点ごとの貫壁性・病変タグ） |
 | `Tutorial` / `TutorialStep` / `TutorialContext`（`src/core/learning/tutorials.ts`） | チュートリアルの手順（題名・指示・ヒント・強調する操作欄・任意か・完了の判定）。`advanceTutorial` が完了した手順を順にとばす |
 | `MapPoint` | 取得点：表面上の位置と最寄り頂点、基準からの LAT（判定不能なら null）、電位 mV、カテーテル、信号の種類（`bipolar`／`omnipolar`）、基準時刻 |
@@ -384,7 +385,14 @@
 - LA と RA は 1 つのメッシュにまとめ、Bachmann 束・卵円窩縁・CS 筋束の 3 か所を心房間の連結でつなぐ。洞調律で LA に最初に入るのは卵円窩縁（洞結節を分界稜の上端に置いたため。連結はどれも一般心房筋と同じ伝導速度）
 - 洞結節は分界稜の上端（SVC と RA の接合部の後外側、方向 (−0.6, 0.75, −0.15)。仮定値）
 - 寸法は `src/core/geometry/parametric/dimensions.ts` に集約し、**normal**（AVNRT・WPW）、**afRemodeled**（AF）、**aflRemodeled**（AFL：RA と三尖弁輪を normal の 1.2 倍。RA の中心は短径から決め、LA と食い込まないようにする）の 3 セットをもつ。構造物の向き（PV・弁輪・CS 口などの方向）は `atria.ts` の `ORIENT` にまとめた仮定値（教育用近似）
-- メッシュの読み込み口は `ChamberLoader` インターフェース（`src/core/geometry/ChamberLoader.ts`）に統一し、glTF ローダ（公開モデル、Blender で切り出し・ポリゴン削減・ラベル付け）を Phase 7 で追加する。公開モデルを使う場合はライセンス（CC BY など）を `docs/ASSETS.md` に記録する。カテーテル配置などの幾何計算はメッシュだけで行い（`MeshQuery`）、SDF に依存しない
+- メッシュの読み込み口は `ChamberLoader` インターフェース（`src/core/geometry/ChamberLoader.ts`）に統一する。公開モデルを使う場合はライセンス（CC BY など）を `docs/ASSETS.md` に記録する。カテーテル配置などの幾何計算はメッシュだけで行い（`MeshQuery`）、SDF に依存しない
+- **glTF ローダ（Phase 7、`src/core/geometry/gltf`）**：glTF（GLB、または data URI を埋め込んだ .gltf）の三角形メッシュと、領域ラベルの JSON（`LabelFile`：頂点 index → 領域名。index は glTF の POSITION を文書の順につないだ通し番号）から `BiatrialModel` を作る（`loadGltfModel`・`gltfChamberLoader`）
+  - 手順：プリミティブをつなぐ → 単位（メートルなら mm へ。差し渡し 2 未満をメートルと判定、JSON の `unit` で指定可）→ 同じ位置の頂点を溶接 → LA と RA に分ける（JSON の `chambers` → メッシュ名 LA／RA → 開口の数 5／4 → 左右）→ 領域 → 目印・開口・PV・連結を求める（`derive.ts`）
+  - 領域：JSON で全頂点を与えればそのまま。一部だけ（例：左心耳）なら、形からの**半自動推定**（`estimate.ts`）を JSON で上書きする。推定は座標系がアプリと同じ（+x = 左、+y = 頭側、+z = 前方）であることを前提に、開口（境界の輪。円を当てはめて中心と軸）から僧帽弁輪（LA の最大の輪）・PV（左右・上下）・三尖弁輪（RA の最大）・CS 口（最小）・SVC／IVC（上下）を決め、管の付け根は輪からメッシュの辺で管の壁をたどって求める。Koch 三角・洞結節・分界稜・Eustachian 稜・CTI・卵円窩はパラメトリック形状と同じ規則。左心耳・右心耳・Bachmann 束は推定しない
+  - 目印：JSON の `anchors` > 推定の途中で決めた目印 > 領域ラベルの重心。分界稜・Eustachian 稜の線と心房間の連結も JSON（`lines`・`bridges`）で与えられる
+  - 書き出し：`exportModelToGltf`（GLB は LA・RA の 2 メッシュ、メートル。ラベル JSON は領域・目印・線・連結を含む）。`npm run export-gltf -- normal 出力.glb 出力.labels.json` で Blender での手直しの出発点を作れる
+  - 動作確認：パラメトリックモデルを glTF に書き出して読み戻す往復テスト。頂点・三角形・領域・目印・連結が一致し、4 症例が誘発 → 標準の通電で根治する。ラベルなし（推定）でも AFL が誘発・根治する。three.js の GLTFLoader でも開けることを確認した
+  - 実際の公開モデルの選定は別途行う（`docs/ASSETS.md`）
 
 #### パラメトリック形状の寸法
 
@@ -479,7 +487,7 @@
 | 4 ✅ | 4 シナリオ実装（基質・誘発・根治判定）・刺激プロトコル | 4 症例すべて誘発→治療→非誘発が成立 |
 | 5 ✅ | アブレーション 3 エネルギー・病変タグ・システム固有指標・クライオバルーン／PFA の配置・接触圧・局所インピーダンス・接合部調律 | RF／クライオ／PFA で病変形状が異なる |
 | 6 ✅ | 収集モード（FAM 風、未収集は穴）・学習ゴール判定・PVI（RF）のチュートリアル・ハロー 20 極・環状カテーテルからの刺激 | 初学者が指示だけで PVI を完遂できる（チュートリアルをスクリプトで最後まで実行できることをテストで確認） |
-| 7 | 専門家レビュー反映・12 誘導 ECG・glTF ローダ（公開モデル差し替え）・研究用拡張口（パラメータ入出力、バッチ実行）・AFL・AVNRT・WPW の詳細なチュートリアル（Phase 6 ではゴール一覧を手引きにしている）・通常型 AFL の時計回り（反時計回りとの鑑別：ハロー・CS の順序の違い） | — |
+| 7（7-1〜7-4 ✅、7-5 は未着手） | 専門家レビュー反映（7-5：指摘を受けてから）・12 誘導 ECG ✅・glTF ローダ ✅（公開モデルの選定は別途）・研究用拡張口 ✅・glTF ローダ（公開モデル差し替え）・研究用拡張口（パラメータ入出力、バッチ実行）・AFL・AVNRT・WPW の詳細なチュートリアル（Phase 6 ではゴール一覧を手引きにしている）・通常型 AFL の時計回り（反時計回りとの鑑別：ハロー・CS の順序の違い） | — |
 
 ---
 

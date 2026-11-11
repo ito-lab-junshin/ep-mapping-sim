@@ -21,7 +21,7 @@ import {
  */
 
 /** 各構造の向き（心腔中心から見た方向）。仮定値（教育用近似） */
-const ORIENT = {
+export const ORIENT = {
   laCenter: v3(24, 2, -8),
   /** RA の中心（x は RA の短径から決める：中隔側の面が LA と重ならないように） */
   raCenter: v3(-20, 0, 8),
@@ -102,7 +102,7 @@ function veinOpening(name: string, frame: TubeFrame): Opening {
 }
 
 /** 方向 dir に最も近い頂点（中心 c から見て） */
-function vertexTowards(m: RawMesh, c: Vec3, dir: Vec3, candidates?: Iterable<number>): number {
+export function vertexTowards(m: RawMesh, c: Vec3, dir: Vec3, candidates?: Iterable<number>): number {
   const d = norm(dir);
   let best = -1, bestDot = -Infinity;
   const it = candidates ?? Array.from({ length: m.positions.length / 3 }, (_, i) => i);
@@ -114,7 +114,7 @@ function vertexTowards(m: RawMesh, c: Vec3, dir: Vec3, candidates?: Iterable<num
   return best;
 }
 
-function nearestVertex(m: RawMesh, p: Vec3, candidates?: Iterable<number>): number {
+export function nearestVertex(m: RawMesh, p: Vec3, candidates?: Iterable<number>): number {
   let best = -1, bestD = Infinity;
   const it = candidates ?? Array.from({ length: m.positions.length / 3 }, (_, i) => i);
   for (const v of it) {
@@ -129,13 +129,13 @@ function rimOf(m: RawMesh, o: Opening, boundary: Set<number>): number[] {
 }
 
 /** 分界稜・Eustachian 稜の帯の半幅 mm。仮定値（教育用近似） */
-const RIDGE_HALF_WIDTH_MM = 3.5;
-const crista = (ORIENT.cristaAzimuthDeg * Math.PI) / 180;
+export const RIDGE_HALF_WIDTH_MM = 3.5;
+export const crista = (ORIENT.cristaAzimuthDeg * Math.PI) / 180;
 
 /** Bachmann 束の LA 側の帯の半幅 mm。仮定値（教育用近似） */
-const BACHMANN_BAND_HALF_WIDTH_MM = 4;
+export const BACHMANN_BAND_HALF_WIDTH_MM = 4;
 
-function segmentDistance(p: Vec3, a: Vec3, b: Vec3): number {
+export function segmentDistance(p: Vec3, a: Vec3, b: Vec3): number {
   const ab = sub(b, a);
   const t = Math.max(0, Math.min(1, dot(sub(p, a), ab) / (dot(ab, ab) || 1)));
   return dist(p, add(a, scale(ab, t)));

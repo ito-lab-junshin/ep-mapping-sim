@@ -16,6 +16,7 @@ npm run test     # vitest（src/core の単体テスト）
 npm run lint     # tsc --noEmit
 npm run build    # tsc -b && vite build
 npm run batch -- 条件.json 結果.csv   # 研究用の一括実行（docs/RESEARCH.md）
+npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリックモデルを glTF に書き出す
 ```
 
 変更のたびに `npm run lint && npm run test` を通してからコミットする。
@@ -50,11 +51,12 @@ npm run batch -- 条件.json 結果.csv   # 研究用の一括実行（docs/RESE
 - Phase 7-1 完了：時計回りの通常型 AFL（別の症例 `afl_cti_cw`、低位外側 RA からのバースト）、AFL（両方向）・AVNRT・WPW のチュートリアル。
 - Phase 7-2 完了：12 誘導 ECG（心室の電気ベクトルのモデル、Einthoven の肢誘導、胸部誘導、左側自由壁の副伝導路のデルタ波は V1 陽性・I/aVL 陰性・下壁陽性）。
 - Phase 7-3 完了：研究用の拡張口（`src/core/research`：パラメータの上書き、`npm run batch` の一括実行 CSV、症例の状態の JSON。`docs/RESEARCH.md`）。
-- 次は **Phase 7（専門家レビュー反映・12 誘導 ECG・glTF ローダ・研究用拡張口・AFL／AVNRT／WPW の詳細なチュートリアル）**。
+- Phase 7-4 完了：glTF ローダ（`src/core/geometry/gltf`：GLB／.gltf の読み書き、ラベル JSON、形からの半自動推定＋JSON の上書き、往復テスト、`npm run export-gltf`）。公開モデルの選定は別途。
+- 次は **Phase 7-5（専門家レビューの反映。指摘を受けてから `docs/REVIEW_LOG.md` に記録して対応）**。Phase 7 のほかの項目は完了。
 
 ## 決定済み事項（再確認不要）
 
-- 解剖メッシュ：まずパラメトリック自作（設計書 §9.1）。glTF ローダは Phase 7。
+- 解剖メッシュ：まずパラメトリック自作（設計書 §9.1）。glTF ローダは Phase 7 で実装済み：領域ラベルは別の JSON（頂点 index → 領域名）、形からの半自動推定＋JSON で手動上書き。動作確認はパラメトリックの往復テスト。公開モデルの選定は別途。
 - 解剖寸法：AF シナリオは afRemodeled、それ以外は normal。
 - 伝導：一般心房筋 1.0 mm/ms、洞調律では優先伝導路なし。AFL の基質は RA 0.6 mm/ms（拡大した RA）。ボルテージ閾値の既定は 0.1 mV・0.5 mV（慣用値・出典未確認）。
 - マップ：カテーテルで取得した点からの補間。補間の到達距離（fill threshold 相当）は UI で変更可能。方向非依存 EGM は Phase 3、接触圧・局所インピーダンスは Phase 5。出典を一次資料で確認できない値は「仮定値（教育用近似）」と書き、推測で出典名を書かない。

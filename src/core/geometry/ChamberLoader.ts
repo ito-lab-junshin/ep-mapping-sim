@@ -1,10 +1,12 @@
 import type { BiatrialModel } from './parametric/atria';
 import { buildBiatrialModel } from './parametric/atria';
 import type { DimensionSetId } from './parametric/dimensions';
+import { loadGltfModel } from './gltf/GltfLoader';
+import type { LabelFile } from './gltf/labels';
 
 /**
  * 解剖メッシュの読み込み口（docs/DESIGN.md §9.1）。
- * Phase 2 はパラメトリック生成のみ。Phase 7 で glTF ローダ（公開モデル）を同じインターフェースで追加する。
+ * パラメトリック生成（Phase 2）と glTF（Phase 7、gltf/GltfLoader.ts）。
  * どのローダも、領域ラベル（regionOfVertex）・心房間の連結・解剖の目印（anatomy）を持つ BiatrialModel を返す。
  */
 export interface ChamberLoader {
@@ -27,3 +29,16 @@ export const parametricLoader: ChamberLoader = {
   label: 'パラメトリック（数式で生成）',
   load: async (set) => loadParametricSync(set),
 };
+
+/**
+ * glTF のモデルの読み込み口（Phase 7）。どの症例（寸法セット）にも同じ形を使う。
+ * labels を省くと領域を形から半自動で推定する（gltf/estimate.ts）
+ */
+export function gltfChamberLoader(name: string, data: ArrayBuffer | Uint8Array | string, labels?: LabelFile): ChamberLoader {
+  let model: BiatrialModel | null = null;
+  return {
+    id: `gltf:${name}`,
+    label: `glTF：${name}`,
+    load: async () => (model ??= loadGltfModel(data, labels, { name }).model),
+  };
+}
