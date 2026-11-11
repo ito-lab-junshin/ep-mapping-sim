@@ -167,3 +167,16 @@ export const AF_SUBSTRATE = {
   /** ERP のばらつきをなめらかにする回数（斑状の不均一性の大きさ）。仮定値 */
   erpSmoothingIterations: 6,
 };
+
+/**
+ * 通常型 AFL の基質（§5.2）。CTI の伝導速度は §4.2 の範囲 0.3〜0.5 mm/ms、CTI の ERP は §4.2 の 230 ms。
+ * 保留中（ユーザー確認待ち）：今の RA の大きさと一般心房筋 1.0 mm/ms では、三尖弁輪を回る旋回の周期が
+ * CTI の ERP（230 ms）より短く、旋回が持続しない。持続を確認できたのは RA の伝導速度 0.4 mm/ms・
+ * RA の ERP 200 ms・CTI 0.3 mm/ms のとき（周期長 249 ms、反時計回り）。値は暫定で、この設定では誘発されない
+ */
+export const AFL_SUBSTRATE = {
+  raErpMs: 180,
+  ctiCv: 0.4,
+  ctiErpMs: 230,
+  cristaTransverseCv: 0.1,
+};

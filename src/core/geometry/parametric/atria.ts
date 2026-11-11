@@ -62,6 +62,8 @@ export interface BiatrialAnatomy {
   rims: { mitral: number[]; tricuspid: number[]; csOs: number[]; ivc: number[] };
   /** CTI の長さ（IVC 縁 − 三尖弁輪の直線距離 mm） */
   ctiLengthMm: number;
+  /** 分界稜（SVC → IVC）と Eustachian 稜（IVC → CS 口）の表面上の線。線維方向を決めるのに使う */
+  lines: { crista: Vec3[]; eustachian: Vec3[] };
 }
 
 export interface BiatrialModel { mesh: SurfaceMesh; anatomy: BiatrialAnatomy; dimensions: AnatomyDimensions }
@@ -117,6 +119,10 @@ function nearestVertex(m: RawMesh, p: Vec3, candidates?: Iterable<number>): numb
 function rimOf(m: RawMesh, o: Opening, boundary: Set<number>): number[] {
   return [...boundary].filter((v) => Math.abs(axialDistance(o, pos(m, v))) < 2.5 && radialDistance(o, pos(m, v)) < o.radius * 1.7);
 }
+
+/** 分界稜・Eustachian 稜の帯の半幅 mm。仮定値（教育用近似） */
+const RIDGE_HALF_WIDTH_MM = 3.5;
+const crista = (ORIENT.cristaAzimuthDeg * Math.PI) / 180;
 
 /** Bachmann 束の LA 側の帯の半幅 mm。仮定値（教育用近似） */
 const BACHMANN_BAND_HALF_WIDTH_MM = 4;
@@ -203,6 +209,7 @@ function buildRightAtrium(D: AnatomyDimensions) {
     tricuspid: rimOf(mesh, tricuspid, boundary),
     csOs: rimOf(mesh, csOs, boundary),
     ivc: rimOf(mesh, ivc, boundary),
+    svc: rimOf(mesh, svc, boundary),
   };
   const P = (v: number) => pos(mesh, v);
   // His 束部位：三尖弁輪の中隔・上方の縁（Koch 三角の頂点）
@@ -222,9 +229,33 @@ function buildRightAtrium(D: AnatomyDimensions) {
   const sinusV = vertexTowards(mesh, c, ORIENT.sinusNode);
   const fossaV = vertexTowards(mesh, c, ORIENT.fossa);
 
+  /** a から b までの RA 表面上の線（弦を中心から放射状に表面へ射影した点列） */
+  const surfaceLine = (a: Vec3, b: Vec3, n = 32): Vec3[] => {
+    const out: Vec3[] = [];
+    for (let i = 0; i <= n; i++) {
+      const q = add(a, scale(sub(b, a), i / n));
+      out.push(P(vertexTowards(mesh, c, sub(q, c))));
+    }
+    return out;
+  };
+  const lineDistance = (p: Vec3, line: Vec3[]) => {
+    let d = Infinity;
+    for (let i = 1; i < line.length; i++) d = Math.min(d, segmentDistance(p, line[i - 1], line[i]));
+    return d;
+  };
+  // 分界稜：SVC の縁（後側方）から IVC の縁（側方）まで、RA 後側壁を縦に走る線。
+  // AFL では横方向の伝導が遅い機能的ブロック線になり、SVC・IVC とつながって回路の後ろ側の境界をつくる
+  const cristaDir = v3(Math.cos(crista), 0, Math.sin(crista));
+  const cristaTop = vertexTowards(mesh, c, add(cristaDir, v3(0, 1.2, 0)), rims.svc);
+  const cristaBottom = vertexTowards(mesh, c, add(cristaDir, v3(0, -1.2, 0)), rims.ivc);
+  const cristaLine = surfaceLine(P(cristaTop), P(cristaBottom));
+  // Eustachian 稜：IVC の縁から CS 口の縁まで（CTI の後ろ側の境界）
+  const eustIvc = nearestVertex(mesh, csOs.center, rims.ivc);
+  const eustCs = nearestVertex(mesh, P(eustIvc), rims.csOs);
+  const eustachianLine = surfaceLine(P(eustIvc), P(eustCs), 12);
+
   const veinLabel = (o: Opening, p: Vec3, junctionBack: number) =>
     axialDistance(o, p) > -junctionBack && radialDistance(o, p) < o.radius * 1.5;
-  const crista = (ORIENT.cristaAzimuthDeg * Math.PI) / 180;
   const label = (p: Vec3): RegionName => {
     if (veinLabel(svc, p, D.vein.length - 1)) return 'svc';
     if (veinLabel(ivc, p, D.vein.length - 1)) return 'ivc';
@@ -232,14 +263,13 @@ function buildRightAtrium(D: AnatomyDimensions) {
     if (dist(p, P(avV)) < 4) return 'av_node';
     if (dist(p, P(slowV)) < 5) return 'slow_pathway';
     if (axialDistance(csOs, p) > -3 && radialDistance(csOs, p) < csOs.radius * 1.8) return 'cs_os';
-    if (axialDistance(tricuspid, p) > -3 && radialDistance(tricuspid, p) < tricuspid.radius * 1.6) return 'tricuspid_annulus';
+    // CTI は三尖弁輪の縁まで続く（弁輪の帯より優先しないと、弁輪沿いに通常の速さの抜け道が残る）
     if (segmentDistance(p, P(ctiIvc), P(ctiTv)) < 7) return 'cti';
+    if (axialDistance(tricuspid, p) > -3 && radialDistance(tricuspid, p) < tricuspid.radius * 1.6) return 'tricuspid_annulus';
+    if (lineDistance(p, eustachianLine) < RIDGE_HALF_WIDTH_MM) return 'eustachian_ridge';
     if (dist(p, P(sinusV)) < 6) return 'sinus_node';
     const q = sub(p, c);
-    const az = Math.atan2(q.z, q.x);
-    let dAz = Math.abs(az - (crista > Math.PI ? crista - 2 * Math.PI : crista));
-    if (dAz > Math.PI) dAz = 2 * Math.PI - dAz;
-    if (dAz < (10 * Math.PI) / 180 && q.y > -0.55 * r.y && q.y < 0.75 * r.y) return 'crista_terminalis';
+    if (lineDistance(p, cristaLine) < RIDGE_HALF_WIDTH_MM) return 'crista_terminalis';
     if (dist(p, P(fossaV)) < 8) return 'fossa_ovalis';
     if (q.x > 0.55 * r.x) return 'ra_septum';
     return 'ra_body';
@@ -247,7 +277,7 @@ function buildRightAtrium(D: AnatomyDimensions) {
 
   return {
     mesh, sdf, center: c, radii: r, openings, tricuspid, csOs, svc, ivc, rims, label,
-    anchors: { hisV, avV, slowV, sinusV, ctiIvc, ctiTv }, ctiLen,
+    anchors: { hisV, avV, slowV, sinusV, ctiIvc, ctiTv }, ctiLen, cristaLine, eustachianLine,
   };
 }
 
@@ -355,6 +385,7 @@ export function buildBiatrialModel(set: DimensionSetId = 'normal'): BiatrialMode
       ivc: ra.rims.ivc.map((v) => nLa + v),
     },
     ctiLengthMm: ra.ctiLen,
+    lines: { crista: ra.cristaLine, eustachian: ra.eustachianLine },
   };
   return { mesh, anatomy, dimensions: D };
 }
