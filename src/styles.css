@@ -104,3 +104,12 @@ html, body, #root { margin: 0; height: 100%; }
 .goals li .note { margin: 4px 0 0; }
 .goals li .row { margin-top: 6px; }
 .goals-done { font-size: 12px; margin: 6px 0 0; }
+
+/* チュートリアル（Phase 6） */
+.tutorial { display: flex; flex-direction: column; gap: 6px; border: 1px solid; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; font-size: 12px; line-height: 1.5; }
+.tutorial.idle { border: none; padding: 0; }
+.tutorial p { margin: 0; }
+.tutorial-head { display: flex; justify-content: space-between; }
+.tutorial-title { font-size: 13px; font-weight: 600; }
+.tutorial-quit { opacity: 0.7; }
+.tutorial-target { outline: 2px solid var(--tutorial-accent, #f5c542); outline-offset: 4px; border-radius: 4px; }

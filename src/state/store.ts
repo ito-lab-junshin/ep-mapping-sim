@@ -42,6 +42,8 @@ interface SimState {
   geometryVersion: number;
   /** 学習ゴールの達成・出来事が変わるたびに増える */
   goalVersion: number;
+  /** 実行中のチュートリアルの手順 index（null = 実行していない） */
+  tutorialStep: number | null;
   /** 3D ビューの表示モード */
   mapType: MapType;
   mapSettings: MapSettings;
@@ -85,6 +87,7 @@ interface SimState {
   setShowTruth: (v: boolean) => void;
   bumpGeometry: () => void;
   bumpGoals: () => void;
+  setTutorialStep: (i: number | null) => void;
   setProtocol: (p: ProtocolConfig | null) => void;
   bumpProtocol: () => void;
   setCureChecks: (c: CureCheck[] | null) => void;
@@ -110,6 +113,7 @@ export const useSim = create<SimState>((set) => ({
   showTruth: false,
   geometryVersion: 0,
   goalVersion: 0,
+  tutorialStep: null,
   mapType: 'live',
   mapSettings: DEFAULT_MAP_SETTINGS,
   autoAcquire: false,
@@ -144,6 +148,7 @@ export const useSim = create<SimState>((set) => ({
   setCureChecks: (cureChecks) => set({ cureChecks }),
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   setShowTruth: (showTruth) => set({ showTruth }),
+  setTutorialStep: (tutorialStep) => set({ tutorialStep }),
   bumpGoals: () => set((s) => ({ goalVersion: s.goalVersion + 1 })),
   bumpGeometry: () => set((s) => ({ geometryVersion: s.geometryVersion + 1 })),
   bumpMap: (message) => set((s) => ({ mapVersion: s.mapVersion + 1, acquireMessage: message ?? s.acquireMessage })),

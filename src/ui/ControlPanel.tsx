@@ -8,6 +8,7 @@ import { CatheterTray } from './CatheterTray';
 import { AblationConsole } from './AblationConsole';
 import { GeometryControls } from './GeometryControls';
 import { GoalList } from './GoalList';
+import { TutorialPanel } from './TutorialPanel';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
 
@@ -23,6 +24,8 @@ export function ControlPanel() {
     <aside className="panel" style={{ background: theme.colors.panel, color: theme.colors.text }}>
       <h1>EP Mapping Simulator</h1>
 
+      <TutorialPanel />
+
       <label>マッピングシステム
         <select value={s.system} onChange={(e) => s.setSystem(e.target.value as MappingSystemId)}>
           {Object.values(SYSTEMS).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -30,13 +33,13 @@ export function ControlPanel() {
       </label>
       <p className="note">{theme.vendorNote}</p>
 
-      <label>不整脈
+      <label data-tutorial="scenario">不整脈
         <select value={s.arrhythmia} onChange={(e) => s.setArrhythmia(e.target.value as ArrhythmiaId)}>
           {Object.values(SCENARIOS).map((sc) => <option key={sc.id} value={sc.id}>{sc.label}</option>)}
         </select>
       </label>
 
-      <GeometryControls />
+      <div data-tutorial="geometry"><GeometryControls /></div>
 
       <label>体表 ECG
         <select value={s.ecgLeadCount} onChange={(e) => s.setEcgLeadCount(Number(e.target.value) as EcgLeadCount)}>
@@ -44,17 +47,25 @@ export function ControlPanel() {
         </select>
       </label>
 
-      <h2>刺激（pacing）</h2>
-      <StimulationPanel />
+      <section data-tutorial="stimulation">
+        <h2>刺激（pacing）</h2>
+        <StimulationPanel />
+      </section>
 
-      <h2>通電（ablation）</h2>
-      <AblationConsole />
+      <section data-tutorial="ablation">
+        <h2>通電（ablation）</h2>
+        <AblationConsole />
+      </section>
 
-      <h2>根治判定</h2>
-      <CurePanel />
+      <section data-tutorial="cure">
+        <h2>根治判定</h2>
+        <CurePanel />
+      </section>
 
-      <h2>マップ（mapping）</h2>
-      <MapControls />
+      <section data-tutorial="map">
+        <h2>マップ（mapping）</h2>
+        <MapControls />
+      </section>
 
       <h2>3D 表示</h2>
       <label>もう一方の心房
@@ -64,15 +75,19 @@ export function ControlPanel() {
         </select>
       </label>
 
-      <h2>カテーテル</h2>
-      <CatheterTray />
+      <section data-tutorial="catheters">
+        <h2>カテーテル</h2>
+        <CatheterTray />
+      </section>
 
       <button onClick={s.toggleRunning} style={{ borderColor: theme.colors.accent }}>
         {s.running ? '一時停止' : '再開'}
       </button>
 
-      <h2>この症例のゴール</h2>
-      <GoalList />
+      <section data-tutorial="goals">
+        <h2>この症例のゴール</h2>
+        <GoalList />
+      </section>
 
       <h2>調律</h2>
       <p className="rhythm" style={{ color: s.tachycardia === 'tachycardia' ? theme.colors.accent : undefined }}>

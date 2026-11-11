@@ -63,20 +63,23 @@
 | `SurfaceMesh` | 心腔の三角形メッシュ。頂点がセルオートマトンの「セル」。頂点ごとに解剖領域ラベル（`src/core/geometry/regions.ts`）をもつ。Phase 2 からは LA と RA をまとめた `chamber: 'BIATRIAL'` のメッシュで、心房ごとの範囲 `parts: MeshPart[]` と心房間の連結 `bridges: InterAtrialBridge[]`（Bachmann 束・卵円窩縁・CS 筋束。三角形をもたない隣接辺で、伝播にだけ効く）をもつ |
 | `TissueState` | 頂点ごとの phase／不応期／伝導速度／viability／voltage。異方性のための線維方向 `fiber`（3n、0 ベクトルは等方性）と長軸方向の伝導速度 `cvLongitudinal`（0 は等方性） |
 | `Catheter` / `Electrode` | 電極の 3D 位置・接触頂点・表面からの実距離 `heightMm`（≦ 2 mm で接触）。双極の組み合わせ。信号源 `source`（`mesh`：心房メッシュから φ モデルで計算／`synthetic`：房室伝導のタイミングから合成。RV のみ）。置かれているか `placed` |
-| `EgmChannel` | 1 チャンネル。チャンネル群 `group`（`ecg`／`hra`／`his`／`cs`／`map`（環状・多極）／`abl`／`rv`）、`mode`（`bipolar`／`unipolar`／`surface`）、リングバッファ `buffer: SampleBuffer` |
+| `EgmChannel` | 1 チャンネル。チャンネル群 `group`（`ecg`／`hra`／`his`／`cs`／`halo`（ハロー 20 極、Phase 6）／`map`（環状・多極）／`abl`／`rv`）、`mode`（`bipolar`／`unipolar`／`surface`）、リングバッファ `buffer: SampleBuffer` |
 | `EcgLead` / `EcgLeadCount` | 体表 ECG の誘導（Phase 1 は I・II・V1）と誘導数（1／3／12） |
 | `Lesion` | 病変の中心頂点・半径・貫壁性・システム固有タグ（`tags`：通電の指標。RF は出力・接触圧・局所インピーダンス・病変指標・径・深さ、クライオは閉塞度・温度・time-to-isolation、PFA は PV と回数） |
 | `AblationSites`（`src/core/ablation/sites.ts`） | 頂点ごとの壁厚 mm（CTI は三尖弁輪側から IVC 側へ変化）と RF の目標の区分 `RfTarget`（`posterior`／`anterior`） |
 | `LesionField`（`src/core/ablation/LesionModel.ts`） | 頂点ごとの貫壁性 0〜1（病変の深さ / その頂点の壁厚）。1 で伝導遮断（viability 0・電位 0）、1 未満は viability = 1 − 0.7 × 貫壁性（伝導は遅くなるが残る）、電位 × (1 − 貫壁性) |
 | `AblationController` / `AblationMetrics` | 通電の状態機械（`engine.ablation`）。RF・クライオは通電の時計（倍速）で病変を育て、PFA は 1 回ずつ瞬時。指標（`AblationMetrics`）を UI に渡し、通電を止めると病変タグ（`Lesion`）を残す |
-| `ArrhythmiaScenario` | 不整脈ごとの `setupSubstrate(engine)`（基質）、推奨の誘発法 `induction`（`extrastimulus`／`burst`／`spontaneous` と刺激部位）、構造的な根治の基準 `structuralChecks(engine)`、学習ゴール。主に表示する心腔 `chambers` と、使う解剖寸法セット `anatomy`（`'normal'`／`'afRemodeled'`／`'aflRemodeled'`、§9.1）。使えるエネルギー `energies`（クライオバルーン・PFA は AF だけ）。誘発と「同じプロトコルで非誘発」の確認は `src/core/arrhythmia/common.ts`（複製したエンジンで刺激プロトコルを走らせる） |
+| `ArrhythmiaScenario` | 不整脈ごとの `setupSubstrate(engine)`（基質）、推奨の誘発法 `induction`（`extrastimulus`／`burst`／`spontaneous` と刺激部位）、構造的な根治の基準 `structuralChecks(engine)`、学習ゴール `goals: LearningGoal[]`（Phase 6 で文字列から判定つきに変更）。主に表示する心腔 `chambers` と、使う解剖寸法セット `anatomy`（`'normal'`／`'afRemodeled'`／`'aflRemodeled'`、§9.1）。使えるエネルギー `energies`（クライオバルーン・PFA は AF だけ）。誘発と「同じプロトコルで非誘発」の確認は `src/core/arrhythmia/common.ts`（複製したエンジンで刺激プロトコルを走らせる） |
 | `CureCheck` | 根治判定の基準 1 つ分（id・説明・成否） |
 | `ConductionSystem` / `VentricularBeat` | 刺激伝導系（`src/core/conduction`）：房室結節の経路（入口頂点・伝導時間・ERP・減衰伝導・逆行）、His、心室の 1 コンパートメント、副伝導路。心室の拍は興奮の由来（`his`／`ap`／`pace`）と、早期興奮のときの His 経由の到達時刻をもつ |
-| `Stimulus` / `ProtocolConfig` / `TrainResult` | 刺激（時刻と対象：心房の頂点または心室）、刺激プロトコルの設定（§5.6）、列ごとの結果（捕捉・AH・エコー・誘発）（`src/core/pacing`） |
+| `Stimulus` / `ProtocolConfig` / `TrainResult` | 刺激（時刻と対象 `StimTarget`：心房の頂点・心室・`none`（電極が接触していない＝刺激アーチファクトだけで捕捉しない、Phase 6））、刺激プロトコルの設定（§5.6）、列ごとの結果（捕捉・AH・エコー・誘発）（`src/core/pacing`） |
 
 | `MapType` | 3D ビューの表示モード（`live`：実時間の伝播／`lat`／`voltage`／`propagation`：LAT マップの再生／`regions`） |
 | `LatMethod` | LAT の取り方（`bipolarPeak`：双極の最大振幅／`unipolarDvdt`：単極の −dV/dt 最大） |
 | `MapSettings` | マップの設定：WOI（`woiBeforeMs`・`woiAfterMs`・手動設定か `woiManual`）、基準チャンネル、LAT の取り方、補間の到達距離 `fillThresholdMm`、ボルテージ閾値 `voltageScarMv`・`voltageNormalMv` |
+| `GeometryAcquisition`（`src/core/geometry/acquisition.ts`） | 収集モード（§9.2）：頂点ごとの収集済みの印、記録した電極の位置、被覆率、表示する三角形（3 頂点とも収集済み） |
+| `LearningGoal` / `GoalContext` / `LearningEvent` / `GoalTracker`（`src/core/learning`） | 学習ゴール（id・説明・手がかり・達成の判定 `achieved(ctx)`・途中経過 `progress`）。判定の材料はエンジン・取得点・学習の出来事（刺激プロトコルの終了：部位・結果・接触・環状カテーテルの PV と隔離の有無／設問への回答）。`GoalTracker` は一度達成したゴールを達成のまま残す |
+| `Tutorial` / `TutorialStep` / `TutorialContext`（`src/core/learning/tutorials.ts`） | チュートリアルの手順（題名・指示・ヒント・強調する操作欄・任意か・完了の判定）。`advanceTutorial` が完了した手順を順にとばす |
 | `MapPoint` | 取得点：表面上の位置と最寄り頂点、基準からの LAT（判定不能なら null）、電位 mV、カテーテル、信号の種類（`bipolar`／`omnipolar`）、基準時刻 |
 
 単位は **mm と ms** に統一する。
@@ -171,6 +174,7 @@
 | グリッド型（HD Grid 風） | 4 × 4 極、間隔 3 mm |
 | CS 電極の位置 | 僧帽弁輪から心房側 3 mm、LA 表面から心外膜側 1.5 mm（CS 内腔） |
 | CS の既定の挿入深さ | 経路上 46 mm（CS 口の手前 6 mm から測る） |
+| ハロー 20 極（Phase 6） | 電極間隔 2-8-2 mm（10 対、全長 92 mm）。三尖弁輪の縁から心房側 2 mm を、CTI の弁輪側のすぐ側壁寄り（遠位 1-2）から側壁を回って前上方（近位 19-20）へ。AFL の症例で置く |
 
 ### 4.3 研究用途への拡張口
 
@@ -400,9 +404,11 @@
 | 心房間の連結の範囲（半径） | 4 | 4 | 仮定値（教育用近似） |
 
 ### 9.2 収集モード（FAM 風）
-- 隠しメッシュ（プリセット）を「真の解剖」として保持し、ユーザーのカテーテル電極が触れた点を収集する
-- 収集点から表示メッシュを段階的に構築（点が少ないときは粗い凸包、増えるにつれて真の形に近づく）
-- 内部の電気生理計算は常に隠しメッシュ上で行い、表示メッシュへ投影する。これにより「マップが粗くても電気生理は正しい」状態を保てる
+- プリセットのメッシュを「真の解剖」として隠し持ち、マッピングに使う自由配置のカテーテル（ABL・環状・多極）の電極の位置を記録する（間隔 1.5 mm 以上）。CS・His・HRA・ハローは使わない
+- 壁から 3 mm 以内の電極が、まわり 5 mm の頂点を「収集済み」にする（仮定値・教育用近似）。表示するのは 3 頂点とも収集済みの三角形だけで、**未収集の部分は穴になる**（点が足りない場所は形が分からないことを体感させる。Phase 6 の決定：凸包・楕円体からの変形は使わない）
+- 真のメッシュは見えない当たり判定として残し、未収集の場所へもカテーテルを動かせる。「真の解剖を重ねる（答え合わせ）」で線として重ねて表示できる
+- 内部の電気生理計算は常に真のメッシュ上で行う。表示メッシュは真のメッシュと同じ頂点なので、マップ・病変はそのまま重なる（「マップが粗くても電気生理は正しい」）
+- 被覆率（心房ごとの収集済みの頂点の割合）を表示する
 
 ---
 
@@ -417,6 +423,7 @@
 | 環状（Lasso 風） | 10 | 任意（PV 内では PV を一周） | PV 電位・隔離確認 |
 | 多極スプライン／グリッド | 20／16 | 任意 | 高密度マッピング（テーマの機能フラグで出し分け） |
 | アブレーション先端 | 4 | LA 側壁 | RF 通電・記録 |
+| ハロー 20 極（Phase 6） | 20（10 対） | 三尖弁輪の側壁（AFL の症例で置く。ほかの症例は一覧から置ける） | 旋回方向の読み（CS と合わせて反時計回り／時計回り）、両方向性ブロックの確認、遠位 1-2 からの刺激 |
 | クライオバルーン | — | 通電欄で選んだ PV の口（AF のみ） | クライオ。押し付けと軸のずれで閉塞度が決まる |
 | PFA デバイス | — | 通電欄で選んだ PV の口（AF のみ） | PFA（バスケット型／フラワー型） |
 
@@ -427,6 +434,7 @@
 - 操作：カテーテルを一覧で選ぶ → 3D 上でクリック／ドラッグ（経路カテーテルは経路上の最寄り位置へ）。ホイールで押し込み／引き戻し、Shift＋ホイールで回転。操作パネルのスライダーでも同じ操作ができる。選択を解除すると視点を回せる
 - 接触判定：電極から表面までの実距離が 2 mm 以下なら接触（`contactVertex` = 最寄り頂点）
 - RV は心室メッシュがないため合成のまま（配置操作なし）
+- 刺激部位（Phase 6 で追加）：環状（1-2）・ハロー遠位（1-2）。電極が壁に接触していなければ捕捉しない（刺激アーチファクトだけ）。PVI の exit block は環状カテーテルからの刺激を標準とする（ABL からの刺激も選べる）
 
 ---
 
@@ -446,7 +454,8 @@
 
 - UI は日本語。専門用語は実機の慣習に合わせ英語併記（例：LAT マップ）
 - 配色は暗背景を基調（実機コンソールに合わせる）。テーマは `src/systems`
-- 学習ゴールのチェックリストを常時表示し、達成した項目に印をつける（達成判定はシナリオの関数）
+- 学習ゴールのチェックリストを常時表示し、達成した項目に印をつける（達成判定はシナリオの `goals`）。次のゴールには手がかりを出す。AFL の旋回方向は、ハローと CS の興奮順序を見て答える設問（`flutterDirection` で判定）
+- チュートリアル（Phase 6 は PVI（RF）だけ）：操作パネルの上に今の手順を出し、完了すると自動で次へ進む。対象の操作欄を枠で強調する。手順：症例の選択 → 収集モード → LA の形（被覆率 70 % 以上）→ 環状カテーテルで PV 電位 → （任意）ボルテージマップ → LSPV の隔離 → entrance block → 環状カテーテルからの刺激で exit block → 残りの PV → 根治判定
 
 ---
 
@@ -460,8 +469,8 @@
 | 3 ✅ | マップ表示（伝播／LAT／ボルテージ）・テーマ完全対応 | 3 テーマで同じ症例を見比べられる |
 | 4 ✅ | 4 シナリオ実装（基質・誘発・根治判定）・刺激プロトコル | 4 症例すべて誘発→治療→非誘発が成立 |
 | 5 ✅ | アブレーション 3 エネルギー・病変タグ・システム固有指標・クライオバルーン／PFA の配置・接触圧・局所インピーダンス・接合部調律 | RF／クライオ／PFA で病変形状が異なる |
-| 6 | 収集モード（FAM 風）・学習ゴール判定・チュートリアル | 初学者が指示だけで PVI を完遂できる |
-| 7 | 専門家レビュー反映・12 誘導 ECG・glTF ローダ（公開モデル差し替え）・研究用拡張口（パラメータ入出力、バッチ実行） | — |
+| 6 ✅ | 収集モード（FAM 風、未収集は穴）・学習ゴール判定・PVI（RF）のチュートリアル・ハロー 20 極・環状カテーテルからの刺激 | 初学者が指示だけで PVI を完遂できる（チュートリアルをスクリプトで最後まで実行できることをテストで確認） |
+| 7 | 専門家レビュー反映・12 誘導 ECG・glTF ローダ（公開モデル差し替え）・研究用拡張口（パラメータ入出力、バッチ実行）・AFL・AVNRT・WPW の詳細なチュートリアル（Phase 6 ではゴール一覧を手引きにしている） | — |
 
 ---
 
