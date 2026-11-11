@@ -83,7 +83,11 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   chambers: ['RA'],
   anatomy: 'aflRemodeled',
   induction: { kind: 'burst', site: 'CS_OS' },
-  setupSubstrate(engine) { applyAflSubstrate(engine); },
+  setupSubstrate(engine) {
+    applyAflSubstrate(engine);
+    // ハロー 20 極を三尖弁輪の側壁に置く（CS と合わせて旋回方向を読む）
+    engine.setPlacement('halo', { kind: 'path', s: engine.paths.halo.defaultS, heightMm: 1 });
+  },
   structuralChecks(engine) {
     const viab = engine.ca.tissue.viability;
     // CTI の線：三尖弁輪側と IVC 側が、CTI の中で病変によって中隔側と側壁側に分かれているか

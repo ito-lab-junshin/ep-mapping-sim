@@ -11,7 +11,7 @@ import type { SimulationEngine } from '../core/sim/SimulationEngine';
 const LABEL_W = 76;
 /** 1 mV あたりの振れ幅（行の高さに対する比、ゲイン 1 のとき） */
 const ROW_SCALE_PER_MV: Record<ChannelGroup, number> = {
-  ecg: 0.55, hra: 0.3, his: 0.45, cs: 0.3, map: 0.3, abl: 0.3, rv: 0.2,
+  ecg: 0.55, hra: 0.3, his: 0.45, cs: 0.3, halo: 0.3, map: 0.3, abl: 0.3, rv: 0.2,
 };
 /** 1 行の最小の高さ px（これを下回る行数になったら縦スクロール） */
 const MIN_ROW_PX = 18;

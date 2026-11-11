@@ -25,11 +25,11 @@ export interface EngineOptions {
 const ECG_LEADS: EcgLead[] = ['I', 'II', 'V1'];
 
 /** 刺激部位（docs/DESIGN.md §5.6） */
-export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'ABL' | 'RV';
+export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'HALO_DIST' | 'ABL' | 'CIRC' | 'RV';
 
 export const PACING_SITE_LABEL: Record<PacingSite, string> = {
   HRA: 'HRA', CS_PROX: 'CS 近位（9-10）', CS_DIST: 'CS 遠位（1-2）', CS_OS: 'CS 口',
-  LOW_LATERAL_RA: '低位外側 RA', ABL: 'ABL 先端', RV: 'RV（心室）',
+  LOW_LATERAL_RA: '低位外側 RA', HALO_DIST: 'ハロー遠位（1-2）', ABL: 'ABL 先端', CIRC: '環状（1-2）', RV: 'RV（心室）',
 };
 
 /** 異所性興奮の焦点（AF の PV トリガーなど）：周期 minCl〜maxCl ms でランダムに発火 */
@@ -201,7 +201,7 @@ export class SimulationEngine {
     // 予約された刺激
     for (const st of this.stimulator.take(until)) {
       if (st.target.kind === 'atrium') ca.excite(st.target.vertex, st.time);
-      else this.conduction.paceVentricle(st.time);
+      else if (st.target.kind === 'ventricle') this.conduction.paceVentricle(st.time);
       this.lastArtifact = st.time;
     }
     // 通電（通電の時計で病変を育てる。接合部調律を出すこともある）
@@ -264,6 +264,13 @@ export class SimulationEngine {
   }
 
   /** 刺激部位 → 刺激の対象（心房の頂点か心室） */
+  /** カテーテルの電極からの刺激の対象：置かれて接触していればその頂点、そうでなければ捕捉しない */
+  private electrodeTarget(cathId: string, electrode: number): StimTarget {
+    const c = this.catheter(cathId);
+    const v = c?.placed ? c.electrodes[electrode].contactVertex : -1;
+    return v >= 0 ? { kind: 'atrium', vertex: v } : { kind: 'none' };
+  }
+
   siteTarget(site: PacingSite): StimTarget {
     if (site === 'RV') return { kind: 'ventricle' };
     const a = this.model.anatomy;
@@ -277,6 +284,9 @@ export class SimulationEngine {
       case 'CS_DIST': return { kind: 'atrium', vertex: nearest('cs', 0, a.anchors.csOs.vertex) };
       case 'CS_OS': return { kind: 'atrium', vertex: a.anchors.csOs.vertex };
       case 'ABL': return { kind: 'atrium', vertex: nearest('abl', 0, a.anchors.sinusNode.vertex) };
+      // 環状・ハローの電極からの刺激：電極が壁に接触していなければ捕捉しない（刺激アーチファクトだけ）
+      case 'CIRC': return this.electrodeTarget('circ', 0);
+      case 'HALO_DIST': return this.electrodeTarget('halo', 0);
       case 'LOW_LATERAL_RA': {
         // RA 側壁の下部（分界稜より前方、IVC より上）
         const p = add(a.ra.center, scale(norm({ x: -1, y: -0.55, z: 0.35 }), 60));

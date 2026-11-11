@@ -17,6 +17,8 @@ export const SPACING_MM = {
   cs_decapolar: [2, 8, 2, 8, 2, 8, 2, 8, 2],
   quadripolar: [5, 5, 5],          // His／HRA／RV
   ablation_tip: [1, 6, 2],         // 先端 3.5 mm
+  /** ハロー 20 極：2-8-2 mm（10 対、全長 92 mm）。仮定値（教育用近似） */
+  halo_20: [2, 8, 2, 8, 2, 8, 2, 8, 2, 8, 2, 8, 2, 8, 2, 8, 2, 8, 2],
 } as const;
 export const ABLATION_TIP_LENGTH_MM = 3.5;
 export const RING_WIDTH_MM = 1;            // リング電極の幅

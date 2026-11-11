@@ -23,7 +23,7 @@ export type GeometryMode = 'acquire' | 'preset';
 export interface Vec3 { x: number; y: number; z: number }
 
 /** EGM パネルのチャンネル群（並び順・配色の単位） */
-export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'map' | 'abl' | 'rv';
+export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'halo' | 'map' | 'abl' | 'rv';
 
 /** 体表 ECG の誘導数（12 誘導は Phase 7） */
 export type EcgLeadCount = 1 | 3 | 12;
@@ -97,6 +97,7 @@ export type CatheterKind =
   | 'his_quadripolar'   // His 4 極
   | 'rv_quadripolar'    // RV 4 極
   | 'hra_quadripolar'   // 高位右房 4 極
+  | 'halo_20'           // ハロー 20 極（三尖弁輪）
   | 'circular_mapping'  // 環状マッピング（Lasso 風）
   | 'multispline'       // 多極（PentaRay 風）
   | 'grid'              // グリッド型（HD Grid 風）

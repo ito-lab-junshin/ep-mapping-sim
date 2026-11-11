@@ -13,6 +13,7 @@ export function catheterGroup(kind: CatheterKind): ChannelGroup {
     case 'hra_quadripolar': return 'hra';
     case 'his_quadripolar': return 'his';
     case 'cs_decapolar': return 'cs';
+    case 'halo_20': return 'halo';
     case 'rv_quadripolar': return 'rv';
     case 'circular_mapping': case 'multispline': case 'grid': return 'map';
     default: return 'abl';
@@ -85,6 +86,15 @@ export function defaultCatheters(model: BiatrialModel): CatheterSpec[] {
       { id: 'CS 9-10', pair: [8, 9] }, { id: 'CS 7-8', pair: [6, 7] }, { id: 'CS 5-6', pair: [4, 5] },
       { id: 'CS 3-4', pair: [2, 3] }, { id: 'CS 1-2', pair: [0, 1] },
     ],
+  });
+
+  // ハロー 20 極：三尖弁輪の側壁に沿って置く（遠位 1-2 が CTI の側壁側、近位 19-20 が前上方）。
+  // 既定では置かない（AFL の症例で置く）
+  const halo: [number, number][] = Array.from({ length: 10 }, (_, i) => [2 * i, 2 * i + 1]);
+  specs.push({
+    catheter: cath('halo', 'halo_20', 'ハロー（Halo 20 極）', 20, halo.slice().reverse()),
+    mode: 'path', pathId: 'halo', layoutMm: SPACING_MM.halo_20, placement: null,
+    channels: halo.slice().reverse().map(([a, b]) => ({ id: `H ${a + 1}-${b + 1}`, pair: [a, b] as [number, number] })),
   });
 
   const ring = consecutive(CIRCULAR.electrodes);

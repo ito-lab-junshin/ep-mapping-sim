@@ -7,3 +7,15 @@
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
+10:53:29 AM [vite] page reload src/core/params.ts
+10:53:29 AM [vite] page reload src/core/catheter/catalog.ts
+10:53:29 AM [vite] page reload src/core/catheter/guidedPaths.ts
+10:53:29 AM [vite] page reload src/core/sim/SimulationEngine.ts
+10:53:29 AM [vite] page reload src/core/pacing/Stimulator.ts
+10:53:29 AM [vite] hmr update /src/ui/EgmPanel.tsx
+10:53:29 AM [vite] hmr update /src/ui/EgmPanel.tsx, /src/ui/ControlPanel.tsx, /src/three/Scene.tsx, /src/ui/MapControls.tsx, /src/ui/StimulationPanel.tsx, /src/ui/CurePanel.tsx, /src/ui/CatheterTray.tsx, /src/ui/AblationConsole.tsx, /src/ui/GeometryControls.tsx, /src/ui/MapLegend.tsx
+10:53:47 AM [vite] page reload src/core/sim/SimulationEngine.ts
+10:53:47 AM [vite] page reload src/core/pacing/ProtocolSession.ts
+10:53:58 AM [vite] hmr update /src/ui/CatheterTray.tsx
+10:53:58 AM [vite] page reload src/core/arrhythmia/aflCti.ts
+10:54:09 AM [vite] page reload src/core/arrhythmia/aflCti.ts

@@ -8,7 +8,7 @@ import { CS_PATH } from '../params';
  * 経路に沿って動かすカテーテル（CS・His・HRA）の経路（docs/DESIGN.md §10）。
  * 経路は折れ線で、長さ s mm の位置で電極を置く。
  */
-export type GuidedPathId = 'cs' | 'his' | 'hra';
+export type GuidedPathId = 'cs' | 'his' | 'hra' | 'halo';
 
 export interface GuidedPath {
   id: GuidedPathId;
@@ -131,7 +131,19 @@ export function buildGuidedPaths(model: BiatrialModel, q: MeshQuery): Record<Gui
   const hraPts = surfaceWalk(q, sn, v3(-0.6, -1, 0.2), 40);
   const hra = polyline('hra', hraPts, true, 16, -1);
 
-  return { cs, his, hra };
+  // ── ハロー：三尖弁輪の縁を、CTI の弁輪側から側壁を回って前上方へ（中隔・CS 口から離れる向き）
+  const ctiIdx = (() => {
+    let bi = 0, bd = Infinity;
+    tvRim.forEach((r, i) => { const d = dist(q.position(r.v), anatomy.anchors.ctiTv.point); if (d < bd) { bd = d; bi = i; } });
+    return bi;
+  })();
+  const atC = (k: number) => q.position(tvRim[(ctiIdx + k + m * 4) % m].v);
+  const lSign = dist(atC(6), csOs) > dist(atC(-6), csOs) ? 1 : -1;
+  const haloPts: Vec3[] = [];
+  for (let k = 0; k <= Math.floor(m * 0.8); k++) haloPts.push(add(atC(lSign * k), scale(tv.axis, -2)));
+  const halo = polyline('halo', dedupe(haloPts), true, 4, 1);
+
+  return { cs, his, hra, halo };
 }
 
 function dedupe(pts: Vec3[]): Vec3[] {

@@ -59,6 +59,11 @@ export function CatheterTray() {
         })}
       </ul>
 
+      {sel && sel.mode === 'path' && sel.pathId && !p && (
+        <button onClick={() => placeCatheter(engine, sel.catheter.id, { kind: 'path', s: engine.paths[sel.pathId!].defaultS, heightMm: 1 })}>
+          このカテーテルを置く
+        </button>
+      )}
       {sel && p?.kind === 'path' && sel.pathId && (
         <>
           <Slider label={sel.catheter.kind === 'cs_decapolar' ? 'CS 挿入深さ（CS 口から）' : '経路上の位置'}
@@ -67,6 +72,9 @@ export function CatheterTray() {
           {sel.catheter.kind !== 'cs_decapolar' && (
             <Slider label="壁からの距離（押し込み）" value={p.heightMm} min={0.5} max={10} step={0.5} unit="mm"
               onChange={(heightMm) => placeCatheter(engine, sel.catheter.id, { ...p, heightMm })} />
+          )}
+          {sel.catheter.kind === 'halo_20' && (
+            <button onClick={() => placeCatheter(engine, sel.catheter.id, null)}>このカテーテルを外す</button>
           )}
         </>
       )}

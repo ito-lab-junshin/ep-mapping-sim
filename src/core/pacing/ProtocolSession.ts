@@ -63,11 +63,14 @@ export class ProtocolSession {
   private captureCheckAt = 0;
   private captured = false;
   private targetVertex: number | null = null;
+  /** 電極が接触していない（捕捉しない） */
+  private noCapture = false;
 
   constructor(readonly engine: SimulationEngine, readonly config: ProtocolConfig) {
     this.coupling = config.kind === 'extrastimulus' ? config.s2StartMs : config.burstFromMs;
     const target = engine.siteTarget(config.site);
     this.targetVertex = target.kind === 'atrium' ? target.vertex : null;
+    this.noCapture = target.kind === 'none';
     engine.rhythm.startStimulation();
     this.scheduleTrain();
   }
@@ -107,7 +110,8 @@ export class ProtocolSession {
     const e = this.engine, c = this.config, now = e.time;
     // 最後の刺激が捕捉されたか（刺激の直後に見る）
     if (now >= this.captureCheckAt && this.captureCheckAt > 0) {
-      if (this.targetVertex === null) this.captured = e.conduction.vBeats.some((b) => b.source === 'pace' && Math.abs(b.time - this.lastStim) < 5);
+      if (this.noCapture) this.captured = false;
+      else if (this.targetVertex === null) this.captured = e.conduction.vBeats.some((b) => b.source === 'pace' && Math.abs(b.time - this.lastStim) < 5);
       else {
         const la = e.ca.tissue.lastActivation[this.targetVertex];
         this.captured = la >= this.lastStim - 1 && la <= this.lastStim + 25;
