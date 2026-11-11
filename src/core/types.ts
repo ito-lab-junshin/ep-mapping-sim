@@ -9,7 +9,7 @@ import type { SimulationEngine, PacingSite } from './sim/SimulationEngine';
 export type MappingSystemId = 'carto' | 'ensite' | 'opal';
 
 /** 不整脈シナリオ */
-export type ArrhythmiaId = 'af' | 'afl_cti' | 'avnrt' | 'wpw';
+export type ArrhythmiaId = 'af' | 'afl_cti' | 'afl_cti_cw' | 'avnrt' | 'wpw';
 
 /** 心腔（BIATRIAL = LA と RA を連結した 1 つのメッシュ） */
 export type ChamberId = 'LA' | 'RA' | 'LV' | 'RV' | 'CS' | 'BIATRIAL';

@@ -2,13 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
 import { getAcquisition, getGoalTracker, getPoints, useEngine } from '../state/engine';
-import { PVI_TUTORIAL, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
+import { TUTORIALS, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
 import { Slider } from './CatheterTray';
 
-const T = PVI_TUTORIAL;
-
 /**
- * チュートリアル（Phase 6 は PVI（RF）だけ）。操作パネルの上に今の手順を出し、完了すると自動で次へ進む。
+ * チュートリアル（PVI（RF）・通常型 AFL（反時計回り／時計回り）・AVNRT・WPW）。操作パネルの上に今の手順を出し、完了すると自動で次へ進む。
  * 対象の操作欄（data-tutorial）を枠で強調し、そこまでスクロールする。
  */
 export function TutorialPanel() {
@@ -20,6 +18,10 @@ export function TutorialPanel() {
   const coverageTarget = useSim((s) => s.tutorialCoveragePct);
   const setCoverageTarget = useSim((s) => s.setTutorialCoveragePct);
   const [, force] = useState(0);
+  const tutorialId = useSim((s) => s.tutorialId);
+  const setTutorialId = useSim((s) => s.setTutorialId);
+  const confirmStep = useSim((s) => s.confirmTutorialStep);
+  const T = TUTORIALS.find((t) => t.id === tutorialId) ?? TUTORIALS[0];
 
   // 500 ms ごとに完了を判定して進める（一時停止中も判定する）
   useEffect(() => {
@@ -38,6 +40,7 @@ export function TutorialPanel() {
           laCoveragePct: getAcquisition(engine).coveragePct(la.vertexStart, la.vertexCount),
           coverageTargetPct: s.tutorialCoveragePct,
           cureOk: !!s.cureChecks && s.cureChecks.every((c) => c.ok),
+          confirmed: new Set(s.tutorialConfirmed),
         },
       };
       const next = advanceTutorial(T, s.tutorialStep, ctx);
@@ -46,7 +49,7 @@ export function TutorialPanel() {
       force((x) => x + 1);
     }, 500);
     return () => clearInterval(id);
-  }, [step, engine, setStep]);
+  }, [step, engine, setStep, T]);
 
   // 項目のチェック（PV ごとの entrance block など）の表示用に、直近の判定材料を残す
   const ctxRef = useRef<TutorialContext | null>(null);
@@ -65,8 +68,13 @@ export function TutorialPanel() {
   if (step === null) {
     return (
       <div className="tutorial idle">
+        <label>チュートリアル
+          <select value={tutorialId} onChange={(e) => setTutorialId(e.target.value)}>
+            {TUTORIALS.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
+          </select>
+        </label>
         <button style={{ borderColor: theme.colors.accent }} onClick={() => { setStep(0); setShowHint(false); }}>
-          チュートリアルを始める：{T.title}
+          チュートリアルを始める
         </button>
       </div>
     );
@@ -94,13 +102,16 @@ export function TutorialPanel() {
             </ul>
           )}
           {showHint && <p className="note">{cur.hint}</p>}
+          {cur.confirmLabel && (
+            <button style={{ borderColor: theme.colors.accent }} onClick={() => confirmStep(cur.id)}>{cur.confirmLabel}</button>
+          )}
           <div className="row">
             <button onClick={() => setShowHint(!showHint)}>{showHint ? 'ヒントを隠す' : 'ヒント'}</button>
             <button onClick={() => { setStep(step + 1); setShowHint(false); }}>{cur.optional ? 'とばす（任意）' : 'この手順をとばす'}</button>
           </div>
         </>
       ) : (
-        <p>4 本の PV を隔離し、根治を確認しました。ほかのエネルギー（クライオバルーン・PFA）や、ほかの症例のゴール一覧にも挑戦してください。</p>
+        <p>{T.title} のチュートリアルを完了しました。{T.id === 'pvi-rf' ? 'ほかのエネルギー（クライオバルーン・PFA）にも挑戦してください。' : ''}{T.id.startsWith('afl') ? '反対向きの粗動の症例と見比べてください。' : ''}</p>
       )}
       <button className="tutorial-quit" onClick={() => setStep(null)}>{done ? '閉じる' : 'チュートリアルをやめる'}</button>
     </div>

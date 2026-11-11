@@ -46,6 +46,7 @@ npm run build    # tsc -b && vite build
 - Phase 4 完了：刺激伝導系（`src/core/conduction`：2 経路の房室結節・His・心室・副伝導路）、刺激装置と刺激プロトコル（`src/core/pacing`）、調律の判定（`src/core/rhythm`）、電気ベクトルの体表 ECG（デルタ波・ペーシング QRS）、4 シナリオ（`src/core/arrhythmia`。AF は PV トリガー、AFL は aflRemodeled、WPW の誘発は CS 遠位）、簡易通電、刺激パネル・根治判定・URL 共有。
 - Phase 5 完了：病変モデル（`src/core/ablation`：頂点ごとの貫壁性 = 深さ / 壁厚、1 で遮断）、RF（§7 の式・接触圧・局所インピーダンス・独自の病変指標）、クライオバルーン（閉塞度・隙間・time-to-isolation）、PFA（バスケット／フラワー、2 回で貫壁性）、通電の状態機械（`engine.ablation`、通電の時計 1×/5×/10×）、接合部調律、His 近傍の警告、操作盤・3D のデバイスと病変タグ。簡易通電は UI から外した（テスト用に残す）。
 - Phase 6 完了：収集モード（`src/core/geometry/acquisition.ts`、収集した部分だけを表示し未収集は穴）、学習ゴール判定（`src/core/learning`：`LearningGoal`・`GoalTracker`・出来事）、PVI（RF）のチュートリアル（`tutorials.ts`・`TutorialPanel`）、ハロー 20 極（AFL で三尖弁輪に置く、旋回方向の設問）、環状カテーテル・ハローからの刺激（非接触は捕捉しない）。
+- Phase 7-1 完了：時計回りの通常型 AFL（別の症例 `afl_cti_cw`、低位外側 RA からのバースト）、AFL（両方向）・AVNRT・WPW のチュートリアル。
 - 次は **Phase 7（専門家レビュー反映・12 誘導 ECG・glTF ローダ・研究用拡張口・AFL／AVNRT／WPW の詳細なチュートリアル）**。
 
 ## 決定済み事項（再確認不要）

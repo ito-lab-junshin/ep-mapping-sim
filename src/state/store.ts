@@ -45,6 +45,10 @@ interface SimState {
   goalVersion: number;
   /** 実行中のチュートリアルの手順 index（null = 実行していない） */
   tutorialStep: number | null;
+  /** 選んでいるチュートリアル */
+  tutorialId: string;
+  /** 「確認した」を押した手順 */
+  tutorialConfirmed: string[];
   /** チュートリアルで LA の形を作る目安の被覆率 % */
   tutorialCoveragePct: number;
   /** 3D ビューの表示モード */
@@ -91,6 +95,8 @@ interface SimState {
   bumpGeometry: () => void;
   bumpGoals: () => void;
   setTutorialStep: (i: number | null) => void;
+  setTutorialId: (id: string) => void;
+  confirmTutorialStep: (id: string) => void;
   setTutorialCoveragePct: (v: number) => void;
   setProtocol: (p: ProtocolConfig | null) => void;
   bumpProtocol: () => void;
@@ -118,6 +124,8 @@ export const useSim = create<SimState>((set) => ({
   geometryVersion: 0,
   goalVersion: 0,
   tutorialStep: null,
+  tutorialId: 'pvi-rf',
+  tutorialConfirmed: [],
   tutorialCoveragePct: TUTORIAL_LA_COVERAGE_PCT,
   mapType: 'live',
   mapSettings: DEFAULT_MAP_SETTINGS,
@@ -153,7 +161,9 @@ export const useSim = create<SimState>((set) => ({
   setCureChecks: (cureChecks) => set({ cureChecks }),
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   setShowTruth: (showTruth) => set({ showTruth }),
-  setTutorialStep: (tutorialStep) => set({ tutorialStep }),
+  setTutorialStep: (tutorialStep) => set(tutorialStep === 0 ? { tutorialStep, tutorialConfirmed: [] } : { tutorialStep }),
+  setTutorialId: (tutorialId) => set({ tutorialId, tutorialStep: null, tutorialConfirmed: [] }),
+  confirmTutorialStep: (id) => set((s) => ({ tutorialConfirmed: [...s.tutorialConfirmed, id] })),
   setTutorialCoveragePct: (tutorialCoveragePct) => set({ tutorialCoveragePct }),
   bumpGoals: () => set((s) => ({ goalVersion: s.goalVersion + 1 })),
   bumpGeometry: () => set((s) => ({ geometryVersion: s.geometryVersion + 1 })),

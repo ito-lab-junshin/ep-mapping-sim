@@ -1,4 +1,4 @@
-import type { ArrhythmiaScenario } from '../types';
+import type { ArrhythmiaScenario, LearningGoal } from '../types';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID } from '../geometry/regions';
 import { AFL_SUBSTRATE, CONDUCTION } from '../params';
@@ -80,7 +80,7 @@ function nearestSegmentDirection(q: { x: number; y: number; z: number }, line: {
  */
 export const aflCtiScenario: ArrhythmiaScenario = {
   id: 'afl_cti',
-  label: '通常型心房粗動（CTI）',
+  label: '通常型心房粗動（CTI、反時計回り）',
   chambers: ['RA'],
   anatomy: 'aflRemodeled',
   induction: { kind: 'burst', site: 'CS_OS' },
@@ -101,10 +101,24 @@ export const aflCtiScenario: ArrhythmiaScenario = {
     ];
   },
   energies: ['rf'],
-  goals: [
+  goals: aflGoals('ccw'),
+};
+
+/**
+ * AFL の学習ゴール。旋回方向の設問は、誘発された粗動の向き（flutterDirection）で正誤を決めるので、
+ * 反時計回り・時計回りのどちらの症例でも同じ判定を使う。手がかりの文だけを向きで変える。
+ *  - 反時計回り：ハローは H 19-20 → H 1-2（側壁を下行）→ CTI → CS 口（CS 9-10 → 1-2）
+ *  - 時計回り：CS 口（CS 9-10 → 1-2）→ CTI → ハローは H 1-2 → H 19-20（側壁を上行）
+ * CS は両方とも近位 → 遠位なので、ハローの向きと、ハローと CS のどちらが先かで見分ける。
+ */
+function aflGoals(direction: 'ccw' | 'cw'): LearningGoal[] {
+  const directionHint = direction === 'ccw'
+    ? '粗動を誘発し、ハロー（H 19-20 → H 1-2 か、その逆か）と、CS 口（CS 9-10）がハローの遠位の後か前かを見て旋回方向を選ぶ'
+    : '粗動を誘発し、ハローの向き（H 1-2 → H 19-20 か、その逆か）と、CS 口（CS 9-10）がハローの遠位の前か後かを見て旋回方向を選ぶ。CS はどちらの向きでも近位 → 遠位';
+  return [
     {
       id: 'direction', label: 'CS 近位→遠位の活性化順序とハロー電極で旋回方向を答える',
-      hint: '粗動を誘発し、ハロー（H 19-20 → H 1-2 か、その逆か）と CS（近位 → 遠位）の順序を見て旋回方向を選ぶ',
+      hint: directionHint,
       achieved: ({ events }) => events.some((e) => e.kind === 'answer' && e.question === 'afl-direction' && e.correct),
     },
     {
@@ -119,8 +133,8 @@ export const aflCtiScenario: ArrhythmiaScenario = {
         && protocolsAfterLastLesion(ctx, ['CS_OS', 'CS_PROX']).length > 0
         && protocolsAfterLastLesion(ctx, ['LOW_LATERAL_RA', 'HALO_DIST']).length > 0,
     },
-  ],
-};
+  ];
+}
 
 /** CTI の線が完成しているか */
 export function ctiLineDone(engine: SimulationEngine): boolean {
@@ -202,3 +216,16 @@ export function tricuspidRingPhases(engine: SimulationEngine, cl: number): numbe
   }
   return bins.map((b) => (b.length ? b.reduce((s, x) => s + x, 0) / b.length : Number.NaN));
 }
+
+/**
+ * 通常型心房粗動の時計回り（clockwise。反時計回りとの鑑別の教材、Phase 7）。
+ * 基質・根治の基準は反時計回りと同じ。低位外側 RA からのバーストでは、CTI が側壁側 → 中隔側の向きに
+ * 通れず、興奮は側壁を上行し、中隔を下行して CTI に中隔側から入る → 時計回りの旋回
+ */
+export const aflCtiCwScenario: ArrhythmiaScenario = {
+  ...aflCtiScenario,
+  id: 'afl_cti_cw',
+  label: '通常型心房粗動（CTI、時計回り）',
+  induction: { kind: 'burst', site: 'LOW_LATERAL_RA' },
+  goals: aflGoals('cw'),
+};
