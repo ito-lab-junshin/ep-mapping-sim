@@ -9,6 +9,7 @@ import { AblationConsole } from './AblationConsole';
 import { GeometryControls } from './GeometryControls';
 import { GoalList } from './GoalList';
 import { TutorialPanel } from './TutorialPanel';
+import { DisclaimerBar } from './AboutPanel';
 import { ResearchPanel } from './ResearchPanel';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
@@ -24,6 +25,7 @@ export function ControlPanel() {
   return (
     <aside className="panel" style={{ background: theme.colors.panel, color: theme.colors.text }}>
       <h1>EP Mapping Simulator</h1>
+      <DisclaimerBar />
 
       <TutorialPanel />
 
