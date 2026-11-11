@@ -11,6 +11,7 @@ import { PointCollection } from '../core/mapping/PointCollection';
 import { acquirePoints } from '../core/mapping/acquire';
 import { catheterGroup } from '../core/catheter/catalog';
 import { MAP_DEFAULTS } from '../core/params';
+import { GeometryAcquisition } from '../core/geometry/acquisition';
 
 /**
  * シナリオ（症例）ごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
@@ -43,6 +44,7 @@ export function resetCase(id: ArrhythmiaId) {
   pointSets.delete(e);
   stopProtocol();
   const s = useSim.getState();
+  s.bumpGeometry();
   s.bumpPlacement();
   s.bumpMap('症例を最初の状態に戻しました');
   s.setCureChecks(null);
@@ -61,6 +63,20 @@ export function catheterAvailable(spec: CatheterSpec, theme: SystemTheme): boole
 
 /** エンジン（症例）ごとの取得点。テーマを切り替えても残る（同じ症例を見比べるため） */
 const pointSets = new Map<SimulationEngine, PointCollection>();
+
+/** エンジン（症例）ごとの収集モードの形（FAM 風）。症例をリセットすると消える */
+const acquisitions = new Map<SimulationEngine, GeometryAcquisition>();
+
+export function getAcquisition(engine: SimulationEngine): GeometryAcquisition {
+  let a = acquisitions.get(engine);
+  if (!a) { a = new GeometryAcquisition(engine.mesh); acquisitions.set(engine, a); }
+  return a;
+}
+
+export function clearAcquisition(engine: SimulationEngine) {
+  getAcquisition(engine).clear();
+  useSim.getState().bumpGeometry();
+}
 
 export function getPoints(engine: SimulationEngine): PointCollection {
   let p = pointSets.get(engine);

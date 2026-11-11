@@ -81,6 +81,13 @@ export const CONDUCTION = {
  * マップ（Phase 3）の既定値。いずれも UI で変更でき、仮定値（教育用近似）。
  * docs/DESIGN.md §4.2・§6・§8.2 と一致させること。
  */
+/**
+ * 収集モード（FAM 風、docs/DESIGN.md §9.2）。仮定値（教育用近似）。
+ * 壁から wallReachMm 以内の電極が、まわり revealRadiusMm の表面を「収集済み」にする。
+ * 収集点は間隔 pointSpacingMm 以上で記録する
+ */
+export const ACQUISITION = { wallReachMm: 3, revealRadiusMm: 5, pointSpacingMm: 1.5 } as const;
+
 export const MAP_DEFAULTS = {
   /** 補間の到達距離（fill threshold 相当）mm と範囲 */
   fillThresholdMm: 10,

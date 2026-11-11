@@ -6,7 +6,7 @@ import type { SimulationEngine } from '../core/sim/SimulationEngine';
 import type { SystemTheme } from '../systems';
 import { REGIONS, REGION_LABEL_JA } from '../core/geometry/regions';
 import { useSim } from '../state/store';
-import { getPoints, placeCatheter } from '../state/engine';
+import { getAcquisition, getPoints, placeCatheter } from '../state/engine';
 import { finiteRange, latColor, voltageColor } from '../core/mapping/colorScale';
 import { replayPhase, wavefrontIntensity } from '../core/mapping/propagationReplay';
 import { CONTACT_HEIGHT_MM } from '../core/params';
@@ -62,6 +62,25 @@ export function ChamberMesh({ engine, theme, view, focus }: Props) {
     return { part, g };
   }), [mesh, position, color]);
   useEffect(() => () => geometries.forEach(({ g }) => g.dispose()), [geometries]);
+
+  // 収集モード（FAM 風）：収集済みの三角形だけを描く（未収集は穴）。真のメッシュは見えない当たり判定として残す
+  const acquire = useSim((s) => s.geometryMode) === 'acquire';
+  const geometryVersion = useSim((s) => s.geometryVersion);
+  const showTruth = useSim((s) => s.showTruth);
+  const revealed = useMemo(() => {
+    if (!acquire) return null;
+    const acq = getAcquisition(engine);
+    return geometries.map(({ part, g }) => {
+      const r = new THREE.BufferGeometry();
+      r.setAttribute('position', position);
+      r.setAttribute('color', color);
+      r.setAttribute('normal', g.getAttribute('normal'));
+      r.setIndex(new THREE.BufferAttribute(acq.revealedIndices(part.indexStart, part.indexCount), 1));
+      return r;
+    });
+    // geometryVersion：収集済みが増えたときに作り直す
+  }, [acquire, engine, geometries, position, color, geometryVersion]);
+  useEffect(() => () => revealed?.forEach((r) => r.dispose()), [revealed]);
 
   const ramp = useMemo(() => theme.colors.activationRamp.map((c) => new THREE.Color(c)), [theme]);
   const base = useMemo(() => new THREE.Color(theme.colors.meshDefault), [theme]);
@@ -154,14 +173,24 @@ export function ChamberMesh({ engine, theme, view, focus }: Props) {
   return (
     <group onPointerDown={onDown} onPointerMove={onMove} onWheel={onWheel}
       onPointerOut={() => useSim.getState().setHoveredRegion(null)}>
-      {geometries.map(({ part, g }) => {
+      {geometries.map(({ part, g }, i) => {
         const isFocus = part.chamber === focus;
         if (!isFocus && otherAtrium === 'hidden') return null;
+        const material = (
+          <meshStandardMaterial vertexColors side={THREE.DoubleSide} roughness={0.6} metalness={0.05}
+            transparent opacity={isFocus ? 0.9 : 0.25} depthWrite={isFocus} />
+        );
+        if (!revealed) return <mesh key={part.chamber} geometry={g} renderOrder={isFocus ? 1 : 0}>{material}</mesh>;
         return (
-          <mesh key={part.chamber} geometry={g} renderOrder={isFocus ? 1 : 0}>
-            <meshStandardMaterial vertexColors side={THREE.DoubleSide} roughness={0.6} metalness={0.05}
-              transparent opacity={isFocus ? 0.9 : 0.25} depthWrite={isFocus} />
-          </mesh>
+          <group key={part.chamber}>
+            <mesh geometry={revealed[i]} renderOrder={isFocus ? 1 : 0}>{material}</mesh>
+            {/* 真の解剖：見えない当たり判定（カテーテルを未収集の場所へ動かせる）。答え合わせでは線で重ねる */}
+            <mesh geometry={g}>
+              {showTruth
+                ? <meshBasicMaterial color={theme.colors.text} wireframe transparent opacity={0.12} depthWrite={false} />
+                : <meshBasicMaterial transparent opacity={0} depthWrite={false} colorWrite={false} />}
+            </mesh>
+          </group>
         );
       })}
     </group>

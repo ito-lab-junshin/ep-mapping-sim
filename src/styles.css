@@ -89,3 +89,8 @@ html, body, #root { margin: 0; height: 100%; }
 .ablation-metrics dt { opacity: 0.7; }
 .ablation-metrics dd { margin: 0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ablation-metrics .full { grid-column: 1 / -1; text-align: left; white-space: normal; }
+
+/* 収集モード（Phase 6） */
+.geometry { display: flex; flex-direction: column; gap: 8px; }
+.geometry .coverage { display: flex; gap: 12px; margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.geometry .coverage .note { margin: 0; }

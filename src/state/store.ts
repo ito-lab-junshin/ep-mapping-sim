@@ -36,6 +36,10 @@ interface SimState {
   dragging: boolean;
   /** 症例の主な心房でない方の表示 */
   otherAtrium: 'translucent' | 'hidden';
+  /** 収集モードで真の解剖を重ねて表示する（答え合わせ） */
+  showTruth: boolean;
+  /** 収集モードの形が変わるたびに増える */
+  geometryVersion: number;
   /** 3D ビューの表示モード */
   mapType: MapType;
   mapSettings: MapSettings;
@@ -76,6 +80,8 @@ interface SimState {
   setAutoAcquire: (a: boolean) => void;
   setShowPoints: (s: boolean) => void;
   bumpMap: (message?: string) => void;
+  setShowTruth: (v: boolean) => void;
+  bumpGeometry: () => void;
   setProtocol: (p: ProtocolConfig | null) => void;
   bumpProtocol: () => void;
   setCureChecks: (c: CureCheck[] | null) => void;
@@ -98,6 +104,8 @@ export const useSim = create<SimState>((set) => ({
   activeCatheter: null,
   dragging: false,
   otherAtrium: 'translucent',
+  showTruth: false,
+  geometryVersion: 0,
   mapType: 'live',
   mapSettings: DEFAULT_MAP_SETTINGS,
   autoAcquire: false,
@@ -131,6 +139,8 @@ export const useSim = create<SimState>((set) => ({
   bumpProtocol: () => set((s) => ({ protocolTick: s.protocolTick + 1 })),
   setCureChecks: (cureChecks) => set({ cureChecks }),
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
+  setShowTruth: (showTruth) => set({ showTruth }),
+  bumpGeometry: () => set((s) => ({ geometryVersion: s.geometryVersion + 1 })),
   bumpMap: (message) => set((s) => ({ mapVersion: s.mapVersion + 1, acquireMessage: message ?? s.acquireMessage })),
   setHoveredRegion: (hoveredRegion) => set((s) => (s.hoveredRegion === hoveredRegion ? s : { hoveredRegion })),
   bumpPlacement: () => set((s) => ({ placementTick: s.placementTick + 1 })),

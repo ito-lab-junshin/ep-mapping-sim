@@ -10,7 +10,7 @@ import { referenceBeats } from '../core/mapping/annotation';
 import type { SystemTheme } from '../systems';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { acquireNow, updateProtocol, useEngine } from '../state/engine';
+import { acquireNow, getAcquisition, updateProtocol, useEngine } from '../state/engine';
 import { SCENARIOS } from '../core/arrhythmia';
 import type { SimulationEngine } from '../core/sim/SimulationEngine';
 
@@ -29,6 +29,24 @@ function EngineClock({ engine, running }: { engine: SimulationEngine; running: b
       const st = engine.rhythm.state;
       useSim.getState().setRhythm(st, st === 'tachycardia' || st === 'pacing' ? engine.rhythm.currentCycleLength(engine.time) : null);
     }
+  });
+  return null;
+}
+
+/**
+ * 収集モード（FAM 風）：カテーテルが動いたら電極の位置を記録し、形が増えたら表示を作り直す（100 ms ごと）。
+ */
+function GeometryCollector({ engine }: { engine: SimulationEngine }) {
+  const last = useRef({ at: -Infinity, version: -1 });
+  useFrame((state) => {
+    const s = useSim.getState();
+    if (s.geometryMode !== 'acquire') return;
+    const now = state.clock.elapsedTime * 1000;
+    if (now - last.current.at < 100 || engine.placementVersion === last.current.version) return;
+    last.current = { at: now, version: engine.placementVersion };
+    // マッピングに使う自由配置のカテーテル（ABL・環状・多極）だけ。CS・His・HRA は収集に使わない
+    const cats = engine.specs.filter((sp) => sp.mode === 'free').map((sp) => sp.catheter);
+    if (getAcquisition(engine).collect(cats)) s.bumpGeometry();
   });
   return null;
 }
@@ -87,6 +105,7 @@ export function Scene() {
         <PointMarkers key={`p-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
         <AblationDevices key={`a-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
         <AutoAcquire engine={engine} theme={theme} />
+        <GeometryCollector engine={engine} />
         <OrbitControls enableDamping target={[2, 0, -2]} enableRotate={!active} enableZoom={!active} />
       </Canvas>
       <MapLegend />

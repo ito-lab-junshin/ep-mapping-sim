@@ -6,6 +6,7 @@ import { StimulationPanel } from './StimulationPanel';
 import { CurePanel } from './CurePanel';
 import { CatheterTray } from './CatheterTray';
 import { AblationConsole } from './AblationConsole';
+import { GeometryControls } from './GeometryControls';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
 
@@ -35,12 +36,7 @@ export function ControlPanel() {
         </select>
       </label>
 
-      <label>ジオメトリー
-        <select value={s.geometryMode} onChange={(e) => s.setGeometryMode(e.target.value as 'acquire' | 'preset')}>
-          <option value="preset">プリセットモデル</option>
-          <option value="acquire">{theme.terms.geometryAcquire}で収集</option>
-        </select>
-      </label>
+      <GeometryControls />
 
       <label>体表 ECG
         <select value={s.ecgLeadCount} onChange={(e) => s.setEcgLeadCount(Number(e.target.value) as EcgLeadCount)}>
