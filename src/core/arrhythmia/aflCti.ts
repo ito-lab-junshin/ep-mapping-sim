@@ -12,8 +12,8 @@ export interface AflParams {
   ctiErpMs: number;
   /** 分界稜の横方向の伝導速度（機能的ブロック線） */
   cristaTransverseCv: number;
-  /** RA（CTI・障壁以外）の伝導速度。未指定なら一般心房筋のまま */
-  raCv?: number;
+  /** RA（CTI・稜・大静脈以外）の伝導速度 */
+  raCv: number;
 }
 
 /** RA の頂点 */
@@ -30,7 +30,7 @@ export function applyAflSubstrate(engine: SimulationEngine, p: AflParams = AFL_S
   for (const v of raVertices(engine)) {
     if (reg[v] === REGION_ID.cti) { t.conductionVelocity[v] = p.ctiCv; t.erp[v] = p.ctiErpMs; continue; }
     t.erp[v] = p.raErpMs;
-    if (p.raCv !== undefined) t.conductionVelocity[v] = p.raCv;
+    t.conductionVelocity[v] = p.raCv;
     // 大静脈（SVC・IVC の管）は心筋がなく興奮しない（伝導速度 0）。ブロック線（分界稜・Eustachian 稜）の端になる。
     // 「遅い伝導」にすると、管の壁を回る小さな旋回ができてしまう
     if (reg[v] === REGION_ID.svc || reg[v] === REGION_ID.ivc) { t.conductionVelocity[v] = 0; t.cvLongitudinal[v] = 0; continue; }
@@ -68,8 +68,10 @@ function nearestSegmentDirection(q: { x: number; y: number; z: number }, line: {
 
 /**
  * 通常型心房粗動（CTI 依存性。docs/DESIGN.md §5.2）
- *  - 基質：CTI の伝導を遅くし（ERP 230 ms は RA より長い）、分界稜を機能的ブロック線にする（異方性）。
- *    RA の ERP は、旋回が持続するよう目標値（周期長 220〜260 ms・興奮間隙 ≧ 20 ms）から調整した仮定値
+ *  - 解剖：拡大した RA（aflRemodeled）
+ *  - 基質：CTI の伝導を遅くし（ERP 230 ms は RA より長い）、分界稜（SVC → IVC）と Eustachian 稜（IVC → CS 口）を
+ *    機能的ブロック線にする（線に沿った向きだけ伝導）。大静脈は興奮しない。RA の伝導速度・ERP は
+ *    目標値（周期長 220〜260 ms・興奮間隙 ≧ 20 ms）から調整した仮定値（AFL_SUBSTRATE）
  *  - 誘発：CS 口からのバースト。CTI は ERP が長いので中隔側 → 側壁側の向きに通れず（一方向性ブロック）、
  *    興奮は中隔を上行し、側壁を下行して CTI に側壁側から入る → 反時計回りの旋回
  *  - 根治：三尖弁輪から IVC までの連続した病変線（CTI を横切る）と、CS 口・低位外側 RA からの刺激が
@@ -79,7 +81,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   id: 'afl_cti',
   label: '通常型心房粗動（CTI）',
   chambers: ['RA'],
-  anatomy: 'normal',
+  anatomy: 'aflRemodeled',
   induction: { kind: 'burst', site: 'CS_OS' },
   setupSubstrate(engine) { applyAflSubstrate(engine); },
   structuralChecks(engine) {
@@ -120,24 +122,56 @@ function ctiLineComplete(engine: SimulationEngine, cti: Set<number>, viab: Float
   return separated(engine.mesh, masked, septal, lateral);
 }
 
-/** CS 口と低位外側 RA から刺激し、CTI の向こう側の端に、線を越えて（CTI を通って）早く届かないか */
+/**
+ * 両方向性ブロック：CS 口と低位外側 RA からそれぞれ刺激し、反対側に届く時刻が、病変のない同じ基質より
+ * BLOCK_DELAY_MS 以上遅れる（CTI を直接通れず、三尖弁輪を回ってくる）こと。複製したエンジンで確かめる
+ */
 function bidirectionalBlock(engine: SimulationEngine): boolean {
-  // 構造的な判定（CTI の中で隔てられている）を両方向から確かめる：刺激して CTI の反対側の端の興奮時刻を見る
-  const run = (from: 'CS_OS' | 'LOW_LATERAL_RA', to: 'CS_OS' | 'LOW_LATERAL_RA') => {
+  const arrival = (from: 'CS_OS' | 'LOW_LATERAL_RA', to: 'CS_OS' | 'LOW_LATERAL_RA', withLesions: boolean) => {
     const c = new SimulationEngine(engine.model);
     aflCtiScenario.setupSubstrate(c);
-    c.ca.tissue.viability.set(engine.ca.tissue.viability);
+    if (withLesions) c.ca.tissue.viability.set(engine.ca.tissue.viability);
     c.sinusEnabled = false;
     const src = c.siteTarget(from), dst = c.siteTarget(to);
-    if (src.kind !== 'atrium' || dst.kind !== 'atrium') return false;
+    if (src.kind !== 'atrium' || dst.kind !== 'atrium') return -1;
     c.ca.stimulate(src.vertex);
-    c.tick(250);
-    const tDst = c.ca.tissue.lastActivation[dst.vertex];
-    // CTI を直接通れば（約 25 mm を CTI の伝導速度で）早く届く。線があれば RA を一周して遅れる
-    return tDst < 0 || tDst > CTI_DIRECT_LIMIT_MS;
+    c.tick(400);
+    return c.ca.tissue.lastActivation[dst.vertex];
   };
-  return run('CS_OS', 'LOW_LATERAL_RA') && run('LOW_LATERAL_RA', 'CS_OS');
+  const blocked = (from: 'CS_OS' | 'LOW_LATERAL_RA', to: 'CS_OS' | 'LOW_LATERAL_RA') => {
+    const t = arrival(from, to, true), ref = arrival(from, to, false);
+    return t < 0 || t - ref >= BLOCK_DELAY_MS;
+  };
+  return blocked('CS_OS', 'LOW_LATERAL_RA') && blocked('LOW_LATERAL_RA', 'CS_OS');
 }
 
-/** CTI を直接通ったとみなす到達時間の上限 ms（これより遅ければ RA を回ってきた＝ブロック）。仮定値 */
-const CTI_DIRECT_LIMIT_MS = 110;
+/** 両方向性ブロックとみなす到達の遅れ ms。仮定値 */
+const BLOCK_DELAY_MS = 30;
+
+/**
+ * 三尖弁輪の縁の興奮の位相（周期長 cl に対する ms）を、CS 口の側から His の方向（中隔を上行する向き）へ
+ * 45° ごとに平均して返す。反時計回りの通常型 AFL では、角度とともに位相が増え続ける。
+ */
+export function tricuspidRingPhases(engine: SimulationEngine, cl: number): number[] {
+  const a = engine.model.anatomy, P = engine.mesh.positions, tv = a.ra.tricuspid, ax = tv.axis;
+  const proj = (p: { x: number; y: number; z: number }) => {
+    const d = p.x * ax.x + p.y * ax.y + p.z * ax.z;
+    return { x: p.x - d * ax.x, y: p.y - d * ax.y, z: p.z - d * ax.z };
+  };
+  const unit = (p: { x: number; y: number; z: number }) => { const l = Math.hypot(p.x, p.y, p.z) || 1; return { x: p.x / l, y: p.y / l, z: p.z / l }; };
+  const u = unit(proj({ x: a.anchors.csOs.point.x - tv.center.x, y: a.anchors.csOs.point.y - tv.center.y, z: a.anchors.csOs.point.z - tv.center.z }));
+  let w = { x: ax.y * u.z - ax.z * u.y, y: ax.z * u.x - ax.x * u.z, z: ax.x * u.y - ax.y * u.x };
+  const angle = (q: { x: number; y: number; z: number }) => {
+    const r = { x: q.x - tv.center.x, y: q.y - tv.center.y, z: q.z - tv.center.z };
+    return ((Math.atan2(r.x * w.x + r.y * w.y + r.z * w.z, r.x * u.x + r.y * u.y + r.z * u.z) * 180) / Math.PI + 360) % 360;
+  };
+  // His の方向が正の角度になるよう向きをそろえる
+  if (angle(a.anchors.his.point) > 180) w = { x: -w.x, y: -w.y, z: -w.z };
+  const t0 = engine.ca.tissue.lastActivation[a.anchors.csOs.vertex];
+  const bins: number[][] = Array.from({ length: 8 }, () => []);
+  for (const v of a.rims.tricuspid) {
+    const q = { x: P[3 * v], y: P[3 * v + 1], z: P[3 * v + 2] };
+    bins[Math.floor(angle(q) / 45) % 8].push((((engine.ca.tissue.lastActivation[v] - t0) % cl) + cl) % cl);
+  }
+  return bins.map((b) => (b.length ? b.reduce((s, x) => s + x, 0) / b.length : Number.NaN));
+}

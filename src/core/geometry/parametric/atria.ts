@@ -23,6 +23,7 @@ import {
 /** 各構造の向き（心腔中心から見た方向）。仮定値（教育用近似） */
 const ORIENT = {
   laCenter: v3(24, 2, -8),
+  /** RA の中心（x は RA の短径から決める：中隔側の面が LA と重ならないように） */
   raCenter: v3(-20, 0, 8),
   pv: {
     LSPV: v3(0.62, 0.5, -0.6),
@@ -33,8 +34,9 @@ const ORIENT = {
   laa: v3(0.72, 0.38, 0.58),
   mitral: v3(0.12, -0.8, 0.58),
   svc: v3(-0.1, 1, -0.25),
-  ivc: v3(-0.1, -0.65, -0.8),
-  tricuspid: v3(0.25, -0.28, 0.93),
+  ivc: v3(-0.1, -0.6, -0.8),
+  /** 前方を向き、わずかに上へ傾ける：IVC の口から三尖弁輪までの CTI を 20 mm 以上にするため（仮定値） */
+  tricuspid: v3(0.25, 0.05, 0.97),
   csOs: v3(0.78, -0.58, -0.22),
   sinusNode: v3(-0.5, 0.82, 0.28),
   fossa: v3(0.95, 0.05, -0.3),
@@ -184,7 +186,8 @@ function buildLeftAtrium(D: AnatomyDimensions) {
 // ───────────────────────── 右房 ─────────────────────────
 
 function buildRightAtrium(D: AnatomyDimensions) {
-  const c = ORIENT.raCenter;
+  // normal（短径 38 mm）で x = −20。RA が大きいと中隔側が LA に食い込むので、その分だけ右へずらす
+  const c = v3(ORIENT.raCenter.x - (D.ra.minorDiameter / 2 - 19), ORIENT.raCenter.y, ORIENT.raCenter.z);
   const r = v3(D.ra.minorDiameter / 2, D.ra.majorDiameter / 2, D.ra.apDiameter / 2);
   const body = ellipsoid(c, r);
   const vein = (dir: Vec3, diameter: number) => {
@@ -220,9 +223,15 @@ function buildRightAtrium(D: AnatomyDimensions) {
   const slowV = nearestVertex(mesh, scale(add(P(csToTv), P(csRimTowardTv)), 0.5));
   // 房室結節（緻密部）：His 部位から CS 口へ 1/3 ほど戻った位置
   const avV = nearestVertex(mesh, add(P(hisV), scale(sub(csOs.center, P(hisV)), 0.35)));
-  // CTI：IVC の縁と三尖弁輪の最短の組
+  // CTI：IVC の口（IVC と RA の接合部の輪）と三尖弁輪の最短の組。
+  // rims.ivc は管の先端の縁なので使わない（CTI は IVC の口から三尖弁輪まで）
+  const ivcJunction: number[] = [];
+  for (let v = 0; v < mesh.positions.length / 3; v++) {
+    const p = P(v);
+    if (Math.abs(axialDistance(ivc, p) + D.vein.length) < 1.5 && radialDistance(ivc, p) < ivc.radius * 1.6) ivcJunction.push(v);
+  }
   let ctiIvc = -1, ctiTv = -1, ctiLen = Infinity;
-  for (const a of rims.ivc) for (const b of rims.tricuspid) {
+  for (const a of ivcJunction) for (const b of rims.tricuspid) {
     const d = dist(P(a), P(b));
     if (d < ctiLen) { ctiLen = d; ctiIvc = a; ctiTv = b; }
   }

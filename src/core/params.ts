@@ -169,14 +169,17 @@ export const AF_SUBSTRATE = {
 };
 
 /**
- * 通常型 AFL の基質（§5.2）。CTI の伝導速度は §4.2 の範囲 0.3〜0.5 mm/ms、CTI の ERP は §4.2 の 230 ms。
- * 保留中（ユーザー確認待ち）：今の RA の大きさと一般心房筋 1.0 mm/ms では、三尖弁輪を回る旋回の周期が
- * CTI の ERP（230 ms）より短く、旋回が持続しない。持続を確認できたのは RA の伝導速度 0.4 mm/ms・
- * RA の ERP 200 ms・CTI 0.3 mm/ms のとき（周期長 249 ms、反時計回り）。値は暫定で、この設定では誘発されない
+ * 通常型 AFL の基質（§5.2）。解剖は拡大した RA（aflRemodeled：RA と三尖弁輪が正常の 1.2 倍）。
+ * CTI の伝導速度 0.3 mm/ms は §4.2 の範囲（0.3〜0.5）の下端、CTI の ERP は §4.2 の 230 ms。
+ * RA の伝導速度・ERP と稜の横方向の伝導は、目標（周期長 220〜260 ms・興奮間隙 ≧ 20 ms・反時計回り・
+ * CS 口からのバーストで誘発）から逆算した仮定値（教育用近似）。このとき周期長 255 ms・興奮間隙 75 ms。
+ * 旋回は CTI の ERP（230 ms）より長い周期でしか続かないため、RA の伝導を遅くする必要がある（リモデリング）
  */
 export const AFL_SUBSTRATE = {
+  raCv: 0.6,
   raErpMs: 180,
-  ctiCv: 0.4,
+  ctiCv: 0.3,
   ctiErpMs: 230,
-  cristaTransverseCv: 0.1,
+  /** 分界稜・Eustachian 稜の横方向の伝導速度。0 = 完全な機能的ブロック（遅いが通れる値だと、稜を横切る興奮で回路が崩れる） */
+  cristaTransverseCv: 0,
 };

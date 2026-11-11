@@ -3,6 +3,8 @@ import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { avnrtScenario } from './avnrt';
 import { wpwScenario } from './wpw';
+import { aflCtiScenario, tricuspidRingPhases } from './aflCti';
+import { ConductionSystem } from '../conduction/ConductionSystem';
 import { afScenario, AF_TRIGGER_PVS, sleeveTip } from './af';
 import { PV_NAMES, PV_OSTIUM, REGION_ID, type PvName } from '../geometry/regions';
 import { tryInduce, verifyCure } from './common';
@@ -138,4 +140,64 @@ describe('AF（PVI）', () => {
     expect(e.ca.tissue.lastActivation[sleeveTip(e, 'LSPV')]).toBeGreaterThan(e.time - 400);
     expect(e.rhythm.state).not.toBe('tachycardia');
   }, 180_000);
+});
+
+describe('通常型 AFL（CTI）', () => {
+  const engine = () => { const e = new SimulationEngine(loadParametricSync('aflRemodeled')); aflCtiScenario.setupSubstrate(e); return e; };
+  const BURST = { observeMs: 1000 };
+  /**
+   * CTI の線：三尖弁輪から IVC の口まで、さらに IVC の中へ延ばす（実際の手技と同じく、線の IVC 側の端に
+   * 隙間を残さないため）。弦の点を表面に射影して焼き、IVC の口までは CTI の領域に限って射影する
+   * （限らないと IVC 側の点が興奮しない管の上に落ちる）。skipMiddle で中ほどに隙間を残す
+   */
+  const ctiLine = (e: SimulationEngine, skipMiddle = false) => {
+    const a = e.model.anatomy.anchors;
+    const p = a.ctiTv.point, q = a.ctiIvc.point;
+    const cti: number[] = [];
+    e.mesh.regionOfVertex.forEach((r, v) => { if (r === REGION_ID.cti) cti.push(v); });
+    const n = 12;
+    for (let i = 0; i <= n + 3; i++) {
+      if (skipMiddle && (i === 5 || i === 6 || i === 7)) continue;
+      const t = i / n;
+      const chord = { x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, z: p.z + (q.z - p.z) * t };
+      ablateAt(e, (t <= 1 ? e.query.closestPoint(chord, cti) : e.query.closestPoint(chord)).point);
+    }
+  };
+
+  it('CS 口からのバーストで、三尖弁輪を反時計回りに旋回する粗動が誘発される（周期長 220〜260 ms、基線のない粗動波、2:1 伝導）', () => {
+    const r = tryInduce(engine(), aflCtiScenario, BURST);
+    expect(r.induced).toBe(true);
+    const e = r.engine;
+    e.tick(1500);
+    const cl = e.rhythm.currentCycleLength(e.time)!;
+    expect(cl).toBeGreaterThan(220);
+    expect(cl).toBeLessThan(260);
+    // 中隔（CS 口側）から His の方向へ、位相が増え続ける
+    const ph = tricuspidRingPhases(e, cl).slice(1);
+    for (let i = 1; i < ph.length; i++) expect(ph[i], ph.join(' ')).toBeGreaterThan(ph[i - 1]);
+    // II の心房成分（粗動波）は基線に戻らず、絶えず続く（鋸歯状）。
+    // 極性（通常型は陰性が優位）はまだ再現できていない（LIMITATIONS）
+    const ii: number[] = [];
+    for (let i = 0; i < Math.round(cl / e.sampleMs); i++) { e.stepOnce(); ii.push(e.ecg.atrial('II')); }
+    expect(ii.filter((x) => Math.abs(x) > 0.01).length / ii.length).toBeGreaterThan(0.7);
+    // 房室結節（ERP 320 ms）は 2:1 で伝える
+    const vcl = ConductionSystem.recent(e.conduction.vTimes, e.time, 3000);
+    const vInt = vcl.slice(1).map((t, i) => t - vcl[i]);
+    expect(vInt.every((x) => x > cl * 1.5)).toBe(true);
+  }, 300_000);
+
+  it('CTI に三尖弁輪から IVC までの線を引くと、両方向性ブロックになり非誘発', () => {
+    const e = engine();
+    ctiLine(e);
+    const checks = verifyCure(e, aflCtiScenario, BURST);
+    expect(checks.every((c) => c.ok), JSON.stringify(checks.filter((c) => !c.ok))).toBe(true);
+  }, 300_000);
+
+  it('線の中ほどに隙間が残ると、線は未完成と判定され、粗動は誘発される', () => {
+    const e = engine();
+    ctiLine(e, true);
+    const checks = aflCtiScenario.structuralChecks(e);
+    expect(checks.find((c) => c.id === 'cti-line')!.ok).toBe(false);
+    expect(tryInduce(e, aflCtiScenario, BURST).induced).toBe(true);
+  }, 300_000);
 });

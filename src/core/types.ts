@@ -178,7 +178,7 @@ export type TachycardiaState =
   | 'noninducible';
 
 /** 解剖寸法のセット（core/geometry/parametric/dimensions.ts） */
-export type AnatomyDimensionSet = 'normal' | 'afRemodeled';
+export type AnatomyDimensionSet = 'normal' | 'afRemodeled' | 'aflRemodeled';
 
 /** 根治判定の基準 1 つ分の結果 */
 export interface CureCheck {

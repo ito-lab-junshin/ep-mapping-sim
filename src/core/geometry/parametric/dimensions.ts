@@ -4,6 +4,7 @@
  *
  * - normal：洞調律の心房（AFL・AVNRT・WPW シナリオで使う）
  * - afRemodeled：AF によるリモデリング後の心房（AF シナリオで使う）
+ * - aflRemodeled：通常型 AFL の患者の拡大した右房（AFL シナリオで使う）
  *
  * 出典を一次資料で確認できた値だけに出典を書き、それ以外は「仮定値（教育用近似）」とする。
  * 寸法を変えるときはこのファイルだけを編集する。
@@ -82,7 +83,24 @@ const afRemodeled: AnatomyDimensions = {
   },
 };
 
-export const DIMENSION_SETS: Record<DimensionSetId, AnatomyDimensions> = { normal, afRemodeled };
+/** RA と三尖弁輪の拡大率（AFL）。仮定値（教育用近似）。目標の周期長（220〜260 ms）から調整する */
+export const AFL_RA_SCALE = 1.2;
+
+const aflRemodeled: AnatomyDimensions = {
+  ...normal,
+  id: 'aflRemodeled',
+  label: '右房拡大（AFL）',
+  /** RA の径。仮定値（教育用近似）：正常の AFL_RA_SCALE 倍 */
+  ra: {
+    minorDiameter: Math.round(normal.ra.minorDiameter * AFL_RA_SCALE),
+    majorDiameter: Math.round(normal.ra.majorDiameter * AFL_RA_SCALE),
+    apDiameter: Math.round(normal.ra.apDiameter * AFL_RA_SCALE),
+  },
+  /** 三尖弁輪径。仮定値（教育用近似）：旋回は三尖弁輪の縁に沿うので、回路の長さは主に弁輪の周長で決まる */
+  annulus: { ...normal.annulus, tricuspid: Math.round(normal.annulus.tricuspid * AFL_RA_SCALE) },
+};
+
+export const DIMENSION_SETS: Record<DimensionSetId, AnatomyDimensions> = { normal, afRemodeled, aflRemodeled };
 
 /**
  * CTI 長の目安（生成後に 20〜40 mm に収まることをテストで確認する）。

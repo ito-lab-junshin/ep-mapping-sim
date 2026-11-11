@@ -142,3 +142,29 @@ describe('両心房の伝播', () => {
     expect(other.every((v) => ca.tissue.lastActivation[v] >= 0)).toBe(true);
   });
 });
+
+describe('AFL 用の拡大した RA（aflRemodeled）', () => {
+  const afl = buildBiatrialModel('aflRemodeled');
+  it('RA と三尖弁輪が normal より大きく、LA と食い込まず、CTI 長が目安の範囲', () => {
+    const raCount = (m: typeof normal) => m.mesh.parts![1].vertexCount;
+    expect(raCount(afl)).toBeGreaterThan(raCount(normal));
+    expect(afl.anatomy.ra.tricuspid.radius).toBeGreaterThan(normal.anatomy.ra.tricuspid.radius);
+    const [la, ra] = afl.mesh.parts!;
+    let min = Infinity;
+    for (let a = la.vertexStart; a < la.vertexStart + la.vertexCount; a += 3) {
+      for (let b = ra.vertexStart; b < ra.vertexStart + ra.vertexCount; b += 3) {
+        const d = Math.hypot(afl.mesh.positions[3 * a] - afl.mesh.positions[3 * b], afl.mesh.positions[3 * a + 1] - afl.mesh.positions[3 * b + 1], afl.mesh.positions[3 * a + 2] - afl.mesh.positions[3 * b + 2]);
+        if (d < min) min = d;
+      }
+    }
+    expect(min).toBeGreaterThan(2);
+    expect(afl.anatomy.ctiLengthMm).toBeGreaterThan(CTI_LENGTH_RANGE_MM[0]);
+    expect(afl.anatomy.ctiLengthMm).toBeLessThan(CTI_LENGTH_RANGE_MM[1]);
+  });
+
+  it('分界稜（SVC → IVC）と Eustachian 稜（IVC → CS 口）の線と領域がある', () => {
+    expect(afl.anatomy.lines.crista.length).toBeGreaterThan(5);
+    expect(afl.anatomy.lines.eustachian.length).toBeGreaterThan(5);
+    expect(verticesInRegion(afl.mesh.regionOfVertex, 'eustachian_ridge').length).toBeGreaterThan(0);
+  });
+});
