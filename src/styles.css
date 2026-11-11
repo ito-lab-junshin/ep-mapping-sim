@@ -113,3 +113,7 @@ html, body, #root { margin: 0; height: 100%; }
 .tutorial-title { font-size: 13px; font-weight: 600; }
 .tutorial-quit { opacity: 0.7; }
 .tutorial-target { outline: 2px solid var(--tutorial-accent, #f5c542); outline-offset: 4px; border-radius: 4px; }
+
+.tutorial-items, .goal-items { display: flex; flex-wrap: wrap; gap: 4px 10px; list-style: none; margin: 0; padding: 0; font-size: 12px; }
+.goal-items { margin-left: 1.2em; }
+.tutorial-items .ok, .goal-items .ok { color: #5fd38d; }

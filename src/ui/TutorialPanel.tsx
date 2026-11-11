@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
 import { getAcquisition, getGoalTracker, getPoints, useEngine } from '../state/engine';
-import { PVI_TUTORIAL, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
+import { PVI_TUTORIAL, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
+import { Slider } from './CatheterTray';
 
 const T = PVI_TUTORIAL;
 
@@ -16,6 +17,9 @@ export function TutorialPanel() {
   const setStep = useSim((s) => s.setTutorialStep);
   const engine = useEngine();
   const [showHint, setShowHint] = useState(false);
+  const coverageTarget = useSim((s) => s.tutorialCoveragePct);
+  const setCoverageTarget = useSim((s) => s.setTutorialCoveragePct);
+  const [, force] = useState(0);
 
   // 500 ms ごとに完了を判定して進める（一時停止中も判定する）
   useEffect(() => {
@@ -32,14 +36,20 @@ export function TutorialPanel() {
         ui: {
           arrhythmia: s.arrhythmia, geometryMode: s.geometryMode,
           laCoveragePct: getAcquisition(engine).coveragePct(la.vertexStart, la.vertexCount),
+          coverageTargetPct: s.tutorialCoveragePct,
           cureOk: !!s.cureChecks && s.cureChecks.every((c) => c.ok),
         },
       };
       const next = advanceTutorial(T, s.tutorialStep, ctx);
       if (next !== s.tutorialStep) { setStep(next); setShowHint(false); }
+      ctxRef.current = ctx;
+      force((x) => x + 1);
     }, 500);
     return () => clearInterval(id);
   }, [step, engine, setStep]);
+
+  // 項目のチェック（PV ごとの entrance block など）の表示用に、直近の判定材料を残す
+  const ctxRef = useRef<TutorialContext | null>(null);
 
   // 対象の操作欄を強調する
   const target = step !== null && step < T.steps.length ? T.steps[step].target : null;
@@ -74,6 +84,15 @@ export function TutorialPanel() {
         <>
           <p className="tutorial-title" style={{ color: theme.colors.accent }}>{cur.title}</p>
           <p>{cur.instruction}</p>
+          {cur.id === 'build-la' && (
+            <Slider label="被覆率の目安（設定）" value={coverageTarget} min={TUTORIAL_COVERAGE_RANGE_PCT[0]} max={TUTORIAL_COVERAGE_RANGE_PCT[1]}
+              step={5} unit="%" onChange={setCoverageTarget} />
+          )}
+          {cur.items && ctxRef.current && (
+            <ul className="tutorial-items">
+              {cur.items(ctxRef.current).map((it) => <li key={it.label} className={it.done ? 'ok' : ''}>{it.done ? '✓' : '・'} {it.label}</li>)}
+            </ul>
+          )}
           {showHint && <p className="note">{cur.hint}</p>}
           <div className="row">
             <button onClick={() => setShowHint(!showHint)}>{showHint ? 'ヒントを隠す' : 'ヒント'}</button>

@@ -283,13 +283,19 @@ export interface GoalContext {
   events: readonly LearningEvent[];
 }
 
+/** ゴールの中の項目 */
+export interface GoalItem { id: string; label: string; ok: boolean }
+
 /** 学習ゴール：一度達成したら達成のまま（GoalTracker） */
 export interface LearningGoal {
   id: string;
   label: string;
   /** 次に何をすればよいかの手がかり */
   hint: string;
-  achieved(ctx: GoalContext): boolean;
+  /** 達成の判定（items をもつゴールは、すべての項目が一度ずつ確認されたら達成） */
+  achieved?(ctx: GoalContext): boolean;
+  /** 1 つずつ確認する項目（例：PV ごとの entrance block）。一度 ok になった項目は確認済みのまま */
+  items?(ctx: GoalContext): GoalItem[];
   /** 途中経過（例："2/4 本"） */
   progress?(ctx: GoalContext): string | null;
 }

@@ -1,7 +1,6 @@
 import type { ArrhythmiaId, GeometryMode, MapPoint } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { GoalTracker } from './GoalTracker';
-import { circularPv } from './conditions';
 import { isolatedPvs } from '../arrhythmia/pv';
 
 /**
@@ -19,6 +18,8 @@ export interface TutorialContext {
     geometryMode: GeometryMode;
     /** 収集モードの LA の被覆率 % */
     laCoveragePct: number;
+    /** LA の形を作る目安 %（設定で変えられる。既定 TUTORIAL_LA_COVERAGE_PCT） */
+    coverageTargetPct: number;
     /** 根治判定の結果がすべて ✓ */
     cureOk: boolean;
   };
@@ -35,13 +36,16 @@ export interface TutorialStep {
   target: TutorialTarget;
   /** 任意の手順（とばしてもよい） */
   optional?: boolean;
+  /** 1 つずつチェックを付ける項目（例：PV ごとの entrance block） */
+  items?(ctx: TutorialContext): { label: string; done: boolean }[];
   done(ctx: TutorialContext): boolean;
 }
 
 export interface Tutorial { id: string; title: string; scenario: ArrhythmiaId; steps: TutorialStep[] }
 
-/** 収集モードで LA の形を作る目安 %（仮定値） */
+/** 収集モードで LA の形を作る目安 % の既定値と、設定で選べる範囲（仮定値） */
 export const TUTORIAL_LA_COVERAGE_PCT = 70;
+export const TUTORIAL_COVERAGE_RANGE_PCT = [30, 95] as const;
 
 export const PVI_TUTORIAL: Tutorial = {
   id: 'pvi-rf',
@@ -62,9 +66,9 @@ export const PVI_TUTORIAL: Tutorial = {
     },
     {
       id: 'build-la', title: 'LA の形を作る', target: 'catheters',
-      instruction: `ABL か多極カテーテルを選び、3D 上でドラッグして LA の壁をなぞります。4 本の PV の口・天蓋・後壁・前壁・LAA を含めて、LA の ${TUTORIAL_LA_COVERAGE_PCT} % 以上を収集します。`,
+      instruction: 'ABL か多極カテーテルを選び、3D 上でドラッグして LA の壁をなぞります。4 本の PV の口・天蓋・後壁・前壁・LAA を含めて、目安の被覆率まで収集します。',
       hint: '多極カテーテル（多極スプライン／グリッド）は一度に広くなぞれます。視点を回すときはカテーテルの選択を解除します。穴の位置が「まだ点が足りない場所」です。',
-      done: (c) => c.ui.laCoveragePct >= TUTORIAL_LA_COVERAGE_PCT,
+      done: (c) => c.ui.laCoveragePct >= c.ui.coverageTargetPct,
     },
     {
       id: 'pv-potential', title: '環状カテーテルで PV 電位を見る', target: 'catheters',
@@ -85,25 +89,23 @@ export const PVI_TUTORIAL: Tutorial = {
       done: (c) => isolatedPvs(c.engine).includes('LSPV'),
     },
     {
-      id: 'entrance', title: 'entrance block を確かめる', target: 'catheters',
-      instruction: '環状カテーテルを隔離した LSPV の中に置き、PV 電位が消えたか、LA と無関係なリズムで出ている（解離）ことを確かめます。',
-      hint: 'LSPV はトリガーのある PV なので、隔離後も PV の中だけで発火が続きます（解離した PV 電位）。',
-      done: (c) => {
-        const pv = circularPv(c.engine);
-        return !!pv && isolatedPvs(c.engine).includes(pv);
-      },
-    },
-    {
-      id: 'exit-block', title: 'exit block を確かめる', target: 'stimulation',
-      instruction: '刺激部位を「環状（1-2）」にして刺激します。PV の中は捕捉されますが（局所の捕捉）、LA・CS には伝わりません。',
-      hint: '刺激の方法はバーストでもかまいません。環状カテーテルが壁に接触していないと捕捉しません。',
-      done: (c) => c.goals.isAchieved('exit-block'),
-    },
-    {
       id: 'all-pvs', title: '残りの PV も隔離する', target: 'ablation',
       instruction: 'LIPV・RSPV・RIPV も同じように一周して隔離します。右の 2 本は口が近いので、間の部分（carina）にも隙間を残さないようにします。',
       hint: 'ゴール一覧に隔離できた本数が出ます。',
       done: (c) => c.goals.isAchieved('isolation'),
+    },
+    {
+      id: 'entrance', title: '4 本の PV で entrance block を確かめる', target: 'catheters',
+      instruction: '環状カテーテルを 4 本の PV に 1 本ずつ入れ、PV 電位が消えたか、LA と無関係なリズムで出ている（解離）ことを確かめます。確かめた PV にチェックが付きます。',
+      hint: 'トリガーのある LSPV・RSPV は、隔離後も PV の中だけで発火が続きます（解離した PV 電位）。実臨床でも見られる所見です。',
+      done: (c) => c.goals.isAchieved('entrance'),
+      items: (c) => c.goals.itemStatus('entrance', c.goals.context(c.engine, c.points)).map((x) => ({ label: x.label, done: x.done })),
+    },
+    {
+      id: 'exit-block', title: 'exit block を確かめる', target: 'stimulation',
+      instruction: '隔離した PV に環状カテーテルを置き、刺激部位を「環状（1-2）」にして刺激します。PV の中は捕捉されますが（局所の捕捉）、LA・CS には伝わりません。',
+      hint: '刺激の方法はバーストでもかまいません。環状カテーテルが壁に接触していないと捕捉しません。',
+      done: (c) => c.goals.isAchieved('exit-block'),
     },
     {
       id: 'cure', title: '根治を判定する', target: 'cure',

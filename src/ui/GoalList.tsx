@@ -35,6 +35,11 @@ export function GoalList() {
             <li key={g.id} className={done ? 'ok' : g === next ? 'next' : ''} style={g === next ? { borderColor: theme.colors.accent } : undefined}>
               <span className="mark">{done ? '✓' : '・'}</span>
               <span>{g.label}{progress ? `（${progress}）` : ''}</span>
+              {g.items && (
+                <span className="goal-items">
+                  {tracker.itemStatus(g.id, ctx).map((it) => <span key={it.id} className={it.done ? 'ok' : ''}>{it.done ? '✓' : '・'}{it.label}</span>)}
+                </span>
+              )}
               {g === next && <p className="note">{g.hint}</p>}
               {g === next && g.id === 'direction' && (
                 <div className="row">

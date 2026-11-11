@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { TUTORIAL_LA_COVERAGE_PCT } from '../core/learning/tutorials';
 import type { ArrhythmiaId, CureCheck, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
 import type { ProtocolConfig } from '../core/pacing/ProtocolSession';
 import { MAP_DEFAULTS } from '../core/params';
@@ -44,6 +45,8 @@ interface SimState {
   goalVersion: number;
   /** 実行中のチュートリアルの手順 index（null = 実行していない） */
   tutorialStep: number | null;
+  /** チュートリアルで LA の形を作る目安の被覆率 % */
+  tutorialCoveragePct: number;
   /** 3D ビューの表示モード */
   mapType: MapType;
   mapSettings: MapSettings;
@@ -88,6 +91,7 @@ interface SimState {
   bumpGeometry: () => void;
   bumpGoals: () => void;
   setTutorialStep: (i: number | null) => void;
+  setTutorialCoveragePct: (v: number) => void;
   setProtocol: (p: ProtocolConfig | null) => void;
   bumpProtocol: () => void;
   setCureChecks: (c: CureCheck[] | null) => void;
@@ -114,6 +118,7 @@ export const useSim = create<SimState>((set) => ({
   geometryVersion: 0,
   goalVersion: 0,
   tutorialStep: null,
+  tutorialCoveragePct: TUTORIAL_LA_COVERAGE_PCT,
   mapType: 'live',
   mapSettings: DEFAULT_MAP_SETTINGS,
   autoAcquire: false,
@@ -149,6 +154,7 @@ export const useSim = create<SimState>((set) => ({
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   setShowTruth: (showTruth) => set({ showTruth }),
   setTutorialStep: (tutorialStep) => set({ tutorialStep }),
+  setTutorialCoveragePct: (tutorialCoveragePct) => set({ tutorialCoveragePct }),
   bumpGoals: () => set((s) => ({ goalVersion: s.goalVersion + 1 })),
   bumpGeometry: () => set((s) => ({ geometryVersion: s.geometryVersion + 1 })),
   bumpMap: (message) => set((s) => ({ mapVersion: s.mapVersion + 1, acquireMessage: message ?? s.acquireMessage })),

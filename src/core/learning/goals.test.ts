@@ -53,6 +53,17 @@ describe('学習ゴール：AF（PVI）', () => {
     t.update(e);
     expect(t.isAchieved('isolation')).toBe(true);
     expect(t.isAchieved('exit-block')).toBe(false);
+    // entrance block：環状カテーテルが入っている LSPV だけ確認済み。残りの PV に 1 本ずつ入れる
+    expect(t.itemStatus('entrance', t.context(e, [])).filter((x) => x.done).map((x) => x.id)).toEqual(['LSPV']);
+    expect(t.isAchieved('entrance')).toBe(false);
+    for (const name of PV_NAMES.filter((x) => x !== 'LSPV')) {
+      const q = e.model.anatomy.la.pvs.find((p) => p.name === name)!, g = q.frame;
+      e.setPlacement('circ', { kind: 'free', point: { x: q.ostium.x + g.axis.x * 6, y: q.ostium.y + g.axis.y * 6, z: q.ostium.z + g.axis.z * 6 }, heightMm: 1, rotationDeg: 0, diameterMm: 15 });
+      t.update(e);
+    }
+    expect(t.isAchieved('entrance')).toBe(true);
+    // 環状カテーテルを LSPV に戻す
+    e.setPlacement('circ', { kind: 'free', point: { x: pv.ostium.x + f.axis.x * 6, y: pv.ostium.y + f.axis.y * 6, z: pv.ostium.z + f.axis.z * 6 }, heightMm: 1, rotationDeg: 0, diameterMm: 15 });
     // 隔離後に環状カテーテル（LSPV、接触あり）から刺激
     expect(protocolStartState(e, 'CIRC')).toEqual({ contact: true, circPv: 'LSPV', circPvIsolated: true });
     t.record(protocol(e, 'CIRC', 'noninducible', protocolStartState(e, 'CIRC')));

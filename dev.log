@@ -35,3 +35,11 @@
 11:08:23 AM [vite] hmr update /src/ui/ControlPanel.tsx
 11:08:23 AM [vite] page reload src/state/store.ts
 11:08:23 AM [vite] hmr update /src/styles.css
+11:14:20 AM [vite] hmr update /src/ui/EgmPanel.tsx, /src/three/Scene.tsx, /src/ui/MapControls.tsx, /src/ui/StimulationPanel.tsx, /src/ui/CurePanel.tsx, /src/ui/CatheterTray.tsx, /src/ui/AblationConsole.tsx, /src/ui/GeometryControls.tsx, /src/three/CatheterMarkers.tsx, /src/ui/MapLegend.tsx, /src/three/PointMarkers.tsx, /src/three/ChamberMesh.tsx, /src/ui/GoalList.tsx, /src/ui/TutorialPanel.tsx
+11:14:20 AM [vite] page reload src/core/arrhythmia/af.ts
+11:14:35 AM [vite] hmr update /src/ui/TutorialPanel.tsx
+11:14:51 AM [vite] page reload src/state/store.ts
+11:14:51 AM [vite] hmr update /src/ui/TutorialPanel.tsx
+11:14:51 AM [vite] hmr update /src/ui/GoalList.tsx
+11:14:51 AM [vite] hmr update /src/styles.css
+11:15:10 AM [vite] hmr update /src/ui/TutorialPanel.tsx

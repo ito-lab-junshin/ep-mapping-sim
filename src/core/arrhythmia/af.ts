@@ -87,6 +87,16 @@ export const afScenario: ArrhythmiaScenario = {
       progress: ({ engine }) => `${isolatedPvs(engine).length}/${PV_NAMES.length} 本`,
     },
     {
+      id: 'entrance', label: '4 本すべての PV に環状カテーテルを置き、PV 電位の消失または解離（entrance block）を確認する',
+      hint: '隔離した PV に環状カテーテルを置く。トリガーのある PV（LSPV・RSPV）では、LA と無関係なリズムで PV 電位が出続ける（解離）',
+      // 環状カテーテルが入っている PV が隔離されていれば、その PV を確認済みにする（1 本ずつ）
+      items: ({ engine }) => {
+        const pv = circularPv(engine);
+        const iso = pv ? isolatedPvs(engine).includes(pv) : false;
+        return PV_NAMES.map((p) => ({ id: p, label: p, ok: iso && pv === p }));
+      },
+    },
+    {
       id: 'exit-block', label: '隔離後に PV 内ペーシング（環状カテーテル）で exit block を確認する',
       hint: '隔離した PV に環状カテーテルを置き、刺激部位「環状（1-2）」で刺激する。PV 内は捕捉されるが LA には伝わらない',
       // 刺激したときに、環状カテーテルが接触していた PV がすでに隔離されていたこと

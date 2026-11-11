@@ -5,7 +5,7 @@ import { afScenario } from '../arrhythmia/af';
 import { verifyCure } from '../arrhythmia/common';
 import { GeometryAcquisition } from '../geometry/acquisition';
 import { GoalTracker } from './GoalTracker';
-import { PVI_TUTORIAL, advanceTutorial, type TutorialContext } from './tutorials';
+import { PVI_TUTORIAL, TUTORIAL_LA_COVERAGE_PCT, advanceTutorial, type TutorialContext } from './tutorials';
 import { protocolStartState } from './events';
 import { PV_NAMES, type PvName } from '../geometry/regions';
 import type { Vec3 } from '../types';
@@ -18,7 +18,7 @@ describe('チュートリアル：PVI（RF）', () => {
     const goals = new GoalTracker(afScenario.goals);
     const acq = new GeometryAcquisition(e.mesh);
     const la = e.mesh.parts![0];
-    const ui: TutorialContext['ui'] = { arrhythmia: 'avnrt', geometryMode: 'preset', laCoveragePct: 0, cureOk: false };
+    const ui: TutorialContext['ui'] = { arrhythmia: 'avnrt', geometryMode: 'preset', laCoveragePct: 0, coverageTargetPct: 95, cureOk: false };
     const ctx = (): TutorialContext => ({ engine: e, goals, points: [], ui: { ...ui, laCoveragePct: acq.coveragePct(la.vertexStart, la.vertexCount) } });
     let i = 0;
     const step = () => { goals.update(e); i = advanceTutorial(PVI_TUTORIAL, i, ctx()); return PVI_TUTORIAL.steps[i]?.id ?? 'done'; };
@@ -53,6 +53,9 @@ describe('チュートリアル：PVI（RF）', () => {
       e.setPlacement('abl', { kind: 'free', point: e.query.position(v), heightMm: 1, rotationDeg: 0 });
       acq.collect([e.catheter('abl')!]);
     }
+    // 目安（設定）を 95 % にすると届かず、既定の 70 % に戻すと進む
+    expect(step()).toBe('build-la');
+    ui.coverageTargetPct = TUTORIAL_LA_COVERAGE_PCT;
     expect(step()).toBe('pv-potential');
     const pv = e.model.anatomy.la.pvs.find((p) => p.name === 'LSPV')!, f = pv.frame;
     e.setPlacement('circ', { kind: 'free', point: { x: pv.ostium.x + f.axis.x * 6, y: pv.ostium.y + f.axis.y * 6, z: pv.ostium.z + f.axis.z * 6 }, heightMm: 1, rotationDeg: 0, diameterMm: 15 });
@@ -62,11 +65,18 @@ describe('チュートリアル：PVI（RF）', () => {
     i++; // 任意の手順をとばす
     expect(step()).toBe('ablate-lspv');
     ring('LSPV');
-    // 環状カテーテルは LSPV の中にあるので、entrance block の確認まで進む
-    expect(step()).toBe('exit-block');
-    goals.record({ kind: 'protocol', time: e.time, site: 'CIRC', status: 'noninducible', results: [], lesionCount: e.lesions.length, ...protocolStartState(e, 'CIRC') });
     expect(step()).toBe('all-pvs');
     for (const p of PV_NAMES.filter((x) => x !== 'LSPV')) ring(p);
+    expect(step()).toBe('entrance');
+    // 環状カテーテルは LSPV にあるので LSPV だけチェックが付く。残りの PV に 1 本ずつ入れる
+    const entrance = PVI_TUTORIAL.steps[i];
+    expect(entrance.items!(ctx()).filter((x) => x.done).map((x) => x.label)).toEqual(['LSPV']);
+    for (const name of PV_NAMES.filter((x) => x !== 'LSPV')) {
+      const q = e.model.anatomy.la.pvs.find((p) => p.name === name)!, g = q.frame;
+      e.setPlacement('circ', { kind: 'free', point: { x: q.ostium.x + g.axis.x * 6, y: q.ostium.y + g.axis.y * 6, z: q.ostium.z + g.axis.z * 6 }, heightMm: 1, rotationDeg: 0, diameterMm: 15 });
+      expect(step()).toBe(name === 'RIPV' ? 'exit-block' : 'entrance');
+    }
+    goals.record({ kind: 'protocol', time: e.time, site: 'CIRC', status: 'noninducible', results: [], lesionCount: e.lesions.length, ...protocolStartState(e, 'CIRC') });
     expect(step()).toBe('cure');
     ui.cureOk = verifyCure(e, afScenario).every((c) => c.ok);
     expect(step()).toBe('done');
