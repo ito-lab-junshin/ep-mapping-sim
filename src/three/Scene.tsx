@@ -9,14 +9,25 @@ import { referenceBeats } from '../core/mapping/annotation';
 import type { SystemTheme } from '../systems';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { acquireNow, useEngine } from '../state/engine';
+import { acquireNow, updateProtocol, useEngine } from '../state/engine';
 import { SCENARIOS } from '../core/arrhythmia';
 import type { SimulationEngine } from '../core/sim/SimulationEngine';
 
-/** 実時間 1 s = シミュレーション 1 s でエンジンを進める（1 フレーム最大 50 ms） */
+/**
+ * 実時間 1 s = シミュレーション 1 s でエンジンを進める（1 フレーム最大 50 ms）。
+ * 刺激プロトコルを進め、調律の状態を 250 ms ごとに UI へ知らせる。
+ */
 function EngineClock({ engine, running }: { engine: SimulationEngine; running: boolean }) {
+  const last = useRef(-Infinity);
   useFrame((_, delta) => {
-    if (running) engine.tick(Math.min(delta * 1000, 50));
+    if (!running) return;
+    engine.tick(Math.min(delta * 1000, 50));
+    updateProtocol();
+    if (engine.time - last.current >= 250) {
+      last.current = engine.time;
+      const st = engine.rhythm.state;
+      useSim.getState().setRhythm(st, st === 'tachycardia' || st === 'pacing' ? engine.rhythm.currentCycleLength(engine.time) : null);
+    }
   });
   return null;
 }

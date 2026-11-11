@@ -3,9 +3,16 @@ import { SCENARIOS } from '../core/arrhythmia';
 import { ENERGY_LABEL } from '../core/ablation/LesionModel';
 import { useSim } from '../state/store';
 import { MapControls } from './MapControls';
+import { StimulationPanel } from './StimulationPanel';
+import { CurePanel } from './CurePanel';
 import { CatheterTray } from './CatheterTray';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, EnergyId, MappingSystemId } from '../core/types';
+
+const RHYTHM_LABEL: Record<string, string> = {
+  sinus: '洞調律（sinus）', pacing: '刺激中・判定中（pacing）', tachycardia: '頻拍（tachycardia）',
+  terminated: '頻拍が停止（terminated）', noninducible: '非誘発（noninducible）',
+};
 
 export function ControlPanel() {
   const s = useSim();
@@ -47,6 +54,12 @@ export function ControlPanel() {
         </select>
       </label>
 
+      <h2>刺激（pacing）</h2>
+      <StimulationPanel />
+
+      <h2>通電と根治判定</h2>
+      <CurePanel />
+
       <h2>マップ（mapping）</h2>
       <MapControls />
 
@@ -70,8 +83,10 @@ export function ControlPanel() {
         {scenario.goals.map((g) => <li key={g}>{g}</li>)}
       </ol>
 
-      <h2>状態</h2>
-      <p>調律: {s.tachycardia}</p>
+      <h2>調律</h2>
+      <p className="rhythm" style={{ color: s.tachycardia === 'tachycardia' ? theme.colors.accent : undefined }}>
+        {RHYTHM_LABEL[s.tachycardia]}{s.cycleLengthMs ? `（周期長 ${Math.round(s.cycleLengthMs)} ms）` : ''}
+      </p>
     </aside>
   );
 }

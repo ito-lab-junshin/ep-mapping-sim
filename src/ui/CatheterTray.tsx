@@ -1,6 +1,6 @@
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { catheterAvailable, placeCatheter, useEngine } from '../state/engine';
+import { ablateWithTip, catheterAvailable, placeCatheter, useEngine } from '../state/engine';
 import { CIRCULAR, CONTACT_THRESHOLD_MM } from '../core/params';
 import { catheterGroup, type CatheterSpec } from '../core/catheter/catalog';
 
@@ -86,6 +86,12 @@ export function CatheterTray() {
             )}
             {sel.catheter.kind !== 'ablation_tip' && (
               <button onClick={() => placeCatheter(engine, sel.catheter.id, null)}>このカテーテルを外す</button>
+            )}
+            {sel.catheter.kind === 'ablation_tip' && (
+              <button style={{ borderColor: theme.colors.lesion }} disabled={sel.catheter.electrodes[0].contactVertex < 0}
+                onClick={() => ablateWithTip(engine)}>
+                {sel.catheter.electrodes[0].contactVertex < 0 ? '簡易通電（先端が接触していません）' : '簡易通電（半径 3 mm）'}
+              </button>
             )}
           </>
         ) : <p className="note">3D ビューの心房表面をクリックして置きます。</p>

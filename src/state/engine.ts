@@ -1,4 +1,6 @@
-import type { AnatomyDimensionSet } from '../core/types';
+import { ProtocolSession, type ProtocolConfig } from '../core/pacing/ProtocolSession';
+import { ablateAt } from '../core/ablation/simpleAblation';
+import type { ArrhythmiaId, CureCheck } from '../core/types';
 import { SimulationEngine } from '../core/sim/SimulationEngine';
 import { loadParametricSync } from '../core/geometry/ChamberLoader';
 import type { Placement } from '../core/catheter/placement';
@@ -12,25 +14,39 @@ import { catheterGroup } from '../core/catheter/catalog';
 import { MAP_DEFAULTS } from '../core/params';
 
 /**
- * 解剖寸法セットごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
- * AF は afRemodeled、それ以外は normal（シナリオの anatomy）。
+ * シナリオ（症例）ごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
+ * 解剖はシナリオの anatomy（AF = afRemodeled、AFL = aflRemodeled、それ以外 = normal）、
+ * 作るときにシナリオの基質を設定する。
  * 3D ビューが tick() で進め、EGM パネルが同じインスタンスのバッファを読む。
  */
-const engines = new Map<AnatomyDimensionSet, SimulationEngine>();
+const engines = new Map<ArrhythmiaId, SimulationEngine>();
 
-export function getEngine(set: AnatomyDimensionSet): SimulationEngine {
-  let e = engines.get(set);
+export function getEngine(id: ArrhythmiaId): SimulationEngine {
+  let e = engines.get(id);
   if (!e) {
-    e = new SimulationEngine(loadParametricSync(set));
-    engines.set(set, e);
+    const scenario = SCENARIOS[id];
+    e = new SimulationEngine(loadParametricSync(scenario.anatomy));
+    scenario.setupSubstrate(e);
+    engines.set(id, e);
   }
   return e;
 }
 
 /** 選択中の症例のエンジン */
 export function useEngine(): SimulationEngine {
-  const set = useSim((s) => SCENARIOS[s.arrhythmia].anatomy);
-  return getEngine(set);
+  return getEngine(useSim((s) => s.arrhythmia));
+}
+
+/** 症例を最初の状態に戻す（病変・取得点・刺激を消す） */
+export function resetCase(id: ArrhythmiaId) {
+  engines.delete(id);
+  const e = getEngine(id);
+  pointSets.delete(e);
+  stopProtocol();
+  const s = useSim.getState();
+  s.bumpPlacement();
+  s.bumpMap('症例を最初の状態に戻しました');
+  s.setCureChecks(null);
 }
 
 /** カテーテルを置き直し、UI に知らせる */
@@ -99,4 +115,64 @@ export function acquireNow(engine: SimulationEngine, theme: SystemTheme, auto = 
 export function clearPoints(engine: SimulationEngine) {
   getPoints(engine).clear();
   useSim.getState().bumpMap('取得点を消去しました');
+}
+
+// ───────────── 刺激プロトコル・通電・根治判定（Phase 4） ─────────────
+
+
+let session: ProtocolSession | null = null;
+/** プロトコルを始めた時点の病変の数（「最後の通電より後の非誘発」かどうかの判定用） */
+let sessionLesionCount = 0;
+
+export function currentSession(): ProtocolSession | null { return session; }
+
+export function startProtocol(engine: SimulationEngine, config: ProtocolConfig) {
+  stopProtocol();
+  session = new ProtocolSession(engine, config);
+  sessionLesionCount = engine.lesions.length;
+  useSim.getState().bumpProtocol();
+}
+
+export function stopProtocol() {
+  if (session && !session.done) session.stop();
+  useSim.getState().bumpProtocol();
+}
+
+/** 毎フレーム呼ぶ（Scene） */
+export function updateProtocol() {
+  if (!session || session.done) return;
+  const before = session.results.length + session.status;
+  session.update();
+  if (session.results.length + session.status !== before) useSim.getState().bumpProtocol();
+}
+
+/** ABL の先端で簡易通電する。先端が接触していなければ何もしない（戻り値 false） */
+export function ablateWithTip(engine: SimulationEngine): boolean {
+  const abl = engine.catheter('abl');
+  if (!abl?.placed || abl.electrodes[0].contactVertex < 0) return false;
+  ablateAt(engine, abl.electrodes[0].position);
+  const s = useSim.getState();
+  s.bumpPlacement();
+  s.setCureChecks(null);
+  return true;
+}
+
+/**
+ * 根治の判定：シナリオの構造的な基準 ＋「最後の通電より後に行った刺激プロトコルで非誘発」。
+ * 非誘発の確認は、表示中のエンジンで刺激パネルから行う（複製で走らせると画面が止まるため）。
+ */
+export function checkCure(engine: SimulationEngine, id: ArrhythmiaId): CureCheck[] {
+  const checks = SCENARIOS[id].structuralChecks(engine);
+  const spontaneous = SCENARIOS[id].induction.kind === 'spontaneous';
+  const afterLastLesion = !!session && session.done && sessionLesionCount === engine.lesions.length && engine.lesions.length > 0;
+  const noninducible = spontaneous
+    ? engine.lesions.length > 0 && engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing'
+    : afterLastLesion && session!.status === 'noninducible';
+  checks.push({
+    id: 'noninducible',
+    label: spontaneous ? 'AF が止まり、再発していない' : '最後の通電の後に、刺激プロトコルで非誘発を確認した',
+    ok: noninducible,
+  });
+  useSim.getState().setCureChecks(checks);
+  return checks;
 }

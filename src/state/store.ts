@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { ArrhythmiaId, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
+import type { ArrhythmiaId, CureCheck, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
+import type { ProtocolConfig } from '../core/pacing/ProtocolSession';
 import { MAP_DEFAULTS } from '../core/params';
 import type { SweepSpeed } from '../core/egm/display';
 
@@ -45,6 +46,14 @@ interface SimState {
   mapVersion: number;
   /** 直近の取得の結果（表示用） */
   acquireMessage: string;
+  /** 刺激プロトコルの設定（URL パラメータで共有、§5.6） */
+  protocol: ProtocolConfig | null;
+  /** 刺激プロトコルの進み具合が変わるたびに増える（UI の再描画用） */
+  protocolTick: number;
+  /** 根治判定の結果（未判定は null） */
+  cureChecks: CureCheck[] | null;
+  /** 調律の周期長 ms（頻拍中） */
+  cycleLengthMs: number | null;
   /** マウスを乗せている領域（表示用） */
   hoveredRegion: string | null;
   /** カテーテル配置が変わるたびに増える（UI の再描画用） */
@@ -67,6 +76,10 @@ interface SimState {
   setAutoAcquire: (a: boolean) => void;
   setShowPoints: (s: boolean) => void;
   bumpMap: (message?: string) => void;
+  setProtocol: (p: ProtocolConfig | null) => void;
+  bumpProtocol: () => void;
+  setCureChecks: (c: CureCheck[] | null) => void;
+  setRhythm: (t: TachycardiaState, cl: number | null) => void;
   setHoveredRegion: (r: string | null) => void;
   bumpPlacement: () => void;
 }
@@ -91,10 +104,14 @@ export const useSim = create<SimState>((set) => ({
   showPoints: true,
   mapVersion: 0,
   acquireMessage: '',
+  protocol: null,
+  protocolTick: 0,
+  cureChecks: null,
+  cycleLengthMs: null,
   hoveredRegion: null,
   placementTick: 0,
   setSystem: (system) => set({ system }),
-  setArrhythmia: (arrhythmia) => set({ arrhythmia, tachycardia: 'sinus', activeCatheter: null }),
+  setArrhythmia: (arrhythmia) => set({ arrhythmia, tachycardia: 'sinus', activeCatheter: null, protocol: null, cureChecks: null }),
   setEnergy: (energy) => set({ energy }),
   setGeometryMode: (geometryMode) => set({ geometryMode }),
   setTachycardia: (tachycardia) => set({ tachycardia }),
@@ -110,6 +127,10 @@ export const useSim = create<SimState>((set) => ({
   setMapSettings: (p) => set((s) => ({ mapSettings: { ...s.mapSettings, ...p } })),
   setAutoAcquire: (autoAcquire) => set({ autoAcquire }),
   setShowPoints: (showPoints) => set({ showPoints }),
+  setProtocol: (protocol) => set({ protocol }),
+  bumpProtocol: () => set((s) => ({ protocolTick: s.protocolTick + 1 })),
+  setCureChecks: (cureChecks) => set({ cureChecks }),
+  setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   bumpMap: (message) => set((s) => ({ mapVersion: s.mapVersion + 1, acquireMessage: message ?? s.acquireMessage })),
   setHoveredRegion: (hoveredRegion) => set((s) => (s.hoveredRegion === hoveredRegion ? s : { hoveredRegion })),
   bumpPlacement: () => set((s) => ({ placementTick: s.placementTick + 1 })),

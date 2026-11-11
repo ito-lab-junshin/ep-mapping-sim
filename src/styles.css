@@ -68,3 +68,14 @@ html, body, #root { margin: 0; height: 100%; }
 .legend-labels { display: flex; flex-direction: column; justify-content: space-between; }
 .legend-foot { margin-top: 6px; line-height: 1.5; opacity: 0.8; }
 .legend-nodata { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+
+.stim, .cure { display: flex; flex-direction: column; gap: 8px; }
+.stim .row label { flex: 1; min-width: 0; }
+.stim .row select { width: 100%; min-width: 0; }
+.stim-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.stim-table th, .stim-table td { text-align: left; padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.stim-table tr.induced td { font-weight: 600; }
+.checks { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.6; }
+.checks .ok { color: #5fd38d; }
+.checks .ng { opacity: 0.85; }
+.panel .rhythm { margin: 0; font-weight: 600; }
