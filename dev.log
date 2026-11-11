@@ -19,3 +19,16 @@
 10:53:58 AM [vite] hmr update /src/ui/CatheterTray.tsx
 10:53:58 AM [vite] page reload src/core/arrhythmia/aflCti.ts
 10:54:09 AM [vite] page reload src/core/arrhythmia/aflCti.ts
+11:00:07 AM [vite] page reload src/core/arrhythmia/af.ts
+11:00:07 AM [vite] page reload src/core/arrhythmia/aflCti.ts
+11:00:07 AM [vite] page reload src/core/arrhythmia/avnrt.ts
+11:00:07 AM [vite] page reload src/core/arrhythmia/wpw.ts
+11:01:54 AM [vite] page reload src/core/arrhythmia/af.ts
+11:03:19 AM [vite] page reload src/core/arrhythmia/af.ts
+11:03:39 AM [vite] hmr update /src/ui/EgmPanel.tsx, /src/three/Scene.tsx, /src/ui/MapControls.tsx, /src/ui/StimulationPanel.tsx, /src/ui/CurePanel.tsx, /src/ui/CatheterTray.tsx, /src/ui/AblationConsole.tsx, /src/ui/GeometryControls.tsx, /src/three/CatheterMarkers.tsx, /src/ui/MapLegend.tsx, /src/three/PointMarkers.tsx, /src/three/ChamberMesh.tsx
+11:03:39 AM [vite] page reload src/state/store.ts
+11:03:39 AM [vite] hmr update /src/three/Scene.tsx
+11:03:56 AM [vite] hmr update /src/ui/ControlPanel.tsx
+11:03:56 AM [vite] hmr update /src/styles.css
+11:04:03 AM [vite] hmr update /src/ui/ControlPanel.tsx
+11:05:15 AM [vite] hmr update /src/ui/GoalList.tsx

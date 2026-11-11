@@ -3,6 +3,7 @@ import { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID } from '../geometry/regions';
 import { AFL_SUBSTRATE, CONDUCTION } from '../params';
 import { separated } from './common';
+import { protocolsAfterLastLesion } from '../learning/conditions';
 
 export interface AflParams {
   /** RA（CTI 以外）の ERP */
@@ -101,11 +102,32 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   },
   energies: ['rf'],
   goals: [
-    'CS 近位→遠位の活性化順序とハロー電極で旋回方向を確認する',
-    'CTI に三尖弁輪から下大静脈まで連続線を引く',
-    'CS 口ペーシングで両方向性ブロックを確認する',
+    {
+      id: 'direction', label: 'CS 近位→遠位の活性化順序とハロー電極で旋回方向を答える',
+      hint: '粗動を誘発し、ハロー（H 19-20 → H 1-2 か、その逆か）と CS（近位 → 遠位）の順序を見て旋回方向を選ぶ',
+      achieved: ({ events }) => events.some((e) => e.kind === 'answer' && e.question === 'afl-direction' && e.correct),
+    },
+    {
+      id: 'cti-line', label: 'CTI に三尖弁輪から下大静脈まで連続線を引く',
+      hint: '三尖弁輪側は壁が厚い（5 mm）。40 W か接触圧を上げた長めの通電で貫壁させる',
+      achieved: ({ engine }) => ctiLineDone(engine),
+    },
+    {
+      id: 'bidirectional', label: 'CS 口と低位外側 RA（またはハロー遠位）からの刺激で両方向性ブロックを確認する',
+      hint: '線の完成後に、CS 口から刺激してハローが近位 → 遠位に下行すること、側壁から刺激して CS が近位から遅れて興奮することを見る',
+      achieved: (ctx) => ctiLineDone(ctx.engine)
+        && protocolsAfterLastLesion(ctx, ['CS_OS', 'CS_PROX']).length > 0
+        && protocolsAfterLastLesion(ctx, ['LOW_LATERAL_RA', 'HALO_DIST']).length > 0,
+    },
   ],
 };
+
+/** CTI の線が完成しているか */
+export function ctiLineDone(engine: SimulationEngine): boolean {
+  const cti = new Set<number>();
+  engine.mesh.regionOfVertex.forEach((r, v) => { if (r === REGION_ID.cti) cti.add(v); });
+  return ctiLineComplete(engine, cti, engine.ca.tissue.viability);
+}
 
 /** CTI の中隔側の端と側壁側の端が、生きている頂点で CTI の帯の中でつながっていなければ線が完成 */
 function ctiLineComplete(engine: SimulationEngine, cti: Set<number>, viab: Float32Array): boolean {

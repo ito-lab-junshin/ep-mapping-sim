@@ -12,6 +12,10 @@ import { acquirePoints } from '../core/mapping/acquire';
 import { catheterGroup } from '../core/catheter/catalog';
 import { MAP_DEFAULTS } from '../core/params';
 import { GeometryAcquisition } from '../core/geometry/acquisition';
+import { GoalTracker } from '../core/learning/GoalTracker';
+import { protocolEvent, protocolStartState } from '../core/learning/events';
+import { flutterDirection } from '../core/learning/flutter';
+import type { LearningEvent } from '../core/types';
 
 /**
  * シナリオ（症例）ごとに 1 つのシミュレーションエンジンを保持する（React の再描画とは独立）。
@@ -136,6 +140,10 @@ export function clearPoints(engine: SimulationEngine) {
 
 
 let session: ProtocolSession | null = null;
+/** プロトコルを始めたときの電極の状態（学習の出来事に使う） */
+let sessionStart: ReturnType<typeof protocolStartState> | null = null;
+let sessionEngine: SimulationEngine | null = null;
+let sessionRecorded = false;
 /** プロトコルを始めた時点の病変の数（「最後の通電より後の非誘発」かどうかの判定用） */
 let sessionLesionCount = 0;
 
@@ -143,13 +151,17 @@ export function currentSession(): ProtocolSession | null { return session; }
 
 export function startProtocol(engine: SimulationEngine, config: ProtocolConfig) {
   stopProtocol();
+  sessionStart = protocolStartState(engine, config.site);
   session = new ProtocolSession(engine, config);
+  sessionEngine = engine;
+  sessionRecorded = false;
   sessionLesionCount = engine.lesions.length;
   useSim.getState().bumpProtocol();
 }
 
 export function stopProtocol() {
   if (session && !session.done) session.stop();
+  recordSessionIfDone();
   useSim.getState().bumpProtocol();
 }
 
@@ -159,6 +171,7 @@ export function updateProtocol() {
   const before = session.results.length + session.status;
   session.update();
   if (session.results.length + session.status !== before) useSim.getState().bumpProtocol();
+  recordSessionIfDone();
 }
 
 /**
@@ -179,4 +192,43 @@ export function checkCure(engine: SimulationEngine, id: ArrhythmiaId): CureCheck
   });
   useSim.getState().setCureChecks(checks);
   return checks;
+}
+
+// ───────────── 学習ゴール（Phase 6） ─────────────
+
+/** エンジン（症例）ごとのゴールの達成状況。症例をリセットすると消える */
+const trackers = new Map<SimulationEngine, GoalTracker>();
+
+export function getGoalTracker(engine: SimulationEngine, id: ArrhythmiaId): GoalTracker {
+  let t = trackers.get(engine);
+  if (!t) { t = new GoalTracker(SCENARIOS[id].goals); trackers.set(engine, t); }
+  return t;
+}
+
+/** 終わった刺激プロトコルを、その症例の学習の出来事として 1 回だけ記録する */
+function recordSessionIfDone() {
+  if (!session || !session.done || sessionRecorded || !sessionEngine || !sessionStart) return;
+  sessionRecorded = true;
+  const t = trackers.get(sessionEngine);
+  t?.record(protocolEvent(sessionEngine, session, sessionLesionCount, sessionStart));
+}
+
+/** 学習の出来事を記録する（設問への回答など） */
+export function recordLearningEvent(engine: SimulationEngine, id: ArrhythmiaId, e: LearningEvent) {
+  getGoalTracker(engine, id).record(e);
+  useSim.getState().bumpGoals();
+}
+
+/** AFL の旋回方向の設問に答える。正解なら true、頻拍中でない・読めないときは null */
+export function answerFlutterDirection(engine: SimulationEngine, id: ArrhythmiaId, value: 'ccw' | 'cw'): boolean | null {
+  const actual = flutterDirection(engine);
+  if (!actual) return null;
+  recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: 'afl-direction', value, correct: value === actual });
+  return value === actual;
+}
+
+/** 定期的に呼ぶ（Scene）：ゴールを判定し、新しく達成したら UI に知らせる */
+export function updateGoals(engine: SimulationEngine, id: ArrhythmiaId) {
+  const done = getGoalTracker(engine, id).update(engine, getPoints(engine).points);
+  if (done.length) useSim.getState().bumpGoals();
 }

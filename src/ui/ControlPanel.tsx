@@ -7,6 +7,7 @@ import { CurePanel } from './CurePanel';
 import { CatheterTray } from './CatheterTray';
 import { AblationConsole } from './AblationConsole';
 import { GeometryControls } from './GeometryControls';
+import { GoalList } from './GoalList';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
 import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
 
@@ -18,7 +19,6 @@ const RHYTHM_LABEL: Record<string, string> = {
 export function ControlPanel() {
   const s = useSim();
   const theme = SYSTEMS[s.system];
-  const scenario = SCENARIOS[s.arrhythmia];
   return (
     <aside className="panel" style={{ background: theme.colors.panel, color: theme.colors.text }}>
       <h1>EP Mapping Simulator</h1>
@@ -72,9 +72,7 @@ export function ControlPanel() {
       </button>
 
       <h2>この症例のゴール</h2>
-      <ol>
-        {scenario.goals.map((g) => <li key={g}>{g}</li>)}
-      </ol>
+      <GoalList />
 
       <h2>調律</h2>
       <p className="rhythm" style={{ color: s.tachycardia === 'tachycardia' ? theme.colors.accent : undefined }}>

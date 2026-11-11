@@ -211,8 +211,8 @@ export interface ArrhythmiaScenario {
    * 「同じプロトコルで非誘発」は、刺激プロトコルの結果で別に判定する（common.ts の verifyCure）。
    */
   structuralChecks(engine: SimulationEngine): CureCheck[];
-  /** 教育用のゴール説明（例：PV 隔離の確認方法） */
-  goals: string[];
+  /** 学習ゴール（達成の判定つき。src/core/learning） */
+  goals: LearningGoal[];
   /** 使えるエネルギー（クライオバルーン・PFA は PV 隔離の AF だけ） */
   energies: EnergyId[];
 }
@@ -254,4 +254,42 @@ export interface MapPoint {
   signal: 'bipolar' | 'omnipolar';
   /** 取得した拍の基準時刻（シミュレーション時刻 ms） */
   referenceTime: number;
+}
+
+// ───────────── 学習ゴール（Phase 6、src/core/learning） ─────────────
+
+/** 学習の出来事（UI が記録する）：刺激プロトコルの終了、設問への回答 */
+export type LearningEvent =
+  | {
+    kind: 'protocol'; time: number; site: PacingSite; status: 'induced' | 'noninducible' | 'stopped';
+    /** 列ごとの結果（捕捉・AH） */
+    results: { couplingMs: number; captured: boolean; ahMs: number | null }[];
+    /** 刺激を始めたときの病変の数（「最後の通電より後」の判定用） */
+    lesionCount: number;
+    /** 刺激した電極が壁に接触していたか */
+    contact: boolean;
+    /** 環状カテーテルが入っていた PV（なければ null） */
+    circPv: string | null;
+    /** そのとき環状カテーテルの PV が隔離されていたか */
+    circPvIsolated: boolean;
+  }
+  | { kind: 'answer'; time: number; question: 'afl-direction'; value: 'ccw' | 'cw'; correct: boolean };
+
+/** ゴールの判定に渡す材料 */
+export interface GoalContext {
+  engine: SimulationEngine;
+  /** 取得したマップの点 */
+  points: readonly MapPoint[];
+  events: readonly LearningEvent[];
+}
+
+/** 学習ゴール：一度達成したら達成のまま（GoalTracker） */
+export interface LearningGoal {
+  id: string;
+  label: string;
+  /** 次に何をすればよいかの手がかり */
+  hint: string;
+  achieved(ctx: GoalContext): boolean;
+  /** 途中経過（例："2/4 本"） */
+  progress?(ctx: GoalContext): string | null;
 }

@@ -1,40 +1,13 @@
 import type { ArrhythmiaScenario, CureCheck } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
-import { PV_NAMES, PV_SLEEVE, REGION_ID, REGIONS, type PvName } from '../geometry/regions';
+import { PV_NAMES, type PvName } from '../geometry/regions';
 import { seededRandom } from '../pacing/Stimulator';
 import { AF_SUBSTRATE } from '../params';
 import { cloneWithSubstrate, separated } from './common';
+import { circularPv, recentlyActivated } from '../learning/conditions';
 
-/** PV のスリーブの頂点 */
-export function sleeveVertices(engine: SimulationEngine, pv: PvName): number[] {
-  const id = REGION_ID[PV_SLEEVE[pv]];
-  const out: number[] = [];
-  engine.mesh.regionOfVertex.forEach((r, v) => { if (r === id) out.push(v); });
-  return out;
-}
-
-/** スリーブの先端（PV 口から最も遠い）の頂点：トリガーの位置 */
-export function sleeveTip(engine: SimulationEngine, pv: PvName): number {
-  const info = engine.model.anatomy.la.pvs.find((p) => p.name === pv)!;
-  const p = engine.mesh.positions;
-  let best = -1, bestA = -Infinity;
-  for (const v of sleeveVertices(engine, pv)) {
-    const a = (p[3 * v] - info.ostium.x) * info.frame.axis.x + (p[3 * v + 1] - info.ostium.y) * info.frame.axis.y + (p[3 * v + 2] - info.ostium.z) * info.frame.axis.z;
-    if (a > bestA) { bestA = a; best = v; }
-  }
-  return best;
-}
-
-/** LA 本体（PV のスリーブ・口以外）の頂点 */
-export function laBody(engine: SimulationEngine): number[] {
-  const la = engine.mesh.parts![0];
-  const out: number[] = [];
-  for (let v = la.vertexStart; v < la.vertexStart + la.vertexCount; v++) {
-    const r = REGIONS[engine.mesh.regionOfVertex[v]];
-    if (!r.endsWith('_sleeve') && !r.endsWith('_ostium')) out.push(v);
-  }
-  return out;
-}
+export { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
+import { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
 
 /** トリガーを置く PV（最も多い上肺静脈 2 本） */
 export const AF_TRIGGER_PVS: PvName[] = ['LSPV', 'RSPV'];
@@ -97,9 +70,28 @@ export const afScenario: ArrhythmiaScenario = {
   },
   energies: ['rf', 'cryo', 'pfa'],
   goals: [
-    '環状カテーテルで PV 電位を記録する',
-    'PV 口周囲に連続した病変で隔離する',
-    '隔離後に PV 内ペーシングで exit block を確認する',
+    {
+      id: 'pv-potential', label: '環状カテーテルで PV 電位を記録する',
+      hint: '環状カテーテルを PV の中（口から少し奥）に置き、3 極以上を壁に接触させる',
+      achieved: ({ engine }) => {
+        const pv = circularPv(engine);
+        if (!pv) return false;
+        const v = engine.catheter('circ')!.electrodes.map((e) => e.contactVertex).filter((x) => x >= 0);
+        return recentlyActivated(engine, v, 1500) >= 3;
+      },
+    },
+    {
+      id: 'isolation', label: 'PV 口周囲に連続した病変で 4 本の PV を隔離する',
+      hint: 'PV 口の前庭部を隙間なく一周するように通電する（点の間隔 約 5 mm 以内）',
+      achieved: ({ engine }) => isolatedPvs(engine).length === PV_NAMES.length,
+      progress: ({ engine }) => `${isolatedPvs(engine).length}/${PV_NAMES.length} 本`,
+    },
+    {
+      id: 'exit-block', label: '隔離後に PV 内ペーシング（環状カテーテル）で exit block を確認する',
+      hint: '隔離した PV に環状カテーテルを置き、刺激部位「環状（1-2）」で刺激する。PV 内は捕捉されるが LA には伝わらない',
+      // 刺激したときに、環状カテーテルが接触していた PV がすでに隔離されていたこと
+      achieved: ({ events }) => events.some((e) => e.kind === 'protocol' && e.site === 'CIRC' && e.contact && e.circPvIsolated),
+    },
   ],
 };
 

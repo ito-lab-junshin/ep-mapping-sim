@@ -10,7 +10,7 @@ import { referenceBeats } from '../core/mapping/annotation';
 import type { SystemTheme } from '../systems';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { acquireNow, getAcquisition, updateProtocol, useEngine } from '../state/engine';
+import { acquireNow, getAcquisition, updateGoals, updateProtocol, useEngine } from '../state/engine';
 import { SCENARIOS } from '../core/arrhythmia';
 import type { SimulationEngine } from '../core/sim/SimulationEngine';
 
@@ -26,6 +26,7 @@ function EngineClock({ engine, running }: { engine: SimulationEngine; running: b
     updateProtocol();
     if (engine.time - last.current >= 250) {
       last.current = engine.time;
+      updateGoals(engine, useSim.getState().arrhythmia);
       const st = engine.rhythm.state;
       useSim.getState().setRhythm(st, st === 'tachycardia' || st === 'pacing' ? engine.rhythm.currentCycleLength(engine.time) : null);
     }

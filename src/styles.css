@@ -94,3 +94,13 @@ html, body, #root { margin: 0; height: 100%; }
 .geometry { display: flex; flex-direction: column; gap: 8px; }
 .geometry .coverage { display: flex; gap: 12px; margin: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
 .geometry .coverage .note { margin: 0; }
+
+/* 学習ゴール（Phase 6） */
+.goals ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.goals li { border-left: 2px solid transparent; padding-left: 6px; }
+.goals li .mark { display: inline-block; width: 1.2em; }
+.goals li.ok { color: #5fd38d; }
+.goals li.next { border-left-color: currentColor; }
+.goals li .note { margin: 4px 0 0; }
+.goals li .row { margin-top: 6px; }
+.goals-done { font-size: 12px; margin: 6px 0 0; }
