@@ -46,7 +46,8 @@ describe('SimulationEngine（両心房・洞調律）', () => {
     expect(hra).toBeLessThan(his);
     expect(his).toBeLessThan(cs[0]);
     for (let i = 1; i < cs.length; i++) expect(cs[i]).toBeGreaterThan(cs[i - 1]);
-    for (const id of ['CS 9-10', 'CS 5-6', 'CS 1-2']) expect(peakAmp(eng, id)).toBeGreaterThan(0.5);
+    // 双極電位は波面の向きで小さくなりうる（卵円窩縁から LA に入った波面は CS の並びに斜めに進む）。平坦でなければよい
+    for (const id of ['CS 9-10', 'CS 5-6', 'CS 1-2']) expect(peakAmp(eng, id)).toBeGreaterThan(0.3);
   });
 
   it('CS を浅くすると遠位電極の興奮が早くなる（位置で波形が変わる）', () => {
@@ -159,5 +160,18 @@ describe('刺激・洞結節・焦点（Phase 4）', () => {
     let atrial = 0;
     eng.ca.tissue.lastActivation.forEach((t) => { if (t >= 0) atrial++; });
     expect(atrial).toBe(0);
+  });
+});
+
+describe('洞調律の V1 の P 波', () => {
+  it('前半陽性・後半陰性の二相性（RA が後上方 → 前下方、LA が後方へ興奮）', () => {
+    const eng = new SimulationEngine(model);
+    eng.conduction.blocked = true;
+    const v1: number[] = [];
+    for (let i = 0; i < 90; i++) { eng.stepOnce(); v1.push(eng.ecg.atrial('V1')); }
+    const pos = v1.indexOf(Math.max(...v1)), neg = v1.indexOf(Math.min(...v1));
+    expect(Math.max(...v1)).toBeGreaterThan(0.03);
+    expect(Math.min(...v1)).toBeLessThan(-0.03);
+    expect(pos).toBeLessThan(neg);
   });
 });

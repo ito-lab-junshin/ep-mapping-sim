@@ -107,7 +107,7 @@ export const MAP_DEFAULTS = {
  * （ERP に近い早い期外刺激ほど AH が延びる。連結期 < ERP はブロック）
  */
 export const AV_NODE = {
-  fast: { ahMs: AH_MS, erpMs: 320, decrementMaxMs: 40, decrementTauMs: 60, retroMs: 40, retroErpMs: 200 },
+  fast: { ahMs: AH_MS, erpMs: 320, decrementMaxMs: 40, decrementTauMs: 60, retroMs: 60, retroErpMs: 200 },
   slow: { ahMs: 200, erpMs: 200, decrementMaxMs: 40, decrementTauMs: 60 },
 };
 /** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */

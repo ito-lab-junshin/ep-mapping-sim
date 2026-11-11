@@ -115,19 +115,30 @@ describe('両心房の伝播', () => {
     expect(reached).toBe(n);
   });
 
-  it('Bachmann 束を切ると LA の最早興奮が遅れる', () => {
-    const firstLa = (cutBachmann: boolean) => {
-      // 心房間の連結は bridges として別に持つので、Bachmann 束だけを取り除く
-      const m = cutBachmann ? { ...mesh, bridges: mesh.bridges!.filter((b) => b.name !== 'bachmann') } : mesh;
+  it('LA の興奮は心房間の連結で決まる：最早の入り口の連結を切ると LA の最早興奮が遅れ、すべて切ると LA は興奮しない', () => {
+    const la = mesh.parts![0];
+    const run = (keep: (name: string) => boolean) => {
+      const m = { ...mesh, bridges: mesh.bridges!.filter((b) => keep(b.name)) };
       const ca = new CellularAutomaton(m);
       ca.stimulate(anatomy.anchors.sinusNode.vertex);
       for (let i = 0; i < 200; i++) ca.step(2);
-      const la = mesh.parts![0];
-      let first = Infinity;
-      for (let v = la.vertexStart; v < la.vertexStart + la.vertexCount; v++) first = Math.min(first, ca.tissue.lastActivation[v]);
-      return first;
+      let first = Infinity, at = -1;
+      for (let v = la.vertexStart; v < la.vertexStart + la.vertexCount; v++) {
+        const t = ca.tissue.lastActivation[v];
+        if (t >= 0 && t < first) { first = t; at = v; }
+      }
+      return { first, at };
     };
-    expect(firstLa(true)).toBeGreaterThan(firstLa(false));
+    const all = run(() => true);
+    // 最早に興奮した LA の頂点に最も近い連結（= 最早の入り口）
+    const P = (v: number) => [mesh.positions[3 * v], mesh.positions[3 * v + 1], mesh.positions[3 * v + 2]];
+    const d = (a: number, b: number) => Math.hypot(...P(a).map((x, k) => x - P(b)[k]));
+    const entry = mesh.bridges!.reduce((best, b) => {
+      const dist = Math.min(...b.pairs.map(([, lv]) => d(lv, all.at)));
+      return dist < best.dist ? { name: b.name, dist } : best;
+    }, { name: '', dist: Infinity }).name;
+    expect(run((n) => n !== entry).first).toBeGreaterThan(all.first);
+    expect(run(() => false).first).toBe(Infinity);
   });
 
   it('PV 口を一周する病変があると PV スリーブに興奮が入らない（隔離）', () => {
