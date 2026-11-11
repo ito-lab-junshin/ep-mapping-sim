@@ -22,7 +22,7 @@ export interface EngineOptions {
   historyMs?: number;
 }
 
-const ECG_LEADS: EcgLead[] = ['I', 'II', 'V1'];
+const ECG_LEADS: EcgLead[] = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
 
 /** 刺激部位（docs/DESIGN.md §5.6） */
 export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'HALO_DIST' | 'ABL' | 'CIRC' | 'RV';

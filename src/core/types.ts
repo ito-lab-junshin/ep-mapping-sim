@@ -29,7 +29,7 @@ export type ChannelGroup = 'ecg' | 'hra' | 'his' | 'cs' | 'halo' | 'map' | 'abl'
 export type EcgLeadCount = 1 | 3 | 12;
 
 /** 体表 ECG の誘導（Phase 1 は I・II・V1） */
-export type EcgLead = 'I' | 'II' | 'V1';
+export type EcgLead = 'I' | 'II' | 'III' | 'aVR' | 'aVL' | 'aVF' | 'V1' | 'V2' | 'V3' | 'V4' | 'V5' | 'V6';
 
 /**
  * 心臓表面メッシュ。頂点ごとに電気生理パラメータを持ち、
