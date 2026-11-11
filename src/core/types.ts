@@ -1,3 +1,5 @@
+import type { SimulationEngine, PacingSite } from './sim/SimulationEngine';
+
 /**
  * シミュレータ全体で共有する型定義。
  * ここを変更するときは docs/DESIGN.md の「データモデル」も更新すること。
@@ -178,7 +180,20 @@ export type TachycardiaState =
 /** 解剖寸法のセット（core/geometry/parametric/dimensions.ts） */
 export type AnatomyDimensionSet = 'normal' | 'afRemodeled';
 
-/** シナリオ（不整脈ごとの基質定義と判定ロジック） */
+/** 根治判定の基準 1 つ分の結果 */
+export interface CureCheck {
+  id: string;
+  label: string;
+  ok: boolean;
+}
+
+/** シナリオの誘発法（spontaneous = 基質だけで自然に始まる。例：AF の PV トリガー） */
+export interface InductionMethod {
+  kind: 'extrastimulus' | 'burst' | 'spontaneous';
+  site: PacingSite;
+}
+
+/** シナリオ（不整脈ごとの基質定義と判定ロジック、docs/DESIGN.md §5） */
 export interface ArrhythmiaScenario {
   id: ArrhythmiaId;
   label: string;
@@ -186,21 +201,17 @@ export interface ArrhythmiaScenario {
   chambers: ChamberId[];
   /** 使う解剖寸法（AF は afRemodeled、それ以外は normal） */
   anatomy: AnatomyDimensionSet;
-  /** メッシュに基質（遅伝導路、副伝導路、PV トリガーなど）を設定する */
-  setupSubstrate(mesh: SurfaceMesh, tissue: TissueState): void;
-  /** 誘発プロトコル（期外刺激・バースト）に対して頻拍が始まるかを返す */
-  tryInduce(tissue: TissueState, protocol: PacingProtocol): boolean;
-  /** 病変集合から「治療完了（根治）」かを判定する */
-  isCured(mesh: SurfaceMesh, tissue: TissueState, lesions: Lesion[]): boolean;
+  /** 推奨の誘発法（§5.6 の刺激部位） */
+  induction: InductionMethod;
+  /** エンジンに基質（遅伝導路、副伝導路、PV トリガー、CTI など）を設定する */
+  setupSubstrate(engine: SimulationEngine): void;
+  /**
+   * 構造的な根治の基準（病変の配置から判定できるもの）。
+   * 「同じプロトコルで非誘発」は、刺激プロトコルの結果で別に判定する（common.ts の verifyCure）。
+   */
+  structuralChecks(engine: SimulationEngine): CureCheck[];
   /** 教育用のゴール説明（例：PV 隔離の確認方法） */
   goals: string[];
-}
-
-export interface PacingProtocol {
-  site: string;              // 例: "CS 9-10", "HRA"
-  cycleLengthMs: number;     // S1
-  extraStimuliMs?: number[]; // S2, S3...
-  burstBeats?: number;
 }
 
 /** 3D ビューの表示モード */

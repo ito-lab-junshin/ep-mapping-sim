@@ -118,8 +118,8 @@ export const ACCESSORY_PATHWAY = {
   conductionMs: 15,
   antegradeErpMs: 280,
   retrogradeErpMs: 250,
-  /** 心室の興奮開始（QRS 開始）から副伝導路の心室付着部（左室側壁の弁輪部）までの心室内伝導時間 */
-  ventricularDelayMs: 40,
+  /** 心室の興奮開始（QRS 開始）から副伝導路の心室付着部（左室側壁の弁輪部）までの心室内伝導時間。VA ≈ 95 ms（順行性 AVRT の RP > 70 ms）になるよう置いた */
+  ventricularDelayMs: 80,
 };
 /** 刺激（ペーシング）のアーチファクト mV（全チャンネルに 1 サンプル） */
 export const PACING_ARTIFACT_MV = 0.8;
@@ -145,4 +145,25 @@ export const PROTOCOL = {
 export const RHYTHM = {
   tachycardiaClMs: 400,
   sustainMs: 5000,
+};
+
+/**
+ * WPW シナリオの房室結節の ERP。順行性 AVRT（周期 約 280 ms）で房室結節が伝導でき、
+ * かつ副伝導路の順行性 ERP（280 ms）より短い（誘発の窓ができる）ように置いた仮定値（教育用近似）
+ */
+export const WPW_AV_NODE_ERP_MS = 250;
+/** 副伝導路の心房付着部の頂点数（§5.4：1〜3 頂点） */
+export const WPW_AP_VERTICES = 2;
+
+/** AF シナリオ（§5.1。値は §4.2 の表と設計書の範囲） */
+export const AF_SUBSTRATE = {
+  /** 心房筋の ERP の範囲（場所によるばらつき） */
+  atrialErpMs: [160, 200] as const,
+  /** PV 筋スリーブ */
+  pvSleeveCv: 0.5,
+  pvSleeveErpMs: 180,
+  /** PV トリガーの発火周期 */
+  triggerClMs: [150, 250] as const,
+  /** ERP のばらつきをなめらかにする回数（斑状の不均一性の大きさ）。仮定値 */
+  erpSmoothingIterations: 6,
 };

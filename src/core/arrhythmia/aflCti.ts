@@ -12,9 +12,9 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   label: '通常型心房粗動（CTI）',
   chambers: ['RA'],
   anatomy: 'normal',
-  setupSubstrate: () => { /* TODO */ },
-  tryInduce: () => false,
-  isCured: () => false,
+  induction: { kind: 'extrastimulus', site: 'HRA' },
+  setupSubstrate: () => { /* TODO(Phase 4) */ },
+  structuralChecks: () => [],
   goals: [
     'CS 近位→遠位の活性化順序とハロー電極で旋回方向を確認する',
     'CTI に三尖弁輪から下大静脈まで連続線を引く',

@@ -1,4 +1,4 @@
-import type { Catheter, EcgLead, EgmChannel, SurfaceMesh } from '../types';
+import type { Catheter, EcgLead, EgmChannel, Lesion, SurfaceMesh } from '../types';
 import { CellularAutomaton } from '../propagation/CellularAutomaton';
 import { applyPreferentialPathways } from '../propagation/preferentialPathways';
 import { EgmGenerator } from '../egm/EgmGenerator';
@@ -49,6 +49,8 @@ export class SimulationEngine {
   readonly stimulator = new Stimulator();
   foci: Focus[] = [];
   sinusEnabled = true;
+  /** 作った病変（簡易通電。Phase 5 でエネルギー別の病変モデルに置き換える） */
+  lesions: Lesion[] = [];
   /** 調律の判定（見張り頂点 = CS 口付近の心房と、心室の拍） */
   readonly rhythm = new RhythmMonitor();
   readonly monitorVertex: number;
