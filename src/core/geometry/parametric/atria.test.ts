@@ -168,3 +168,14 @@ describe('AFL 用の拡大した RA（aflRemodeled）', () => {
     expect(verticesInRegion(afl.mesh.regionOfVertex, 'eustachian_ridge').length).toBeGreaterThan(0);
   });
 });
+
+describe('右心耳（RAA）', () => {
+  it('3 つの寸法セットすべてに右心耳があり、三尖弁輪・SVC の開口と重ならない', () => {
+    for (const m of [normal, af, buildBiatrialModel('aflRemodeled')]) {
+      const raa = verticesInRegion(m.mesh.regionOfVertex, 'raa');
+      expect(raa.length).toBeGreaterThan(100);
+      const b = boundaryEdgeVertices({ positions: m.mesh.positions, indices: m.mesh.indices });
+      expect(raa.filter((v) => b.has(v)).length).toBe(0);
+    }
+  });
+});

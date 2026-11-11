@@ -39,6 +39,8 @@ const ORIENT = {
   tricuspid: v3(0.25, 0.05, 0.97),
   csOs: v3(0.78, -0.58, -0.22),
   sinusNode: v3(-0.5, 0.82, 0.28),
+  /** 右心耳：前側方・上方。三尖弁輪の開口（前方）と SVC の両方に重ならない向き（仮定値） */
+  raa: v3(-0.75, 0.55, 0.35),
   fossa: v3(0.95, 0.05, -0.3),
   /** 分界稜：RA 側壁のやや後方（xz 平面の方位角） */
   cristaAzimuthDeg: 200,
@@ -197,7 +199,13 @@ function buildRightAtrium(D: AnatomyDimensions) {
   };
   const svcF = vein(ORIENT.svc, D.vein.svc);
   const ivcF = vein(ORIENT.ivc, D.vein.ivc);
-  const sdf = smoothUnion(4, body, tube(svcF), tube(ivcF));
+  // 右心耳：先の閉じた楕円断面の袋。付け根を大きくなめらかにつなぎ、幅広い三角形の形に近づける
+  const raaDir = norm(ORIENT.raa);
+  const raaO = surfacePointAlong(body, c, raaDir);
+  const raaFrame = tubeFrame(sub(raaO, scale(raaDir, 6)), add(raaO, scale(raaDir, D.raa.length - D.raa.ostiumMinor / 2)),
+    D.raa.ostiumMajor / 2, D.raa.ostiumMinor / 2, v3(0, 1, 0));
+  const raaSdf = tube(raaFrame);
+  const sdf = smoothUnion(6, smoothUnion(4, body, tube(svcF), tube(ivcF)), raaSdf);
 
   const closed = meshFromSdf(sdf, c, 55);
   const tricuspid = openingAtRadius(closed, 'tricuspid', c, norm(ORIENT.tricuspid), D.annulus.tricuspid / 2);
@@ -277,6 +285,7 @@ function buildRightAtrium(D: AnatomyDimensions) {
     if (axialDistance(tricuspid, p) > -3 && radialDistance(tricuspid, p) < tricuspid.radius * 1.6) return 'tricuspid_annulus';
     if (lineDistance(p, eustachianLine) < RIDGE_HALF_WIDTH_MM) return 'eustachian_ridge';
     if (dist(p, P(sinusV)) < 6) return 'sinus_node';
+    if (raaSdf(p.x, p.y, p.z) < 1.5 && dot(sub(p, raaO), raaDir) > -1) return 'raa';
     const q = sub(p, c);
     if (lineDistance(p, cristaLine) < RIDGE_HALF_WIDTH_MM) return 'crista_terminalis';
     if (dist(p, P(fossaV)) < 8) return 'fossa_ovalis';

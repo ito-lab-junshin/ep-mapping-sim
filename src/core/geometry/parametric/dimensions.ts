@@ -24,6 +24,8 @@ export interface AnatomyDimensions {
   ra: { minorDiameter: number; majorDiameter: number; apDiameter: number };
   pv: { LSPV: PvOstium; LIPV: PvOstium; RSPV: PvOstium; RIPV: PvOstium; sleeveLength: number };
   laa: { length: number; ostiumDiameter: number };
+  /** 右心耳：開口の長軸径 × 短軸径、開口から先端までの長さ（深さ） */
+  raa: { ostiumMajor: number; ostiumMinor: number; length: number };
   annulus: { mitral: number; tricuspid: number };
   vein: { svc: number; ivc: number; length: number; csOstium: number };
 }
@@ -52,6 +54,12 @@ const normal: AnatomyDimensions = {
   },
   /** 左心耳。仮定値（教育用近似） */
   laa: { length: 22, ostiumDiameter: 16 },
+  /**
+   * 右心耳。仮定値（教育用近似）。開口の長軸径 20 mm は、ユーザー提示の文献情報
+   * （Folia Morphologica 掲載の解剖学的検討、平均 約 20 mm。原文は未確認）に合わせた。
+   * 断面は幅広い三角形の袋に近づけるため楕円（20 × 14 mm、断面積 約 2.2 cm²）。長さは仮定値
+   */
+  raa: { ostiumMajor: 20, ostiumMinor: 14, length: 25 },
   /** 弁輪径。仮定値（教育用近似） */
   annulus: { mitral: 30, tricuspid: 35 },
   /** SVC・IVC 径、RA から先の静脈の長さ、CS 口径。仮定値（教育用近似） */

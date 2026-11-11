@@ -8,7 +8,7 @@ export const REGIONS = [
   'lspv_sleeve', 'lipv_sleeve', 'rspv_sleeve', 'ripv_sleeve',
   'lspv_ostium', 'lipv_ostium', 'rspv_ostium', 'ripv_ostium',
   // 右房
-  'ra_body', 'ra_septum', 'fossa_ovalis', 'sinus_node', 'crista_terminalis', 'eustachian_ridge', 'cti', 'cs_os',
+  'ra_body', 'ra_septum', 'raa', 'fossa_ovalis', 'sinus_node', 'crista_terminalis', 'eustachian_ridge', 'cti', 'cs_os',
   'his_region', 'av_node', 'slow_pathway', 'tricuspid_annulus', 'svc', 'ivc',
 ] as const;
 
@@ -22,7 +22,7 @@ export const REGION_LABEL_JA: Record<RegionName, string> = {
   laa: '左心耳（LAA）', mitral_annulus: '僧帽弁輪', bachmann_bundle: 'Bachmann 束',
   lspv_sleeve: 'LSPV', lipv_sleeve: 'LIPV', rspv_sleeve: 'RSPV', ripv_sleeve: 'RIPV',
   lspv_ostium: 'LSPV 口', lipv_ostium: 'LIPV 口', rspv_ostium: 'RSPV 口', ripv_ostium: 'RIPV 口',
-  ra_body: 'RA 本体', ra_septum: 'RA 中隔', fossa_ovalis: '卵円窩', sinus_node: '洞結節', crista_terminalis: '分界稜', eustachian_ridge: 'Eustachian 稜',
+  ra_body: 'RA 本体', ra_septum: 'RA 中隔', raa: '右心耳（RAA）', fossa_ovalis: '卵円窩', sinus_node: '洞結節', crista_terminalis: '分界稜', eustachian_ridge: 'Eustachian 稜',
   cti: '峡部（CTI）', cs_os: 'CS 口', his_region: 'His 束部位', av_node: '房室結節', slow_pathway: '遅伝導路部位',
   tricuspid_annulus: '三尖弁輪', svc: 'SVC', ivc: 'IVC',
 };

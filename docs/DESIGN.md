@@ -338,9 +338,9 @@
 
 - `src/core/geometry/parametric/` で、符号付き距離関数（楕円体・楕円断面の管のなめらかな和）を Surface Nets で三角形メッシュにする（格子 2 mm、辺長の中央値 約 2 mm、頂点 normal 約 5,000・afRemodeled 約 5,900）。緯度経度メッシュと違い、極や継ぎ目ができない
   - LA：楕円体＋PV 4 本（上下径を長軸とする楕円断面の管、口から 15 mm）＋LAA＋僧帽弁輪の開口
-  - RA：楕円体＋SVC・IVC＋三尖弁輪の開口＋CS 口
+  - RA：楕円体＋SVC・IVC＋右心耳＋三尖弁輪の開口＋CS 口
   - 弁輪・静脈の端・CS 口は平面で切り抜いた穴とする
-- 頂点ごとの領域ラベル（`src/core/geometry/regions.ts`、30 種。Phase 4 で Bachmann 束の帯と Eustachian 稜を追加）を生成時に付ける。分界稜は SVC の縁から IVC の縁まで、Eustachian 稜は IVC の縁から CS 口まで、RA 表面の線として定義する：LA 本体・中隔・天蓋・後壁・前壁、LAA、僧帽弁輪、PV 4 本のスリーブと口、RA 本体・中隔、卵円窩、洞結節、分界稜、CTI、CS 口、His 束部位、房室結節、遅伝導路部位、三尖弁輪、SVC、IVC
+- 頂点ごとの領域ラベル（`src/core/geometry/regions.ts`、31 種。Phase 4 で Bachmann 束の帯と Eustachian 稜、Phase 4 の追補で右心耳を追加）を生成時に付ける。分界稜は SVC の縁から IVC の縁まで、Eustachian 稜は IVC の縁から CS 口まで、RA 表面の線として定義する：LA 本体・中隔・天蓋・後壁・前壁、LAA、僧帽弁輪、PV 4 本のスリーブと口、RA 本体・中隔、卵円窩、洞結節、分界稜、CTI、CS 口、His 束部位、房室結節、遅伝導路部位、三尖弁輪、SVC、IVC
 - LA と RA は 1 つのメッシュにまとめ、Bachmann 束・卵円窩縁・CS 筋束の 3 か所を心房間の連結（隣接辺）でつなぐ
 - 寸法は `src/core/geometry/parametric/dimensions.ts` に集約し、**normal**（AVNRT・WPW）、**afRemodeled**（AF）、**aflRemodeled**（AFL：RA と三尖弁輪を normal の 1.2 倍。RA の中心は短径から決め、LA と食い込まないようにする）の 3 セットをもつ。構造物の向き（PV・弁輪・CS 口などの方向）は `atria.ts` の `ORIENT` にまとめた仮定値（教育用近似）
 - メッシュの読み込み口は `ChamberLoader` インターフェース（`src/core/geometry/ChamberLoader.ts`）に統一し、glTF ローダ（公開モデル、Blender で切り出し・ポリゴン削減・ラベル付け）を Phase 7 で追加する。公開モデルを使う場合はライセンス（CC BY など）を `docs/ASSETS.md` に記録する。カテーテル配置などの幾何計算はメッシュだけで行い（`MeshQuery`）、SDF に依存しない
@@ -360,6 +360,7 @@
 | （参考）PV 最大口径 | — | — | RSPV 21.0〜22.6、LSPV 18.9〜20.2：Gebhard C ほか, Cardiol Res Pract 2014;2014:179632。測定法が異なるため上限の参考値（モデルには使わない） |
 | PV スリーブの長さ（口から先） | 15 | 15 | 仮定値（教育用近似） |
 | LAA 長さ・口径 | 22・16 | 22・16 | 仮定値（教育用近似） |
+| 右心耳（RAA）開口の長軸径 × 短軸径・長さ | 20 × 14・25 | 同左 | 仮定値（教育用近似）。開口の長軸径 20 mm は、ユーザー提示の文献情報（Folia Morphologica 掲載の解剖学的検討、平均 約 20 mm。原文は未確認）に合わせた。幅広い三角形の袋に近づけるため楕円断面とし、付け根を大きくなめらかにつなぐ。向きは前側方・上方（三尖弁輪・SVC の開口と重ならない） |
 | RA 短径・長径・前後径 | 38・50・40 | 38・50・40 | 仮定値（教育用近似）。aflRemodeled は 1.2 倍（46・60・48） |
 | 僧帽弁輪径 | 30 | 30 | 仮定値（教育用近似） |
 | 三尖弁輪径 | 35 | 35 | 仮定値（教育用近似）。aflRemodeled は 1.2 倍（42）：旋回は弁輪の縁に沿うので、回路の長さは主に弁輪の周長で決まる |
