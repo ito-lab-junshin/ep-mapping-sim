@@ -3,7 +3,7 @@ import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { afScenario, laBody, sleeveVertices } from '../arrhythmia/af';
 import { separated } from '../arrhythmia/common';
-import { contactForceG, lesionIndexPct, localImpedanceOhm, rfDepthMm, rfRadiusMm } from './rf';
+import { contactForceG, lesionIndexPct, localImpedanceOhm, rfDoseRate, rfLesion } from './rf';
 import { cryoOcclusion } from './cryo';
 import { pvCoord } from './pvGeometry';
 import { verticesInRegion } from '../geometry/regions';
@@ -17,29 +17,68 @@ const runAblation = (e: SimulationEngine, seconds: number) => {
   for (let i = 0; i < steps && e.ablation.active; i++) e.ablation.step(e.sampleMs);
 };
 
-describe('RF の病変モデル（§7）', () => {
-  it('出力・時間・接触が大きいほど病変が大きく深い（半径 2〜8 mm）', () => {
-    expect(rfRadiusMm(40, 30, 20)).toBeGreaterThan(rfRadiusMm(25, 30, 20));
-    expect(rfRadiusMm(30, 40, 20)).toBeGreaterThan(rfRadiusMm(30, 10, 20));
-    expect(rfRadiusMm(30, 30, 30)).toBeGreaterThan(rfRadiusMm(30, 30, 5));
-    expect(rfRadiusMm(50, 60, 40)).toBeLessThanOrEqual(8);
-    expect(rfRadiusMm(25, 10, 5)).toBeGreaterThan(2);
+describe('RF の病変モデル（§7、臨床経験に基づく教育用近似）', () => {
+  /** 指標 100 % に達するまでの秒数（一定の出力・接触圧） */
+  const timeTo100 = (p: number, cf: number, target: 'posterior' | 'anterior') => ABLATION.rf.targetRefS[target] / rfDoseRate(p, cf);
+
+  it('30 W・20 g で後壁の目標に約 30 秒、前壁の目標に約 40 秒。接触圧 27 g なら速く、10 g なら遅い', () => {
+    expect(timeTo100(30, 20, 'posterior')).toBeCloseTo(30, 5);
+    expect(timeTo100(30, 20, 'anterior')).toBeCloseTo(40, 5);
+    expect(lesionIndexPct(rfLesion(30, 20, 30).dose, 'posterior')).toBeCloseTo(100, 5);
+    expect(timeTo100(30, 27, 'posterior')).toBeLessThan(28);
+    expect(timeTo100(30, 10, 'posterior')).toBeGreaterThan(40);
+    expect(timeTo100(40, 20, 'posterior')).toBeLessThan(25);
   });
 
-  it('同じ通電でも壁厚 4 mm の CTI では貫壁性に届きにくい（病変指標が小さい）', () => {
-    // 30 W・20 秒・10 g（LA では十分、厚い CTI では不足）
-    const d = rfDepthMm(rfRadiusMm(30, 20, 10));
-    expect(lesionIndexPct(d, ABLATION.wallThicknessMm.la)).toBeGreaterThan(100);
-    expect(lesionIndexPct(d, ABLATION.wallThicknessMm.cti)).toBeLessThan(100);
+  it('指標 100 % の病変は径 6〜8 mm・深さ 3〜4 mm で、LA（2 mm）は貫壁、CTI の弁輪側（5 mm）は未貫壁', () => {
+    for (const [t, target] of [[30, 'posterior'], [40, 'anterior']] as const) {
+      const l = rfLesion(30, 20, t);
+      expect(lesionIndexPct(l.dose, target)).toBeCloseTo(100, 5);
+      expect(l.depthMm).toBeGreaterThanOrEqual(3); expect(l.depthMm).toBeLessThanOrEqual(4);
+      expect(2 * l.radiusMm).toBeGreaterThanOrEqual(6); expect(2 * l.radiusMm).toBeLessThanOrEqual(8);
+      expect(l.depthMm).toBeGreaterThan(ABLATION.wallThicknessMm.la);
+      expect(l.depthMm).toBeLessThan(ABLATION.wallThicknessMm.ctiTv);
+    }
   });
 
-  it('接触圧は押し込むほど大きく、非接触は 0。局所インピーダンスは接触で上がり、病変の形成で下がる', () => {
+  it('病変は時間に対して飽和する：指標 180 % でも深さは 1.8 倍にならない', () => {
+    const at100 = rfLesion(30, 20, 30), at180 = rfLesion(30, 20, 54);
+    expect(lesionIndexPct(at180.dose, 'posterior')).toBeCloseTo(180, 5);
+    expect(at180.depthMm / at100.depthMm).toBeLessThan(1.5);
+    expect(rfLesion(50, 40, 600).depthMm).toBeLessThanOrEqual(ABLATION.rf.saturationDepthMm);
+  });
+
+  it('CTI の弁輪側（5 mm）は 30 W・20 g では 60 秒でも貫壁しにくく、40 W か接触圧を上げた長時間通電で貫壁する', () => {
+    const tv = ABLATION.wallThicknessMm.ctiTv, ivc = ABLATION.wallThicknessMm.ctiIvc;
+    expect(rfLesion(30, 20, 30).depthMm).toBeLessThan(ivc);  // 30 秒では IVC 側も未貫壁
+    expect(rfLesion(30, 20, 40).depthMm).toBeGreaterThan(ivc); // 40 秒で IVC 側は貫壁
+    expect(rfLesion(30, 20, 60).depthMm).toBeLessThan(tv);
+    expect(rfLesion(40, 20, 45).depthMm).toBeGreaterThan(tv);
+    expect(rfLesion(30, 30, 60).depthMm).toBeGreaterThan(tv);
+  });
+
+  it('接触圧は押し込むほど大きく、非接触は 0（病変は育たない）。局所インピーダンスは接触で上がり、病変の形成で下がる', () => {
     expect(contactForceG(3)).toBe(0);
+    expect(rfDoseRate(30, 0)).toBe(0);
     expect(contactForceG(0.5)).toBeGreaterThan(contactForceG(1.5));
     const blood = localImpedanceOhm(0, 0).value, contact = localImpedanceOhm(30, 0).value, burned = localImpedanceOhm(30, 1);
     expect(contact).toBeGreaterThan(blood);
     expect(burned.value).toBeLessThan(contact);
     expect(burned.drop).toBe(ABLATION.localImpedance.maxDropOhm);
+  });
+});
+
+describe('部位の性質（壁厚・目標の区分）', () => {
+  it('CTI の壁厚は三尖弁輪側 5 mm から IVC 側 3.5 mm へ薄くなり、LA の後壁は後壁の目標、天蓋は前壁の目標', () => {
+    const e = new SimulationEngine(loadParametricSync('aflRemodeled'));
+    const s = e.ablation.sites, a = e.model.anatomy.anchors;
+    const near = (pt: { x: number; y: number; z: number }) => e.query.closestPoint(pt, verticesInRegion(e.mesh.regionOfVertex, 'cti')).vertex;
+    expect(s.wallMm[near(a.ctiTv.point)]).toBeGreaterThan(4.6);
+    expect(s.wallMm[near(a.ctiIvc.point)]).toBeLessThan(3.9);
+    const post = verticesInRegion(e.mesh.regionOfVertex, 'la_posterior'), roof = verticesInRegion(e.mesh.regionOfVertex, 'la_roof');
+    expect(post.filter((v) => s.target[v] === 'posterior').length / post.length).toBeGreaterThan(0.9);
+    expect(roof.every((v) => s.target[v] === 'anterior')).toBe(true);
+    expect(s.target[a.slowPathway.vertex]).toBe('posterior');
   });
 });
 
@@ -54,7 +93,9 @@ describe('通電の状態機械', () => {
     runAblation(e, 40);
     expect(e.ablation.active).toBeNull();
     expect(e.lesions.length).toBe(1);
-    expect(e.lesions[0].tags.lesionIndexPct).toBeGreaterThan(100);
+    expect(e.lesions[0].tags.lesionIndexPct).toBeGreaterThan(50);
+    expect(e.lesions[0].tags.transmuralityPct).toBe(100);
+    expect(e.lesions[0].transmurality).toBe(1);
     const blocked = Array.from(e.ablation.field.transmurality).filter((t) => t >= 1).length;
     expect(blocked).toBeGreaterThan(5);
   });

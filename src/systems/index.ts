@@ -48,7 +48,7 @@ export interface SystemTheme {
     fillThreshold: string;
     lesionTag: string;         // 例: Visitag / AutoMark / Lesion Tag
     localImpedance?: string;   // 例: DirectSense
-    /** 病変指標の呼び方（features.ablationIndex のとき表示。尺度は独自：貫壁性 = 100 %） */
+    /** 病変指標の呼び方（features.ablationIndex のとき表示。尺度は独自：部位の目標量 = 100 %） */
     lesionIndex?: string;
   };
   features: {

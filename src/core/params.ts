@@ -185,15 +185,18 @@ export const AFL_SUBSTRATE = {
 };
 
 /**
- * アブレーション（Phase 5、docs/DESIGN.md §7）。§7 の RF 病変半径の式以外はすべて仮定値（教育用近似）。
+ * アブレーション（Phase 5、docs/DESIGN.md §7）。すべて仮定値（教育用近似）。RF の係数は臨床経験に基づく。
  * 各社製品のアルゴリズム（Ablation Index・DirectSense など）とは無関係。
  */
 export const ABLATION = {
   /** 通電の時計の倍速（EGM・伝播は実時間のまま） */
   clockSpeeds: [1, 5, 10] as const,
   defaultClockSpeed: 5,
-  /** 部位ごとの壁厚 mm（貫壁性 = 病変の深さ / 壁厚） */
-  wallThicknessMm: { la: 2, pv: 1.5, ra: 2, cti: 4, koch: 2 },
+  /**
+   * 部位ごとの壁厚 mm（貫壁性 = 病変の深さ / 壁厚）。仮定値（教育用近似）。
+   * CTI は一様でなく、三尖弁輪側（前庭部）ctiTv から IVC 側 ctiIvc へ直線的に薄くなる
+   */
+  wallThicknessMm: { la: 2, pv: 1.5, ra: 2, ctiTv: 5, ctiIvc: 3.5, koch: 2 },
   /** 貫壁性 t < 1 の頂点の viability = 1 − partialSlowing × t（伝導は遅くなるが残る） */
   partialSlowing: 0.7,
   rf: {
@@ -201,9 +204,19 @@ export const ABLATION = {
     defaultPowerW: 30,
     defaultDurationS: 30,
     maxDurationS: 60,
-    /** §7：病変半径 ≈ 1.5 + (出力^0.6 × 時間^0.3 × 接触^0.3) / 12 mm（2〜8 mm）。深さ = 半径 × depthRatio */
-    depthRatio: 0.7,
-    maxRadiusMm: 8,
+    /**
+     * RF の病変モデルの係数（臨床経験に基づく教育用近似。文献値に差し替えるときはここだけを直す）。
+     *  - 量（基準条件の秒数に換算した通電量）：毎秒 (出力 / refPowerW)^powerExp × (接触圧 / refContactG)^contactExp を積算
+     *  - 病変指標 = 量 / その部位の目標量 × 100 %（後壁 30 s・前壁 40 s：30 W・20 g で後壁の目標に約 30 秒、前壁の目標に約 40 秒）
+     *  - 深さ = saturationDepthMm × (1 − exp(−量 / tauRefS))（時間に対して飽和する。指標 180 % でも深さは 1.8 倍にならない）
+     *    基準条件で 30 s：深さ 3.3 mm、40 s：4.0 mm、60 s：5.0 mm
+     *  - 病変の半径 = 深さ × radiusPerDepth（指標 100 % で径 6.6〜8 mm）
+     */
+    dose: { refPowerW: 30, refContactG: 20, powerExp: 1.2, contactExp: 0.7 },
+    targetRefS: { posterior: 30, anterior: 40 },
+    saturationDepthMm: 6.6,
+    tauRefS: 43.3,
+    radiusPerDepth: 1,
     /** 接触圧：押し込み量（接触の閾値 2 mm からの距離）0〜1.5 mm を 0〜40 g に対応 */
     contactForceMaxG: 40,
     contactForcePushRangeMm: 1.5,

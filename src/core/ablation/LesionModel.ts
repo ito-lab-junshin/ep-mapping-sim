@@ -1,5 +1,4 @@
 import type { EnergyId, SurfaceMesh, TissueState } from '../types';
-import { REGIONS } from '../geometry/regions';
 import { ABLATION } from '../params';
 
 /**
@@ -15,23 +14,13 @@ export const ENERGY_LABEL: Record<EnergyId, string> = {
   pfa: 'パルスフィールド（PFA）',
 };
 
-/** 部位の壁厚 mm（仮定値） */
-export function wallThicknessMm(regionId: number): number {
-  const r = REGIONS[regionId];
-  const w = ABLATION.wallThicknessMm;
-  if (r === 'cti') return w.cti;
-  if (r.endsWith('_sleeve') || r.endsWith('_ostium')) return w.pv;
-  if (r === 'his_region' || r === 'av_node' || r === 'slow_pathway') return w.koch;
-  if (r.startsWith('la') || r === 'laa' || r === 'mitral_annulus' || r === 'bachmann_bundle') return w.la;
-  return w.ra;
-}
-
 export class LesionField {
   /** 頂点ごとの貫壁性 0〜1 */
   readonly transmurality: Float32Array;
   private baseVoltage: Float32Array;
 
-  constructor(readonly mesh: SurfaceMesh, readonly tissue: TissueState) {
+  /** wallMm：頂点ごとの壁厚 mm（sites.ts） */
+  constructor(readonly mesh: SurfaceMesh, readonly tissue: TissueState, readonly wallMm: Float32Array) {
     this.transmurality = new Float32Array(tissue.viability.length);
     this.baseVoltage = Float32Array.from(tissue.voltage);
   }
@@ -49,7 +38,7 @@ export class LesionField {
 
   /** 頂点 v の深さ depthMm を、その部位の壁厚で割った貫壁性にする */
   raiseDepth(v: number, depthMm: number) {
-    this.raise(v, depthMm / wallThicknessMm(this.mesh.regionOfVertex[v]));
+    this.raise(v, depthMm / this.wallMm[v]);
   }
 
   private applyVertex(v: number) {

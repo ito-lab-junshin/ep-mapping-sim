@@ -1,18 +1,32 @@
 import type { SurfaceMesh, Vec3 } from '../types';
 import { ABLATION } from '../params';
 import type { LesionField } from './LesionModel';
+import type { RfTarget } from './sites';
 
 const RF = ABLATION.rf;
 
-/** §7 の病変半径 mm（時間 t 秒の時点。通電の途中も同じ式で育つ） */
-export function rfRadiusMm(powerW: number, timeS: number, contactForceG: number): number {
-  const x = Math.pow(powerW, 0.6) * Math.pow(Math.max(timeS, 0), 0.3) * Math.pow(Math.max(contactForceG, 0), 0.3);
-  return Math.min(RF.maxRadiusMm, 1.5 + x / 12);
+/** 通電量の増える速さ（基準条件 30 W・20 g で 1 /s）。接触していなければ 0 */
+export function rfDoseRate(powerW: number, contactForceG: number): number {
+  const d = RF.dose;
+  if (contactForceG <= 0) return 0;
+  return Math.pow(powerW / d.refPowerW, d.powerExp) * Math.pow(contactForceG / d.refContactG, d.contactExp);
 }
 
-/** 病変の深さ mm（半径に比例。仮定値） */
-export function rfDepthMm(radiusMm: number): number {
-  return RF.depthRatio * radiusMm;
+/** 通電量（基準条件の秒数）から病変の深さ mm：時間に対して飽和する */
+export function rfDepthFromDose(doseRefS: number): number {
+  return RF.saturationDepthMm * (1 - Math.exp(-Math.max(0, doseRefS) / RF.tauRefS));
+}
+
+/** 病変の半径 mm（深さに比例） */
+export function rfRadiusFromDepth(depthMm: number): number {
+  return RF.radiusPerDepth * depthMm;
+}
+
+/** 一定の出力・接触圧で timeS 秒通電したときの量・深さ・半径 */
+export function rfLesion(powerW: number, contactForceG: number, timeS: number) {
+  const dose = rfDoseRate(powerW, contactForceG) * timeS;
+  const depthMm = rfDepthFromDose(dose);
+  return { dose, depthMm, radiusMm: rfRadiusFromDepth(depthMm) };
 }
 
 /** 接触圧 g：先端の壁からの距離 heightMm から（押し込むほど大きく、非接触は 0。仮定値の対応） */
@@ -28,9 +42,9 @@ export function localImpedanceOhm(cfG: number, formation01: number): { value: nu
   return { value: li.bloodOhm + li.contactMaxOhm * Math.min(1, cfG / RF.contactForceMaxG) - drop, drop };
 }
 
-/** 病変指標（独自の尺度）：貫壁性に必要な量 = 100 % */
-export function lesionIndexPct(depthMm: number, wallMm: number): number {
-  return (100 * depthMm) / wallMm;
+/** 病変指標（独自の尺度）：その部位の目標量（後壁 30 s・前壁 40 s 相当）に対する通電量の割合 % */
+export function lesionIndexPct(doseRefS: number, target: RfTarget): number {
+  return (100 * doseRefS) / RF.targetRefS[target];
 }
 
 /** 点 center のまわりに RF 病変を置く：深さは中心で depthMm、半径 r の球冠の形で浅くなる */

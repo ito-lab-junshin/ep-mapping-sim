@@ -2,8 +2,9 @@ import type { EnergyId, Lesion, Vec3 } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { PvName } from '../geometry/regions';
 import { ABLATION } from '../params';
-import { LesionField, wallThicknessMm } from './LesionModel';
-import { contactForceG, depositRf, lesionIndexPct, localImpedanceOhm, rfDepthMm, rfRadiusMm } from './rf';
+import { LesionField } from './LesionModel';
+import { contactForceG, depositRf, lesionIndexPct, localImpedanceOhm, rfDepthFromDose, rfDoseRate, rfRadiusFromDepth } from './rf';
+import { ablationSites, type AblationSites, type RfTarget } from './sites';
 import { cryoDepthMm, cryoMinTempC, cryoOcclusion, depositCryo } from './cryo';
 import { depositPfa, type PfaShape } from './pfa';
 import { seededRandom } from '../pacing/Stimulator';
@@ -20,8 +21,13 @@ export interface AblationMetrics {
   contactForceG?: number;
   localImpedanceOhm?: number;
   liDropOhm?: number;
-  /** 独自の病変指標（貫壁性に必要な量 = 100 %） */
+  /** 独自の病変指標（その部位の目標量 = 100 %） */
   lesionIndexPct?: number;
+  /** 病変指標の目標の区分（後壁／前壁） */
+  rfTarget?: RfTarget;
+  /** 通電点の壁厚 mm と、その点の貫壁性 %（病変の深さ / 壁厚、最大 100） */
+  wallMm?: number;
+  transmuralityPct?: number;
   radiusMm?: number;
   depthMm?: number;
   occlusion?: number;
@@ -39,6 +45,8 @@ interface Active {
   energy: 'rf' | 'cryo';
   elapsedS: number;
   targetS: number;
+  /** RF：基準条件の秒数に換算した通電量 */
+  dose: number;
   pv?: PvName;
   startedAt: number;
   isolatedAtS: number | null;
@@ -56,6 +64,7 @@ interface Active {
  */
 export class AblationController {
   readonly field: LesionField;
+  readonly sites: AblationSites;
   speed: number = ABLATION.defaultClockSpeed;
   rf = { powerW: ABLATION.rf.defaultPowerW, durationS: ABLATION.rf.defaultDurationS };
   cryo = { pv: 'LSPV' as PvName, push01: 1, misalignDeg: 0, leakAngleDeg: 270, durationS: ABLATION.cryo.defaultDurationS };
@@ -65,7 +74,8 @@ export class AblationController {
   private rng = seededRandom(5);
 
   constructor(readonly engine: SimulationEngine) {
-    this.field = new LesionField(engine.mesh, engine.ca.tissue);
+    this.sites = ablationSites(engine.mesh, engine.model.anatomy);
+    this.field = new LesionField(engine.mesh, engine.ca.tissue, this.sites.wallMm);
   }
 
   private pvInfo(name: PvName) { return this.engine.model.anatomy.la.pvs.find((p) => p.name === name)!; }
@@ -86,7 +96,7 @@ export class AblationController {
       if (!t || t.vertex < 0) return 'ABL の先端が接触していません';
     }
     this.active = {
-      energy, elapsedS: 0, targetS: energy === 'rf' ? this.rf.durationS : this.cryo.durationS,
+      energy, elapsedS: 0, dose: 0, targetS: energy === 'rf' ? this.rf.durationS : this.cryo.durationS,
       pv: energy === 'cryo' ? this.cryo.pv : undefined, startedAt: this.engine.time,
       isolatedAtS: null, nextIsolationCheckS: 0, nextJunctional: this.engine.time, junctional: false,
       last: { energy, active: true, elapsedS: 0 },
@@ -123,7 +133,7 @@ export class AblationController {
     for (const [k, v] of Object.entries(m)) if (typeof v === 'number') tags[k] = v;
     this.engine.lesions.push({
       id: `L${this.engine.lesions.length + 1}`, energy, centerVertex,
-      radiusMm: m.radiusMm ?? 0, transmurality: Math.min(1, (m.lesionIndexPct ?? 100) / 100),
+      radiusMm: m.radiusMm ?? 0, transmurality: this.field.transmurality[centerVertex],
       createdAt: this.engine.time, tags,
     } as Lesion);
   }
@@ -132,21 +142,25 @@ export class AblationController {
   step(simDtMs: number) {
     const a = this.active;
     if (!a) return;
-    a.elapsedS += (simDtMs / 1000) * this.speed;
-    a.last = a.energy === 'rf' ? this.stepRf(a) : this.stepCryo(a);
+    const dtS = (simDtMs / 1000) * this.speed;
+    a.elapsedS += dtS;
+    a.last = a.energy === 'rf' ? this.stepRf(a, dtS) : this.stepCryo(a);
     if (a.elapsedS >= a.targetS) this.stop();
   }
 
-  private stepRf(a: Active): AblationMetrics {
+  private stepRf(a: Active, dtS: number): AblationMetrics {
     const t = this.tip();
     const e = this.engine;
     if (!t || t.vertex < 0) return { ...a.last, energy: 'rf', active: true, elapsedS: a.elapsedS, contactForceG: 0, message: '先端が離れています（病変は育ちません）' };
-    const r = rfRadiusMm(this.rf.powerW, a.elapsedS, t.cf);
-    const depth = rfDepthMm(r);
+    // 通電量を積算し（接触圧が変われば増え方も変わる）、深さは量に対して飽和する
+    a.dose += rfDoseRate(this.rf.powerW, t.cf) * dtS;
+    const depth = rfDepthFromDose(a.dose);
+    const r = rfRadiusFromDepth(depth);
     depositRf(this.field, e.mesh, t.pos, r, depth);
-    const wall = wallThicknessMm(e.mesh.regionOfVertex[t.vertex]);
-    const index = lesionIndexPct(depth, wall);
-    const li = localImpedanceOhm(t.cf, depth / wall);
+    const wall = this.sites.wallMm[t.vertex], target = this.sites.target[t.vertex];
+    const index = lesionIndexPct(a.dose, target);
+    const transmural = Math.min(1, depth / wall);
+    const li = localImpedanceOhm(t.cf, transmural);
     // 接合部調律：遅伝導路部位の近くで通電しているあいだ、周期 500〜700 ms で接合部の興奮
     const sp = e.model.anatomy.anchors.slowPathway.point;
     const near = Math.hypot(t.pos.x - sp.x, t.pos.y - sp.y, t.pos.z - sp.z) <= ABLATION.junctionalRadiusMm + 1;
@@ -160,7 +174,8 @@ export class AblationController {
     const hisD = Math.hypot(t.pos.x - his.x, t.pos.y - his.y, t.pos.z - his.z);
     return {
       energy: 'rf', active: true, elapsedS: a.elapsedS, powerW: this.rf.powerW, contactForceG: t.cf,
-      localImpedanceOhm: li.value, liDropOhm: li.drop, lesionIndexPct: index, radiusMm: r, depthMm: depth,
+      localImpedanceOhm: li.value, liDropOhm: li.drop, lesionIndexPct: index, rfTarget: target, radiusMm: r, depthMm: depth,
+      wallMm: wall, transmuralityPct: transmural * 100,
       junctional: a.junctional, hisDistanceMm: hisD,
       message: hisD < ABLATION.hisWarningMm ? `注意：His 部位に近い（${hisD.toFixed(1)} mm）` : undefined,
     };
