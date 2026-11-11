@@ -168,14 +168,15 @@ function buildLeftAtrium(D: AnatomyDimensions) {
   const mesh = largestComponent(cutOpenings(closed, openings));
 
   const label = (p: Vec3): RegionName => {
+    // PV の管：軸に最も近い（半径で正規化した距離が最小の）PV に割り当てる。
+    // 右 PV のように管が近接すると、最初に見つかった PV に隣の管の壁を割り当ててしまうため
+    let bestPv: PvInfo | null = null, bestA = 0, bestRel = 1.9;
     for (const pv of pvs) {
       const a = dot(sub(p, pv.ostium), pv.frame.axis);
-      const rad = radialDistance({ name: '', center: pv.ostium, axis: pv.frame.axis, radius: 0 }, p);
-      if (rad < pv.radius * 1.9) {
-        if (a > 1) return PV_SLEEVE[pv.name];
-        if (a > -3) return PV_OSTIUM[pv.name];
-      }
+      const rel = radialDistance({ name: '', center: pv.ostium, axis: pv.frame.axis, radius: 0 }, p) / pv.radius;
+      if (a > -3 && rel < bestRel) { bestPv = pv; bestA = a; bestRel = rel; }
     }
+    if (bestPv) return bestA > 1 ? PV_SLEEVE[bestPv.name] : PV_OSTIUM[bestPv.name];
     if (laaSdf(p.x, p.y, p.z) < 1.5 && dot(sub(p, laaO), laaDir) > -1) return 'laa';
     if (axialDistance(mitral, p) > -4 && radialDistance(mitral, p) < mitral.radius * 1.6) return 'mitral_annulus';
     const q = sub(p, c);

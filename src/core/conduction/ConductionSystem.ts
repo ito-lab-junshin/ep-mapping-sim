@@ -90,6 +90,14 @@ export class ConductionSystem {
     this.schedule({ time: t + ap.conductionMs, kind: 'ventricle', source: 'ap' });
   }
 
+  /**
+   * 接合部の興奮（遅伝導路の通電中の接合部調律など）：共通路から His → 心室へ伝わり、
+   * 逆行できる経路（速伝導路）を通って心房へも戻る
+   */
+  junctionalBeat(t: number) {
+    this.schedule({ time: t, kind: 'common', pathway: -1 });
+  }
+
   /** 心室刺激（RV ペーシング） */
   paceVentricle(t: number) {
     this.schedule({ time: t, kind: 'ventricle', source: 'pace' });

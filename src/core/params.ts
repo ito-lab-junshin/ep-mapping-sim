@@ -183,3 +183,61 @@ export const AFL_SUBSTRATE = {
   /** 分界稜・Eustachian 稜の横方向の伝導速度。0 = 完全な機能的ブロック（遅いが通れる値だと、稜を横切る興奮で回路が崩れる） */
   cristaTransverseCv: 0,
 };
+
+/**
+ * アブレーション（Phase 5、docs/DESIGN.md §7）。§7 の RF 病変半径の式以外はすべて仮定値（教育用近似）。
+ * 各社製品のアルゴリズム（Ablation Index・DirectSense など）とは無関係。
+ */
+export const ABLATION = {
+  /** 通電の時計の倍速（EGM・伝播は実時間のまま） */
+  clockSpeeds: [1, 5, 10] as const,
+  defaultClockSpeed: 5,
+  /** 部位ごとの壁厚 mm（貫壁性 = 病変の深さ / 壁厚） */
+  wallThicknessMm: { la: 2, pv: 1.5, ra: 2, cti: 4, koch: 2 },
+  /** 貫壁性 t < 1 の頂点の viability = 1 − partialSlowing × t（伝導は遅くなるが残る） */
+  partialSlowing: 0.7,
+  rf: {
+    powerRangeW: [25, 50] as const,
+    defaultPowerW: 30,
+    defaultDurationS: 30,
+    maxDurationS: 60,
+    /** §7：病変半径 ≈ 1.5 + (出力^0.6 × 時間^0.3 × 接触^0.3) / 12 mm（2〜8 mm）。深さ = 半径 × depthRatio */
+    depthRatio: 0.7,
+    maxRadiusMm: 8,
+    /** 接触圧：押し込み量（接触の閾値 2 mm からの距離）0〜1.5 mm を 0〜40 g に対応 */
+    contactForceMaxG: 40,
+    contactForcePushRangeMm: 1.5,
+  },
+  localImpedance: { bloodOhm: 100, contactMaxOhm: 40, maxDropOhm: 30 },
+  cryo: {
+    balloonDiameterMm: 28,
+    /** 閉塞度 = 押し付け × (1 − 軸のずれ / misalignLimitDeg) */
+    misalignLimitDeg: 30,
+    /** この閉塞度以上で PV を一周する帯が完成（未満は閉塞の悪い側に隙間） */
+    fullRingOcclusion: 0.8,
+    /** 最低温度 = minTempBaseC + minTempSlopeC × 閉塞度 */
+    minTempBaseC: -40,
+    minTempSlopeC: -20,
+    /** 深さ = maxDepthMm × (|最低温度| / 60) × (1 − exp(−時間 / tauS)) */
+    maxDepthMm: 3,
+    tauS: 60,
+    defaultDurationS: 180,
+    /** 病変の帯：PV 口から LA 側 antralMm まで、PV 口の外側へ marginMm まで */
+    antralMm: 7,
+    marginMm: 6,
+  },
+  pfa: {
+    /** 1 回の通電で加わる貫壁性（2 回以上で貫壁性 1） */
+    transmuralityPerApplication: 0.5,
+    /** バスケット型：PV 口の縁の輪（口の半径 − 2 〜 + 4 mm）、フラワー型：PV 口を覆う円盤（口の半径 + 6 mm まで） */
+    basketInnerMm: -2,
+    basketOuterMm: 4,
+    flowerOuterMm: 6,
+    antralMm: 6,
+  },
+  /** 接合部調律：遅伝導路部位から junctionalRadiusMm 以内で RF 通電中、周期 junctionalClMs で接合部の興奮 */
+  junctionalRadiusMm: 5,
+  junctionalClMs: [500, 700] as const,
+  /** His 部位にこれより近い通電には注意を出す（合併症は扱わない） */
+  hisWarningMm: 5,
+};

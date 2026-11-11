@@ -26,7 +26,7 @@ export function sleeveTip(engine: SimulationEngine, pv: PvName): number {
 }
 
 /** LA 本体（PV のスリーブ・口以外）の頂点 */
-function laBody(engine: SimulationEngine): number[] {
+export function laBody(engine: SimulationEngine): number[] {
   const la = engine.mesh.parts![0];
   const out: number[] = [];
   for (let v = la.vertexStart; v < la.vertexStart + la.vertexCount; v++) {

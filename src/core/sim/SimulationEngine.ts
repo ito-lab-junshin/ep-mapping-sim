@@ -6,6 +6,7 @@ import { RingBuffer } from '../egm/RingBuffer';
 import { farFieldV, hisSpike, localV } from '../egm/templates';
 import { ConductionSystem } from '../conduction/ConductionSystem';
 import { RhythmMonitor } from '../rhythm/RhythmMonitor';
+import { AblationController } from '../ablation/AblationController';
 import { seededRandom, Stimulator, type StimTarget } from '../pacing/Stimulator';
 import { SurfaceEcg } from '../ecg/SurfaceEcg';
 import type { BiatrialModel } from '../geometry/parametric/atria';
@@ -49,8 +50,14 @@ export class SimulationEngine {
   readonly stimulator = new Stimulator();
   foci: Focus[] = [];
   sinusEnabled = true;
-  /** 作った病変（簡易通電。Phase 5 でエネルギー別の病変モデルに置き換える） */
+  /** 作った病変（通電ごとの記録。病変タグ） */
   lesions: Lesion[] = [];
+  private _ablation: AblationController | null = null;
+  /** 通電の状態機械（基質を設定したあと、最初に使うときに作る：病変の場は基質の電位を基準にする） */
+  get ablation(): AblationController {
+    if (!this._ablation) this._ablation = new AblationController(this);
+    return this._ablation;
+  }
   /** 調律の判定（見張り頂点 = CS 口付近の心房と、心室の拍） */
   readonly rhythm = new RhythmMonitor();
   readonly monitorVertex: number;
@@ -197,6 +204,8 @@ export class SimulationEngine {
       else this.conduction.paceVentricle(st.time);
       this.lastArtifact = st.time;
     }
+    // 通電（通電の時計で病変を育てる。接合部調律を出すこともある）
+    this._ablation?.step(this.sampleMs);
     // 刺激伝導系（His・心室・逆行伝導）
     this.conduction.advance(until);
     for (const ex of this.conduction.takeExits(until)) ca.excite(ex.vertex, ex.time);
