@@ -1,15 +1,18 @@
-import type { EcgLead, EcgLeadCount } from '../types';
+import type { EcgLead, EcgLeadCount, Vec3 } from '../types';
+import type { VentricularBeat } from '../conduction/ConductionSystem';
 import { gaussSum } from '../egm/templates';
 import { QT_MS } from '../params';
 
 /**
- * 体表 ECG のテンプレート合成（docs/DESIGN.md §5.5、教育用近似）。
+ * 体表 ECG（docs/DESIGN.md §5.5、教育用近似）。
  *
- *  - P 波: 1 拍ごとの「心房の活性化済み割合 f（0→1）」を位相とするテンプレート。
- *    始まり＝心房の最早活性化、幅＝全心房の活性化時間になる（因果的に計算できる）。
- *    II・I は単峰性の陽性、V1 は前半陽性・後半陰性の二相性（RA → LA の順を表す）。
- *  - QRS・T 波: 心室興奮（QRS 開始）時刻からのガウス成分の和。
- *  - Phase 4 で鋸歯状波（AFL）・デルタ波（WPW）を追加する。
+ *  - 心房成分（P 波・粗動波）：φ モデルの電流源から求めた心房の電気ベクトル p を、誘導の方向 L に投影する
+ *    （V = k p·L）。洞調律の P 波、粗動の鋸歯状波、AF の f 波が同じ式から出る。
+ *  - 心室成分：心室はメッシュを持たないため、拍の種類ごとのテンプレート
+ *      His 経由：正常の QRS・T
+ *      副伝導路による早期興奮：デルタ波（緩やかな立ち上がり）＋ His 経由の興奮が届いてからの QRS（融合）
+ *      RV ペーシング：幅の広い QRS
+ *  - 誘導の方向（座標系 +x = 左、+y = 頭側、+z = 前方）と振幅の較正は仮定値（教育用近似）。
  */
 
 export interface EcgLeadOption { count: EcgLeadCount; label: string; leads: EcgLead[]; available: boolean }
@@ -25,67 +28,76 @@ export function ecgLeadsFor(count: EcgLeadCount): EcgLead[] {
   return ECG_LEAD_OPTIONS.find((o) => o.count === count)?.leads ?? [];
 }
 
-/** P 波の振幅 mV（単峰成分, 二相成分） */
-const P_AMP: Record<EcgLead, { mono: number; bi: number }> = {
-  I: { mono: 0.08, bi: 0 },
-  II: { mono: 0.15, bi: 0 },
-  V1: { mono: 0.03, bi: 0.07 },
+/** 誘導の方向（単位ベクトル）。I = 左、II = 左下 60°、V1 = 右前方。仮定値 */
+export const LEAD_VECTOR: Record<EcgLead, Vec3> = {
+  I: { x: 1, y: 0, z: 0 },
+  II: { x: 0.5, y: -0.866, z: 0 },
+  V1: { x: -0.25, y: 0, z: 0.968 },
 };
 
-/** QRS・T（QRS 開始からの [中心 ms, 幅 ms, 振幅 mV]） */
+/** 心房の電気ベクトル → mV の係数（洞調律の II の P 波のピーク ≈ 0.15 mV になるよう較正） */
+export const ATRIAL_ECG_GAIN = 0.0018;
+
+type Parts = readonly (readonly [number, number, number])[];
 const T_PEAK_MS = QT_MS - 80;
-const QRS_T: Record<EcgLead, readonly (readonly [number, number, number])[]> = {
+
+/** His 経由の QRS・T（QRS 開始からの [中心 ms, 幅 ms, 振幅 mV]） */
+const QRS_T: Record<EcgLead, Parts> = {
   I: [[15, 5, -0.04], [40, 11, 0.7], [66, 7, -0.1], [T_PEAK_MS, 40, 0.2]],
   II: [[15, 5, -0.05], [40, 10, 1.1], [65, 7, -0.2], [T_PEAK_MS, 40, 0.3]],
   V1: [[22, 7, 0.25], [50, 12, -0.9], [T_PEAK_MS, 40, -0.08]],
 };
 
-/** 新しい拍とみなす活性化の空白 ms */
-const BEAT_GAP_MS = 40;
-/** 活性化が止まってから P 波を減衰させる時定数 ms */
-const P_DECAY_MS = 8;
+/** RV 心尖ペーシングの幅広い QRS（左脚ブロック型・上方軸）と二次性の T */
+const PACED_QRS_T: Record<EcgLead, Parts> = {
+  I: [[50, 25, 0.8], [T_PEAK_MS + 20, 50, -0.25]],
+  II: [[50, 25, -0.9], [T_PEAK_MS + 20, 50, 0.25]],
+  V1: [[55, 28, -1.0], [T_PEAK_MS + 20, 50, 0.3]],
+};
+
+/**
+ * デルタ波の極性（左側自由壁の副伝導路：I で陰性、V1 で陽性 = A 型）と振幅 mV（デルタ波の終わり）。
+ * 早期興奮の程度（融合の時間）が長いほど、デルタ波は大きく長くなる。
+ */
+const DELTA_MV: Record<EcgLead, number> = { I: -0.25, II: 0.2, V1: 0.35 };
+/** 心室の興奮がすべて副伝導路から（His 経由が届かない）ときのデルタ波の長さ ms */
+const FULL_PREEXCITATION_MS = 60;
 
 export class SurfaceEcg {
-  private beatActivated = 0;
-  private lastActTime = -Infinity;
-  private f = 0;
+  private dipole: Vec3 = { x: 0, y: 0, z: 0 };
 
-  /**
-   * 毎サンプル呼ぶ。newActivations = このサンプル間に活性化した頂点数、
-   * viableCount = 興奮しうる頂点数。
-   */
-  update(now: number, newActivations: number, viableCount: number) {
-    if (newActivations > 0) {
-      if (now - this.lastActTime > BEAT_GAP_MS) this.beatActivated = 0;
-      this.beatActivated += newActivations;
-      this.lastActTime = now;
-    }
-    this.f = viableCount > 0 ? Math.min(1, this.beatActivated / viableCount) : 0;
+  /** 毎サンプル、心房の電気ベクトルを渡す */
+  setAtrialDipole(p: Vec3) { this.dipole = p; }
+
+  /** 心房成分 mV */
+  atrial(lead: EcgLead): number {
+    const l = LEAD_VECTOR[lead], p = this.dipole;
+    return ATRIAL_ECG_GAIN * (p.x * l.x + p.y * l.y + p.z * l.z);
   }
 
-  /** P 波成分 mV */
-  pWave(now: number, lead: EcgLead): number {
-    if (this.lastActTime === -Infinity) return 0;
-    const quiet = now - this.lastActTime;
-    const decay = quiet <= 2 ? 1 : Math.exp(-(quiet - 2) / P_DECAY_MS);
-    const a = P_AMP[lead];
-    return decay * (a.mono * Math.sin(Math.PI * this.f) + a.bi * Math.sin(2 * Math.PI * this.f));
-  }
-
-  /** QRS・T 成分 mV。vTimes = 心室興奮（QRS 開始）時刻 */
-  ventricular(now: number, lead: EcgLead, vTimes: number[]): number {
+  /** 心室成分 mV（QRS・デルタ波・T） */
+  ventricular(now: number, lead: EcgLead, beats: VentricularBeat[]): number {
     let s = 0;
-    for (const v of vTimes) {
-      const dt = now - v;
-      if (dt < -30 || dt > QT_MS + 150) continue;
+    for (const b of beats) {
+      const dt = now - b.time;
+      if (dt < -30 || dt > QT_MS + 200) continue;
+      if (b.source === 'pace') { s += gaussSum(dt, PACED_QRS_T[lead]); continue; }
+      if (b.source === 'ap') {
+        const delta = Math.min(FULL_PREEXCITATION_MS, (b.hisArrival ?? b.time + FULL_PREEXCITATION_MS) - b.time);
+        const amp = DELTA_MV[lead] * (delta / FULL_PREEXCITATION_MS + 0.3) / 1.3;
+        // デルタ波：緩やかに立ち上がり、His 経由の QRS が始まるまで続く
+        if (dt >= 0) s += dt < delta ? amp * (dt / delta) : amp * Math.exp(-(dt - delta) / 20);
+        s += gaussSum(dt - delta, QRS_T[lead]);
+        continue;
+      }
       s += gaussSum(dt, QRS_T[lead]);
     }
     return s;
   }
 
-  sample(now: number, lead: EcgLead, vTimes: number[]): number {
-    return this.pWave(now, lead) + this.ventricular(now, lead, vTimes);
+  sample(now: number, lead: EcgLead, beats: VentricularBeat[]): number {
+    return this.atrial(lead) + this.ventricular(now, lead, beats);
   }
 
-  reset() { this.beatActivated = 0; this.lastActTime = -Infinity; this.f = 0; }
+  reset() { this.dipole = { x: 0, y: 0, z: 0 }; }
 }

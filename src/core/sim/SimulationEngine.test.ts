@@ -32,7 +32,7 @@ const peakAmp = (eng: SimulationEngine, id: string) => {
 /** 心室成分を混ぜずに心房の順序だけを見る */
 function atrialOnly(ms: number) {
   const eng = new SimulationEngine(model);
-  eng.av.params.ahMs = 10_000;
+  eng.conduction.blocked = true;
   eng.tick(ms);
   return eng;
 }
@@ -52,7 +52,7 @@ describe('SimulationEngine（両心房・洞調律）', () => {
   it('CS を浅くすると遠位電極の興奮が早くなる（位置で波形が変わる）', () => {
     const deep = atrialOnly(300);
     const shallow = new SimulationEngine(model);
-    shallow.av.params.ahMs = 10_000;
+    shallow.conduction.blocked = true;
     shallow.setPlacement('cs', { kind: 'path', s: 30, heightMm: 0 });
     shallow.tick(300);
     expect(atrialPeak(deep, 'CS 1-2') - atrialPeak(shallow, 'CS 1-2')).toBeGreaterThan(10);
@@ -61,10 +61,12 @@ describe('SimulationEngine（両心房・洞調律）', () => {
   it('His の H は房室結節部位の興奮 + AH、RV の V は + AH + HV の後', () => {
     const eng = new SimulationEngine(model);
     eng.tick(400);
-    const tA = eng.av.aTimes[0];
-    expect(eng.av.hTimes[0]).toBeCloseTo(tA + AH_MS);
-    expect(eng.av.vTimes[0]).toBeCloseTo(tA + AH_MS + HV_MS);
-    expect(peakTime(eng, ch(eng, 'RV 1-2'), 0)).toBeGreaterThan(eng.av.vTimes[0]);
+    const c = eng.conduction;
+    const tA = c.aTimes[0];
+    // 1 拍目は前の拍がないので減衰伝導なし
+    expect(c.hTimes[0]).toBeCloseTo(tA + AH_MS);
+    expect(c.vTimes[0]).toBeCloseTo(tA + AH_MS + HV_MS);
+    expect(peakTime(eng, ch(eng, 'RV 1-2'), 0)).toBeGreaterThan(c.vTimes[0]);
   });
 
   it('自由配置カテーテルは置くまで平坦、置くと信号が出て、外すと再び平坦', () => {
@@ -103,7 +105,7 @@ describe('SimulationEngine（両心房・洞調律）', () => {
 describe('寸法セット', () => {
   it('AF シナリオ用（afRemodeled）でも同じ順序で興奮する', () => {
     const eng = new SimulationEngine(loadParametricSync('afRemodeled'));
-    eng.av.params.ahMs = 10_000;
+    eng.conduction.blocked = true;
     eng.tick(300);
     const cs = ['CS 9-10', 'CS 1-2'].map((id) => atrialPeak(eng, id));
     expect(cs[1]).toBeGreaterThan(cs[0]);
@@ -119,5 +121,43 @@ describe('P 波幅（§4.2：一般心房筋の伝導速度の調整目標）', 
     const width = (last - first) * eng.sampleMs;
     expect(width).toBeGreaterThan(70);
     expect(width).toBeLessThan(120);
+  });
+});
+
+describe('刺激・洞結節・焦点（Phase 4）', () => {
+  it('HRA を 600 ms で刺激すると捕捉され、洞結節はリセットされて自発発火しない。全チャンネルに刺激アーチファクトが出る', () => {
+    const eng = new SimulationEngine(model);
+    eng.tick(100);
+    const times = [200, 800, 1400, 2000];
+    eng.pace('HRA', times);
+    eng.tick(2300);
+    const sinus = eng.sinusVertex;
+    // 最後の洞結節の興奮は最後の刺激の直後（刺激による捕捉）
+    expect(eng.ca.tissue.lastActivation[sinus]).toBeGreaterThan(2000);
+    expect(eng.ca.tissue.lastActivation[sinus]).toBeLessThan(2060);
+    // 刺激の時刻の付近で II にアーチファクト
+    const ii = ch(eng, 'II').buffer;
+    const at = (t: number) => ii.at(ii.length - 1 - Math.round((eng.time - t) / eng.sampleMs));
+    expect(Math.max(at(2000), at(2002))).toBeGreaterThan(0.5);
+  });
+
+  it('異所性興奮の焦点は周期 minCl〜maxCl ms で発火する', () => {
+    const eng = new SimulationEngine(model);
+    eng.sinusEnabled = false;
+    const v = model.anatomy.anchors.sinusNode.vertex;
+    eng.addFocus(v, 300, 300, 7);
+    eng.tick(1000);
+    expect(eng.ca.tissue.lastActivation[v]).toBeGreaterThan(850);
+  });
+
+  it('RV 刺激で心室が興奮する（副伝導路がなければ心房へは戻らない）', () => {
+    const eng = new SimulationEngine(model);
+    eng.sinusEnabled = false;
+    eng.pace('RV', [100]);
+    eng.tick(400);
+    expect(eng.conduction.vBeats.map((b) => b.source)).toEqual(['pace']);
+    let atrial = 0;
+    eng.ca.tissue.lastActivation.forEach((t) => { if (t >= 0) atrial++; });
+    expect(atrial).toBe(0);
   });
 });

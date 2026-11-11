@@ -42,6 +42,7 @@ export class EgmGenerator {
   private recent: Uint8Array;
   private activeCount = 0;
   private computedAt = NaN;
+  private centroid: Vec3;
 
   /** frontOnly = false で全頂点を電流源の候補にする（検証用） */
   constructor(readonly mesh: SurfaceMesh, readonly tissue: TissueState, readonly opts: { frontOnly?: boolean } = {}) {
@@ -59,6 +60,9 @@ export class EgmGenerator {
     this.source = new Float32Array(n);
     this.active = new Int32Array(n);
     this.recent = new Uint8Array(n);
+    let cx = 0, cy = 0, cz = 0;
+    for (let v = 0; v < n; v++) { cx += mesh.positions[3 * v]; cy += mesh.positions[3 * v + 1]; cz += mesh.positions[3 * v + 2]; }
+    this.centroid = { x: cx / n, y: cy / n, z: cz / n };
   }
 
   /** 時刻 now の電流源分布を計算する（同じ now では再計算しない） */
@@ -108,6 +112,24 @@ export class EgmGenerator {
       phi += this.source[v] / r;
     }
     return PHI_GAIN * phi;
+  }
+
+  /**
+   * 時刻 now の心房の電気ベクトル（電流双極子モーメント）p = Σ Iₘ,ᵥ (xᵥ − c)。
+   * Σ Iₘ ≈ 0 なので基準点 c にほぼ依存しない。体表 ECG の心房成分（P 波・粗動波）に使う。
+   */
+  dipole(now: number): Vec3 {
+    this.update(now);
+    const p = this.mesh.positions;
+    let x = 0, y = 0, z = 0, s = 0;
+    for (let i = 0; i < this.activeCount; i++) {
+      const v = this.active[i];
+      const q = this.source[v];
+      x += q * p[3 * v]; y += q * p[3 * v + 1]; z += q * p[3 * v + 2]; s += q;
+    }
+    // 残りの Σ Iₘ（数値誤差）の分を重心で差し引く
+    const c = this.centroid;
+    return { x: x - s * c.x, y: y - s * c.y, z: z - s * c.z };
   }
 
   /** 双極電位 mV = 電極 a の単極 − 電極 b の単極 */

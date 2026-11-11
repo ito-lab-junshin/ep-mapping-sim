@@ -75,6 +75,14 @@ export class CellularAutomaton {
     return true;
   }
 
+  /**
+   * 頂点 v を時刻 t に興奮させる予約（刺激伝導系からの逆行伝導・PV トリガー・ペーシング）。
+   * その時刻に不応期なら興奮しない（捕捉されない）。
+   */
+  excite(v: number, t: number) {
+    this.schedule(v, t);
+  }
+
   /** dt [ms] 進める */
   step(dt: number) {
     const t = this.tissue;

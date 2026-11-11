@@ -4,15 +4,17 @@ import { applyPreferentialPathways } from '../propagation/preferentialPathways';
 import { EgmGenerator } from '../egm/EgmGenerator';
 import { RingBuffer } from '../egm/RingBuffer';
 import { farFieldV, hisSpike, localV } from '../egm/templates';
-import { AvConduction } from '../conduction/AvConduction';
+import { ConductionSystem } from '../conduction/ConductionSystem';
+import { RhythmMonitor } from '../rhythm/RhythmMonitor';
+import { seededRandom, Stimulator, type StimTarget } from '../pacing/Stimulator';
 import { SurfaceEcg } from '../ecg/SurfaceEcg';
 import type { BiatrialModel } from '../geometry/parametric/atria';
 import { MeshQuery } from '../geometry/MeshQuery';
 import { buildGuidedPaths, nearestS, type GuidedPath, type GuidedPathId } from '../catheter/guidedPaths';
 import { placeFree, placeOnPath, type Placement } from '../catheter/placement';
 import { catheterGroup, defaultCatheters, type CatheterSpec } from '../catheter/catalog';
-import { EGM_HISTORY_MS, MAP_DEFAULTS, SAMPLE_MS, SINUS_CYCLE_MS, TEMPLATE_AMPLITUDE_MV } from '../params';
-import { scale } from '../geometry/parametric/sdf';
+import { EGM_HISTORY_MS, MAP_DEFAULTS, PACING_ARTIFACT_MV, SAMPLE_MS, SINUS_CYCLE_MS, TEMPLATE_AMPLITUDE_MV } from '../params';
+import { add, norm, scale } from '../geometry/parametric/sdf';
 
 export interface EngineOptions {
   sinusCycleMs?: number;
@@ -20,6 +22,17 @@ export interface EngineOptions {
 }
 
 const ECG_LEADS: EcgLead[] = ['I', 'II', 'V1'];
+
+/** 刺激部位（docs/DESIGN.md §5.6） */
+export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'ABL' | 'RV';
+
+export const PACING_SITE_LABEL: Record<PacingSite, string> = {
+  HRA: 'HRA', CS_PROX: 'CS 近位（9-10）', CS_DIST: 'CS 遠位（1-2）', CS_OS: 'CS 口',
+  LOW_LATERAL_RA: '低位外側 RA', ABL: 'ABL 先端', RV: 'RV（心室）',
+};
+
+/** 異所性興奮の焦点（AF の PV トリガーなど）：周期 minCl〜maxCl ms でランダムに発火 */
+export interface Focus { vertex: number; minClMs: number; maxClMs: number; next: number; rng: () => number }
 
 /**
  * 1 症例ぶんのシミュレーション（UI 非依存）。
@@ -31,7 +44,14 @@ export class SimulationEngine {
   readonly mesh: SurfaceMesh;
   readonly ca: CellularAutomaton;
   readonly egm: EgmGenerator;
-  readonly av = new AvConduction();
+  /** 刺激伝導系（房室結節の経路・His・心室・副伝導路） */
+  readonly conduction: ConductionSystem;
+  readonly stimulator = new Stimulator();
+  foci: Focus[] = [];
+  sinusEnabled = true;
+  /** 調律の判定（見張り頂点 = CS 口付近の心房と、心室の拍） */
+  readonly rhythm = new RhythmMonitor();
+  readonly monitorVertex: number;
   readonly ecg = new SurfaceEcg();
   readonly query: MeshQuery;
   readonly paths: Record<GuidedPathId, GuidedPath>;
@@ -45,7 +65,12 @@ export class SimulationEngine {
 
   private acc = 0;
   private lastSinus = -Infinity;
-  private lastNodeActivation = -1;
+  /** 経路の入口頂点・副伝導路の心房付着部で最後に見た興奮時刻 */
+  private lastEntry: number[] = [];
+  private lastApSeen = -1;
+  private lastArtifact = -Infinity;
+  private lastMonitorSeen = -1;
+  private lastVSeen = -Infinity;
   private sampler: (() => number)[] = [];
   /** 現在のサンプルでの、電極ごとの単極電位 mV（メッシュ上に置かれたカテーテル） */
   private uni = new Map<string, Float32Array>();
@@ -62,11 +87,13 @@ export class SimulationEngine {
     this.sinusVertex = model.anatomy.anchors.sinusNode.vertex;
     this.avNodeVertex = model.anatomy.anchors.avNode.vertex;
     this.sinusCycleMs = opts.sinusCycleMs ?? SINUS_CYCLE_MS;
+    this.conduction = new ConductionSystem(this.avNodeVertex);
+    this.monitorVertex = model.anatomy.anchors.csOs.vertex;
     const capacity = Math.ceil((opts.historyMs ?? EGM_HISTORY_MS) / SAMPLE_MS);
 
     for (const lead of ECG_LEADS) {
       this.channels.push({ id: lead, catheterId: 'ecg', group: 'ecg', mode: 'surface', buffer: new RingBuffer(capacity), gain: 1 });
-      this.sampler.push(() => this.ecg.sample(this.time, lead, this.av.vTimes));
+      this.sampler.push(() => this.ecg.sample(this.time, lead, this.conduction.vBeats));
     }
 
     this.specs = defaultCatheters(model);
@@ -145,25 +172,63 @@ export class SimulationEngine {
   /** sampleMs だけ進め、全チャンネルを 1 サンプル記録する */
   stepOnce() {
     const ca = this.ca, t = ca.tissue;
-    if (ca.time - this.lastSinus >= this.sinusCycleMs) {
-      ca.stimulate(this.sinusVertex);
-      this.lastSinus = ca.time;
+    const until = ca.time + this.sampleMs;
+    // 洞結節：最後に洞結節の部位が興奮してから（ペーシング・頻拍の興奮でもリセットされる）周期が経ったら発火
+    if (this.sinusEnabled) {
+      const la = t.lastActivation[this.sinusVertex];
+      const last = Math.max(this.lastSinus, la >= 0 ? la : -Infinity); // -1 は未興奮
+      if (ca.time - last >= this.sinusCycleMs) {
+        ca.stimulate(this.sinusVertex);
+        this.lastSinus = ca.time;
+      }
     }
+    // 異所性興奮の焦点（PV トリガーなど）
+    for (const f of this.foci) {
+      while (f.next <= until) {
+        ca.excite(f.vertex, f.next);
+        f.next += f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
+      }
+    }
+    // 予約された刺激
+    for (const st of this.stimulator.take(until)) {
+      if (st.target.kind === 'atrium') ca.excite(st.target.vertex, st.time);
+      else this.conduction.paceVentricle(st.time);
+      this.lastArtifact = st.time;
+    }
+    // 刺激伝導系（His・心室・逆行伝導）
+    this.conduction.advance(until);
+    for (const ex of this.conduction.takeExits(until)) ca.excite(ex.vertex, ex.time);
+
     const prev = ca.time;
     ca.step(this.sampleMs);
 
-    let newActs = 0, viable = 0;
-    for (let v = 0; v < t.phase.length; v++) {
-      if (t.viability[v] > 0) viable++;
-      if (t.lastActivation[v] >= prev) newActs++;
+    // 房室結節の経路の入口頂点・副伝導路の心房付着部に興奮が届いたか
+    this.conduction.pathways.forEach((p, k) => {
+      const la = t.lastActivation[p.vertex];
+      if (la > (this.lastEntry[k] ?? -1)) {
+        this.lastEntry[k] = la;
+        this.conduction.atrialArrival(k, la);
+      }
+    });
+    const ap = this.conduction.ap;
+    if (ap) {
+      let first = Infinity;
+      for (const v of ap.vertices) if (t.lastActivation[v] > this.lastApSeen) first = Math.min(first, t.lastActivation[v]);
+      if (first < Infinity) {
+        this.lastApSeen = Math.max(...ap.vertices.map((v) => t.lastActivation[v]));
+        this.conduction.apAtrialArrival(first);
+      }
     }
-    this.ecg.update(ca.time, newActs, viable);
 
-    const node = t.lastActivation[this.avNodeVertex];
-    if (node > this.lastNodeActivation) {
-      this.lastNodeActivation = node;
-      this.av.atrialArrival(node);
-    }
+    // 調律の判定
+    const m = t.lastActivation[this.monitorVertex];
+    if (m > this.lastMonitorSeen) { this.lastMonitorSeen = m; this.rhythm.recordAtrial(m); }
+    for (const b of this.conduction.vBeats) if (b.time > this.lastVSeen) { this.lastVSeen = b.time; this.rhythm.recordVentricular(b.time); }
+    this.rhythm.update(ca.time, this.lastStimulusTime, this.stimulator.pending > 0);
+
+    // 体表 ECG の心房成分（電気ベクトル）
+    this.ecg.setAtrialDipole(this.egm.dipole(ca.time));
+
 
     // 電極ごとの単極電位を 1 回だけ計算し、双極チャンネルはその差で作る
     for (const spec of this.specs) {
@@ -176,7 +241,50 @@ export class SimulationEngine {
         hist?.[e].push(u[e]);
       }
     }
-    for (let i = 0; i < this.channels.length; i++) this.channels[i].buffer.push(this.sampler[i]());
+    // 刺激アーチファクト（この刻みで刺激が入ったら全チャンネルに 1 サンプル）
+    const art = this.lastArtifact > prev && this.lastArtifact <= ca.time ? PACING_ARTIFACT_MV : 0;
+    for (let i = 0; i < this.channels.length; i++) this.channels[i].buffer.push(this.sampler[i]() + art);
+  }
+
+  /** 最後に届けた刺激の時刻（なければ −∞） */
+  get lastStimulusTime(): number {
+    const d = this.stimulator.delivered;
+    return d.length ? d[d.length - 1] : -Infinity;
+  }
+
+  /** 刺激部位 → 刺激の対象（心房の頂点か心室） */
+  siteTarget(site: PacingSite): StimTarget {
+    if (site === 'RV') return { kind: 'ventricle' };
+    const a = this.model.anatomy;
+    const nearest = (cathId: string, electrode: number, fallback: number) => {
+      const c = this.catheter(cathId);
+      return c?.placed ? this.query.closestPoint(c.electrodes[electrode].position).vertex : fallback;
+    };
+    switch (site) {
+      case 'HRA': return { kind: 'atrium', vertex: nearest('hra', 0, a.anchors.sinusNode.vertex) };
+      case 'CS_PROX': return { kind: 'atrium', vertex: nearest('cs', 9, a.anchors.csOs.vertex) };
+      case 'CS_DIST': return { kind: 'atrium', vertex: nearest('cs', 0, a.anchors.csOs.vertex) };
+      case 'CS_OS': return { kind: 'atrium', vertex: a.anchors.csOs.vertex };
+      case 'ABL': return { kind: 'atrium', vertex: nearest('abl', 0, a.anchors.sinusNode.vertex) };
+      case 'LOW_LATERAL_RA': {
+        // RA 側壁の下部（分界稜より前方、IVC より上）
+        const p = add(a.ra.center, scale(norm({ x: -1, y: -0.55, z: 0.35 }), 60));
+        return { kind: 'atrium', vertex: this.query.closestPoint(p).vertex };
+      }
+    }
+    return { kind: 'ventricle' };
+  }
+
+  /** 部位 site を、時刻 times（シミュレーション時刻 ms）に刺激する予約 */
+  pace(site: PacingSite, times: number[], label?: string) {
+    const target = this.siteTarget(site);
+    this.stimulator.schedule(times.map((time) => ({ time, target, label })));
+  }
+
+  /** 異所性興奮の焦点を加える（seed で乱数を固定） */
+  addFocus(vertex: number, minClMs: number, maxClMs: number, seed = 1) {
+    const rng = seededRandom(seed);
+    this.foci.push({ vertex, minClMs, maxClMs, rng, next: this.time + minClMs + rng() * (maxClMs - minClMs) });
   }
 
   /** 電極の単極電位の履歴（環状・多極・ABL のみ。サンプル間隔 sampleMs、最後が現在） */
@@ -184,7 +292,7 @@ export class SimulationEngine {
     return this.uniHistory.get(catheterId)?.[electrode];
   }
 
-  private recentV(windowMs = 200) { return AvConduction.recent(this.av.vTimes, this.time, windowMs); }
+  private recentV(windowMs = 200) { return ConductionSystem.recent(this.conduction.vTimes, this.time, windowMs); }
 
   private makeSampler(spec: CatheterSpec, pair: [number, number]): () => number {
     const cath = spec.catheter;
@@ -207,7 +315,7 @@ export class SimulationEngine {
         const now = this.time;
         const u = this.uni.get(cath.id)!;
         let s = u[pair[0]] - u[pair[1]];
-        for (const h of AvConduction.recent(this.av.hTimes, now, 50)) s += hv.h * hisSpike(now - h);
+        for (const h of ConductionSystem.recent(this.conduction.hTimes, now, 50)) s += hv.h * hisSpike(now - h);
         for (const v of this.recentV()) s += hv.v * farFieldV(now - v);
         return s;
       };
@@ -227,11 +335,18 @@ export class SimulationEngine {
 
   reset() {
     this.ca.reset();
-    this.av.reset();
+    this.conduction.reset();
+    this.stimulator.reset();
+    this.lastEntry = [];
+    this.lastApSeen = -1;
+    this.lastArtifact = -Infinity;
+    this.lastMonitorSeen = -1;
+    this.lastVSeen = -Infinity;
+    this.rhythm.reset();
+    for (const f of this.foci) f.next = f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
     this.ecg.reset();
     this.acc = 0;
     this.lastSinus = -Infinity;
-    this.lastNodeActivation = -1;
     for (const ch of this.channels) ch.buffer.clear();
     for (const h of this.uniHistory.values()) for (const b of h) b.clear();
   }

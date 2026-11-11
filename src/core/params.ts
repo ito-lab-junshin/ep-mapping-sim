@@ -98,3 +98,51 @@ export const MAP_DEFAULTS = {
   /** 自動取得で、既存の点からこの距離 mm 以内なら取り直さない */
   autoMinSpacingMm: 1.5,
 };
+
+/**
+ * 房室結節の経路・His・心室・副伝導路（Phase 4。docs/DESIGN.md §4.2・§5.3・§5.4 と一致させること）。
+ * 既存の値（AH 80 ms、速伝導路 ERP 320 ms、遅伝導路 ERP 200 ms、副伝導路の順行性 ERP 280 ms）以外は仮定値（教育用近似）。
+ *
+ * 経路の伝導時間 = 基本の AH + 減衰分。減衰分 = decrementMaxMs × exp(−(連結期 − ERP) / decrementTauMs)
+ * （ERP に近い早い期外刺激ほど AH が延びる。連結期 < ERP はブロック）
+ */
+export const AV_NODE = {
+  fast: { ahMs: AH_MS, erpMs: 320, decrementMaxMs: 40, decrementTauMs: 60, retroMs: 40, retroErpMs: 200 },
+  slow: { ahMs: 200, erpMs: 200, decrementMaxMs: 40, decrementTauMs: 60 },
+};
+/** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */
+export const HIS_ERP_MS = VENTRICLE_ERP_MS;
+/** 副伝導路（左側自由壁） */
+export const ACCESSORY_PATHWAY = {
+  /** 心房付着部 ↔ 心室付着部の伝導時間 */
+  conductionMs: 15,
+  antegradeErpMs: 280,
+  retrogradeErpMs: 250,
+  /** 心室の興奮開始（QRS 開始）から副伝導路の心室付着部（左室側壁の弁輪部）までの心室内伝導時間 */
+  ventricularDelayMs: 40,
+};
+/** 刺激（ペーシング）のアーチファクト mV（全チャンネルに 1 サンプル） */
+export const PACING_ARTIFACT_MV = 0.8;
+
+/** 刺激プロトコルの既定値（§5.6。教科書的な値） */
+export const PROTOCOL = {
+  s1Ms: 600,
+  s1Beats: 8,
+  /** S2 の開始 = S1 − 100 ms、刻み 10 ms、下限 */
+  s2StartOffsetMs: 100,
+  s2StepMs: 10,
+  s2MinMs: 150,
+  /** バースト：300 → 200 ms を 10 ms 刻み、各 10 拍 */
+  burstFromMs: 300,
+  burstToMs: 200,
+  burstStepMs: 10,
+  burstBeats: 10,
+  /** 1 列の刺激が終わってから次の列までの観察時間 ms。仮定値 */
+  observeMs: 1500,
+};
+
+/** 調律の判定（仮定値・教育用近似）：周期がこれ未満の興奮が、刺激をやめてから sustainMs 以上続けば頻拍 */
+export const RHYTHM = {
+  tachycardiaClMs: 400,
+  sustainMs: 5000,
+};
