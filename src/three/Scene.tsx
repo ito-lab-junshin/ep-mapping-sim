@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { ChamberMesh } from './ChamberMesh';
 import { CatheterMarkers } from './CatheterMarkers';
 import { PointMarkers } from './PointMarkers';
+import { AblationDevices } from './AblationDevices';
 import { MapLegend } from '../ui/MapLegend';
 import { referenceBeats } from '../core/mapping/annotation';
 import type { SystemTheme } from '../systems';
@@ -84,6 +85,7 @@ export function Scene() {
         <ChamberMesh key={engine.model.dimensions.id} engine={engine} theme={theme} view={view} focus={focus} />
         <CatheterMarkers key={`m-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
         <PointMarkers key={`p-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
+        <AblationDevices key={`a-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
         <AutoAcquire engine={engine} theme={theme} />
         <OrbitControls enableDamping target={[2, 0, -2]} enableRotate={!active} enableZoom={!active} />
       </Canvas>

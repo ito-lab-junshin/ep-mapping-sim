@@ -24,6 +24,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
     const v = engine.model.anatomy.anchors.slowPathway.vertex;
     return [{ id: 'slow-pathway-lesion', label: '遅伝導路の部位（Koch 三角の後下方）に病変がある', ok: engine.ca.tissue.viability[v] <= 0 }];
   },
+  energies: ['rf'],
   goals: [
     'His 束電位を記録し Koch 三角の範囲を把握する',
     '期外刺激で AH jump を確認する',

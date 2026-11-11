@@ -212,6 +212,8 @@ export interface ArrhythmiaScenario {
   structuralChecks(engine: SimulationEngine): CureCheck[];
   /** 教育用のゴール説明（例：PV 隔離の確認方法） */
   goals: string[];
+  /** 使えるエネルギー（クライオバルーン・PFA は PV 隔離の AF だけ） */
+  energies: EnergyId[];
 }
 
 /** 3D ビューの表示モード */

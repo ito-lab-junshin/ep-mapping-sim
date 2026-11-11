@@ -95,6 +95,7 @@ export const afScenario: ArrhythmiaScenario = {
     checks.push({ id: 'exit-block', label: '全 PV：exit block（PV 内を刺激しても LA に伝わらない）', ok: exitBlock(engine) });
     return checks;
   },
+  energies: ['rf', 'cryo', 'pfa'],
   goals: [
     '環状カテーテルで PV 電位を記録する',
     'PV 口周囲に連続した病変で隔離する',

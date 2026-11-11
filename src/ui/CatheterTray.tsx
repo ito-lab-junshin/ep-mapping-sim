@@ -1,6 +1,6 @@
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { ablateWithTip, catheterAvailable, placeCatheter, useEngine } from '../state/engine';
+import { catheterAvailable, placeCatheter, useEngine } from '../state/engine';
 import { CIRCULAR, CONTACT_THRESHOLD_MM } from '../core/params';
 import { catheterGroup, type CatheterSpec } from '../core/catheter/catalog';
 
@@ -27,7 +27,7 @@ function status(spec: CatheterSpec): string {
 /**
  * カテーテル一覧（§10）。選んだカテーテルを 3D 上で動かす。
  * 経路カテーテル（CS・His・HRA）は経路上の位置、自由配置（ABL・環状・多極）は表面上の任意の点。
- * 多極スプライン／グリッドはテーマの機能フラグで出し分ける。クライオバルーン・PFA は Phase 5。
+ * 多極スプライン／グリッドはテーマの機能フラグで出し分ける。クライオバルーン・PFA は通電欄で PV を選んで置く。
  */
 export function CatheterTray() {
   const theme = SYSTEMS[useSim((s) => s.system)];
@@ -88,10 +88,7 @@ export function CatheterTray() {
               <button onClick={() => placeCatheter(engine, sel.catheter.id, null)}>このカテーテルを外す</button>
             )}
             {sel.catheter.kind === 'ablation_tip' && (
-              <button style={{ borderColor: theme.colors.lesion }} disabled={sel.catheter.electrodes[0].contactVertex < 0}
-                onClick={() => ablateWithTip(engine)}>
-                {sel.catheter.electrodes[0].contactVertex < 0 ? '簡易通電（先端が接触していません）' : '簡易通電（半径 3 mm）'}
-              </button>
+              <p className="note">{sel.catheter.electrodes[0].contactVertex < 0 ? '先端が接触していません（押し込む）' : '先端が接触しています。通電は「通電（ablation）」欄から'}</p>
             )}
           </>
         ) : <p className="note">3D ビューの心房表面をクリックして置きます。</p>

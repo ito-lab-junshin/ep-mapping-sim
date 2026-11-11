@@ -95,6 +95,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
       { id: 'bidirectional', label: '両方向性ブロック（CS 口・低位外側 RA からの刺激が線を越えない）', ok: bidirectionalBlock(engine) },
     ];
   },
+  energies: ['rf'],
   goals: [
     'CS 近位→遠位の活性化順序とハロー電極で旋回方向を確認する',
     'CTI に三尖弁輪から下大静脈まで連続線を引く',

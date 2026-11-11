@@ -72,6 +72,7 @@ export function ChamberMesh({ engine, theme, view, focus }: Props) {
 
   useFrame((state) => {
     const t = engine.ca.tissue;
+    const partial = engine.ablation.field.transmurality;
     const now = engine.time;
     const tmp = new THREE.Color();
     const setRgb = (rgb: [number, number, number]) => tmp.setRGB(rgb[0], rgb[1], rgb[2]);
@@ -89,6 +90,7 @@ export function ChamberMesh({ engine, theme, view, focus }: Props) {
         else setRgb(voltageColor(x, settings.voltageScarMv, settings.voltageNormalMv, theme.colors.voltageRamp, theme.colors.scar));
       } else if (t.viability[v] <= 0) tmp.copy(lesion);
       else if (view === 'regions') tmp.copy(regionColor(mesh.regionOfVertex[v]));
+      else if (partial[v] > 0) tmp.copy(base).lerp(lesion, 0.25 + 0.4 * partial[v]); // 非貫壁性の病変（伝導は残る）
       else {
         const age = now - t.lastActivation[v];
         if (t.lastActivation[v] < 0 || age > 200) tmp.copy(base);

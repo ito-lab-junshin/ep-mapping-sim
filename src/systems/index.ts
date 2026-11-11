@@ -48,6 +48,8 @@ export interface SystemTheme {
     fillThreshold: string;
     lesionTag: string;         // 例: Visitag / AutoMark / Lesion Tag
     localImpedance?: string;   // 例: DirectSense
+    /** 病変指標の呼び方（features.ablationIndex のとき表示。尺度は独自：貫壁性 = 100 %） */
+    lesionIndex?: string;
   };
   features: {
     contactForce: boolean;         // 接触圧表示（RF 先端）
@@ -77,7 +79,7 @@ export const SYSTEMS: Record<MappingSystemId, SystemTheme> = {
     },
     pointMarker: { shape: 'sphere', sizeMm: 0.9 },
     terms: {
-      geometryAcquire: 'FAM（高速解剖マップ）', activationMap: 'LAT マップ', lesionTag: 'VisiTag 風タグ',
+      geometryAcquire: 'FAM（高速解剖マップ）', activationMap: 'LAT マップ', lesionTag: 'VisiTag 風タグ', lesionIndex: 'Ablation Index 風 病変指標',
       voltageMap: 'ボルテージマップ（bipolar）', propagationMap: '伝播マップ（propagation）', mapPoint: '取得点', fillThreshold: '補間の到達距離（fill threshold）',
     },
     features: {

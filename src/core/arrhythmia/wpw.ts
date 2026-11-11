@@ -40,6 +40,7 @@ export const wpwScenario: ArrhythmiaScenario = {
       { id: 'no-delta', label: 'デルタ波が消えた（直近の拍が His 経由だけ）', ok: noDelta },
     ];
   },
+  energies: ['rf'],
   goals: [
     '弁輪多極カテーテルで最早期部位を探す',
     'AV（または VA）融合部位で通電する',

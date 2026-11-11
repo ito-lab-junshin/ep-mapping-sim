@@ -1,13 +1,13 @@
 import { SYSTEMS } from '../systems';
 import { SCENARIOS } from '../core/arrhythmia';
-import { ENERGY_LABEL } from '../core/ablation/LesionModel';
 import { useSim } from '../state/store';
 import { MapControls } from './MapControls';
 import { StimulationPanel } from './StimulationPanel';
 import { CurePanel } from './CurePanel';
 import { CatheterTray } from './CatheterTray';
+import { AblationConsole } from './AblationConsole';
 import { ECG_LEAD_OPTIONS } from '../core/ecg/SurfaceEcg';
-import type { ArrhythmiaId, EcgLeadCount, EnergyId, MappingSystemId } from '../core/types';
+import type { ArrhythmiaId, EcgLeadCount, MappingSystemId } from '../core/types';
 
 const RHYTHM_LABEL: Record<string, string> = {
   sinus: '洞調律（sinus）', pacing: '刺激中・判定中（pacing）', tachycardia: '頻拍（tachycardia）',
@@ -35,12 +35,6 @@ export function ControlPanel() {
         </select>
       </label>
 
-      <label>エネルギー
-        <select value={s.energy} onChange={(e) => s.setEnergy(e.target.value as EnergyId)}>
-          {(Object.keys(ENERGY_LABEL) as EnergyId[]).map((e) => <option key={e} value={e}>{ENERGY_LABEL[e]}</option>)}
-        </select>
-      </label>
-
       <label>ジオメトリー
         <select value={s.geometryMode} onChange={(e) => s.setGeometryMode(e.target.value as 'acquire' | 'preset')}>
           <option value="preset">プリセットモデル</option>
@@ -57,7 +51,10 @@ export function ControlPanel() {
       <h2>刺激（pacing）</h2>
       <StimulationPanel />
 
-      <h2>通電と根治判定</h2>
+      <h2>通電（ablation）</h2>
+      <AblationConsole />
+
+      <h2>根治判定</h2>
       <CurePanel />
 
       <h2>マップ（mapping）</h2>

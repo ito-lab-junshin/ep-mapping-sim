@@ -1,5 +1,4 @@
 import { ProtocolSession, type ProtocolConfig } from '../core/pacing/ProtocolSession';
-import { ablateAt } from '../core/ablation/simpleAblation';
 import type { ArrhythmiaId, CureCheck } from '../core/types';
 import { SimulationEngine } from '../core/sim/SimulationEngine';
 import { loadParametricSync } from '../core/geometry/ChamberLoader';
@@ -144,17 +143,6 @@ export function updateProtocol() {
   const before = session.results.length + session.status;
   session.update();
   if (session.results.length + session.status !== before) useSim.getState().bumpProtocol();
-}
-
-/** ABL の先端で簡易通電する。先端が接触していなければ何もしない（戻り値 false） */
-export function ablateWithTip(engine: SimulationEngine): boolean {
-  const abl = engine.catheter('abl');
-  if (!abl?.placed || abl.electrodes[0].contactVertex < 0) return false;
-  ablateAt(engine, abl.electrodes[0].position);
-  const s = useSim.getState();
-  s.bumpPlacement();
-  s.setCureChecks(null);
-  return true;
 }
 
 /**
