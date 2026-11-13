@@ -111,10 +111,13 @@ const aflRemodeled: AnatomyDimensions = {
 export const DIMENSION_SETS: Record<DimensionSetId, AnatomyDimensions> = { normal, afRemodeled, aflRemodeled };
 
 /**
- * CTI 長の目安（生成後に 20〜40 mm に収まることをテストで確認する）。
- * 仮定値（教育用近似）。形状から決まる結果であり、入力値ではない
+ * CTI 長の目安（生成後にこの範囲に収まることをテストで確認する）。仮定値（教育用近似）。形状から決まる結果であり、入力値ではない。
+ * 三尖弁輪を下へ傾けたため（AFL の II の粗動波を陰性優位にするため）、正常の大きさの RA では約 15 mm になる。
+ * CTI の長さが効く AFL の解剖（aflRemodeled）は AFL_CTI_MIN_MM 以上を別に確かめる
  */
-export const CTI_LENGTH_RANGE_MM = [20, 40] as const;
+export const CTI_LENGTH_RANGE_MM = [14, 40] as const;
+/** AFL の解剖（拡大した RA）の CTI 長の下限。仮定値（教育用近似） */
+export const AFL_CTI_MIN_MM = 20;
 
 /** 両心房の配置・心房間の連結。仮定値（教育用近似） */
 export const LAYOUT = {

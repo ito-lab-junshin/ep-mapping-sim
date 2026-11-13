@@ -164,7 +164,7 @@ describe('通常型 AFL（CTI）', () => {
     }
   };
 
-  it('CS 口からのバーストで、三尖弁輪を反時計回りに旋回する粗動が誘発される（周期長 220〜260 ms、基線のない粗動波、2:1 伝導）', () => {
+  it('CS 口からのバーストで、三尖弁輪を反時計回りに旋回する粗動が誘発される（周期長 220〜260 ms、下壁誘導で陰性優位の基線のない粗動波、2:1 伝導）', () => {
     const r = tryInduce(engine(), aflCtiScenario, BURST);
     expect(r.induced).toBe(true);
     const e = r.engine;
@@ -176,10 +176,13 @@ describe('通常型 AFL（CTI）', () => {
     const ph = tricuspidRingPhases(e, cl).slice(1);
     for (let i = 1; i < ph.length; i++) expect(ph[i], ph.join(' ')).toBeGreaterThan(ph[i - 1]);
     // II の心房成分（粗動波）は基線に戻らず、絶えず続く（鋸歯状）。
-    // 極性（通常型は陰性が優位）はまだ再現できていない（LIMITATIONS）
-    const ii: number[] = [];
-    for (let i = 0; i < Math.round(cl / e.sampleMs); i++) { e.stepOnce(); ii.push(e.ecg.atrial('II')); }
+    // 通常型（反時計回り）は下壁誘導（II・III・aVF）で陰性が優位（陰性の面積 / 陽性の面積 ≧ 1.5）
+    const w: Record<'II' | 'III' | 'aVF', number[]> = { II: [], III: [], aVF: [] };
+    for (let i = 0; i < Math.round((2 * cl) / e.sampleMs); i++) { e.stepOnce(); for (const l of ['II', 'III', 'aVF'] as const) w[l].push(e.ecg.atrial(l)); }
+    const ii = w.II;
     expect(ii.filter((x) => Math.abs(x) > 0.01).length / ii.length).toBeGreaterThan(0.7);
+    const negPos = (a: number[]) => a.filter((x) => x < 0).reduce((s, x) => s - x, 0) / a.filter((x) => x > 0).reduce((s, x) => s + x, 0);
+    for (const l of ['II', 'III', 'aVF'] as const) expect(negPos(w[l]), l).toBeGreaterThan(1.5);
     // 房室結節（ERP 320 ms）は 2:1 で伝える
     const vcl = ConductionSystem.recent(e.conduction.vTimes, e.time, 3000);
     const vInt = vcl.slice(1).map((t, i) => t - vcl[i]);
