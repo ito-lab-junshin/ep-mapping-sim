@@ -118,6 +118,13 @@ export const MAP_DEFAULTS = {
 export const AV_NODE = {
   fast: { ahMs: AH_MS, erpMs: 320, decrementMaxMs: 40, decrementTauMs: 60, retroMs: 60, retroErpMs: 200 },
   slow: { ahMs: 200, erpMs: 200, decrementMaxMs: 40, decrementTauMs: 60 },
+  /**
+   * 心室刺激での逆行伝導（VA 伝導、Phase 7 の追補。仮定値・教育用近似）：心室 → His（vhMs）→ 共通路 → 速伝導路を逆行して心房へ。
+   * 結節の逆行時間 = baseMs + decrementMaxMs × exp(−(c − erpMs) / decrementTauMs)。c は His への到着から前回の逆行伝導の
+   * 終わりまでの回復時間（c < erpMs でブロック）。伝導が延びるほど次の回復時間が短くなり、逆行性 Wenckebach が出る。
+   * 刺激周期 600 ms で VA 約 130 ms、400 ms で VA が延びてから途絶える（逆行性 Wenckebach）、380 ms で 3:2
+   */
+  retrograde: { vhMs: 40, baseMs: 88, decrementMaxMs: 70, decrementTauMs: 70, erpMs: 245 },
 };
 /** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */
 export const HIS_ERP_MS = VENTRICLE_ERP_MS;

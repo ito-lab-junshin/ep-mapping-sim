@@ -151,15 +151,20 @@ describe('刺激・洞結節・焦点（Phase 4）', () => {
     expect(eng.ca.tissue.lastActivation[v]).toBeGreaterThan(850);
   });
 
-  it('RV 刺激で心室が興奮する（副伝導路がなければ心房へは戻らない）', () => {
+  it('RV 刺激で心室が興奮し、房室結節を逆行して心房へ戻る（求心性：房室結節の付近が最早、CS は近位から遠位）', () => {
     const eng = new SimulationEngine(model);
     eng.sinusEnabled = false;
     eng.pace('RV', [100]);
     eng.tick(400);
     expect(eng.conduction.vBeats.map((b) => b.source)).toEqual(['pace']);
-    let atrial = 0;
-    eng.ca.tissue.lastActivation.forEach((t) => { if (t >= 0) atrial++; });
-    expect(atrial).toBe(0);
+    const la = eng.ca.tissue.lastActivation;
+    let first = Infinity, firstV = -1;
+    la.forEach((t, v) => { if (t >= 0 && t < first) { first = t; firstV = v; } });
+    expect(first - 100).toBeGreaterThan(120); expect(first - 100).toBeLessThan(140);
+    expect(firstV).toBe(eng.avNodeVertex);
+    const cs = eng.catheter('cs')!;
+    const t = (i: number) => la[eng.query.closestPoint(cs.electrodes[i].position).vertex];
+    expect(t(9)).toBeLessThan(t(0));
   });
 });
 

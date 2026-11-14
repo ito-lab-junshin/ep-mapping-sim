@@ -1,4 +1,4 @@
-import { ACCESSORY_PATHWAY, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS } from '../params';
+import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS } from '../params';
 import { antegradeTime, fastPathway, type PathwayState } from './AvNode';
 
 /** 心室の興奮（QRS 開始）の記録 */
@@ -25,7 +25,8 @@ export interface AccessoryPathwayState {
 type Event =
   | { time: number; kind: 'common'; pathway: number }
   | { time: number; kind: 'ventricle'; source: VentricularBeat['source'] }
-  | { time: number; kind: 'apRetro' };
+  | { time: number; kind: 'apRetro' }
+  | { time: number; kind: 'hisRetro' };
 
 const KEEP = 16;
 
@@ -47,6 +48,8 @@ export class ConductionSystem {
 
   lastH = -Infinity;
   lastV = -Infinity;
+  /** 心室からの逆行の結節伝導が終わった時刻（逆行の回復時間の起点） */
+  private retroNodeEnd = -Infinity;
   /** 入口頂点の心房興奮時刻（伝導しなかったものも含む） */
   aTimes: number[] = [];
   hTimes: number[] = [];
@@ -109,6 +112,7 @@ export class ConductionSystem {
       const e = this.queue.shift()!;
       if (e.kind === 'common') this.onCommon(e.time, e.pathway);
       else if (e.kind === 'ventricle') this.onVentricle(e.time, e.source);
+      else if (e.kind === 'hisRetro') this.onHisRetro(e.time);
       else this.onApRetro(e.time);
     }
   }
@@ -145,12 +149,32 @@ export class ConductionSystem {
     this.lastV = t;
     this.vBeats.push({ time: t, source });
     if (this.vBeats.length > KEEP) this.vBeats.shift();
+    // 刺激による心室の興奮は His を逆行する（房室結節の逆行伝導、VA 伝導）
+    if (source === 'pace') this.schedule({ time: t + AV_NODE.retrograde.vhMs, kind: 'hisRetro' });
     // 副伝導路を逆行して心房へ（副伝導路自身が起こした興奮は不応期で戻らない）
     const ap = this.ap;
     if (ap) {
       const reach = t + (source === 'ap' ? 0 : ap.ventricularDelayMs);
       this.schedule({ time: reach, kind: 'apRetro' });
     }
+  }
+
+  /**
+   * His に逆行して届いた心室の興奮：His の不応期（順行の興奮と衝突）→ 結節の逆行（減衰伝導・逆行性 Wenckebach）→ 心房へ。
+   * 出口は逆行できる経路（速伝導路）の入口頂点
+   */
+  private onHisRetro(t: number) {
+    if (this.blocked || t - this.lastH < this.hisErpMs) return;
+    this.lastH = t;
+    const r = AV_NODE.retrograde;
+    const c = t - this.retroNodeEnd;
+    if (c < r.erpMs) return;
+    const p = this.pathways.find((x) => x.params.retroMs !== undefined);
+    if (!p) return;
+    const conduct = r.baseMs + r.decrementMaxMs * Math.exp(-(c - r.erpMs) / r.decrementTauMs);
+    this.retroNodeEnd = t + conduct;
+    p.last = t;
+    this.addExit({ time: t + conduct, vertex: p.vertex, via: p.params.name });
   }
 
   private onApRetro(t: number) {
@@ -181,6 +205,7 @@ export class ConductionSystem {
     for (const p of this.pathways) p.last = -Infinity;
     if (this.ap) this.ap.last = -Infinity;
     this.lastH = this.lastV = -Infinity;
+    this.retroNodeEnd = -Infinity;
     this.aTimes = []; this.hTimes = []; this.vBeats = [];
     this.queue = []; this.exits = []; this.exitLog = [];
   }
