@@ -3,7 +3,7 @@ import { buildBiatrialModel } from './atria';
 import { boundaryEdgeVertices } from './meshOps';
 import { REGIONS, REGION_ID, PV_NAMES, PV_OSTIUM, PV_SLEEVE, verticesInRegion, type RegionName } from '../regions';
 import { CellularAutomaton } from '../../propagation/CellularAutomaton';
-import { AFL_CTI_MIN_MM, CTI_LENGTH_RANGE_MM, DIMENSION_SETS } from './dimensions';
+import { CTI_LENGTH_RANGE_MM, DIMENSION_SETS } from './dimensions';
 import { dot, sub, v3 } from './sdf';
 
 const normal = buildBiatrialModel('normal');
@@ -169,7 +169,7 @@ describe('AFL 用の拡大した RA（aflRemodeled）', () => {
       }
     }
     expect(min).toBeGreaterThan(2);
-    expect(afl.anatomy.ctiLengthMm).toBeGreaterThanOrEqual(AFL_CTI_MIN_MM);
+    expect(afl.anatomy.ctiLengthMm).toBeGreaterThan(CTI_LENGTH_RANGE_MM[0]);
     expect(afl.anatomy.ctiLengthMm).toBeLessThan(CTI_LENGTH_RANGE_MM[1]);
   });
 

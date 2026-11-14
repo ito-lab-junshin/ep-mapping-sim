@@ -1,4 +1,4 @@
-import type { SurfaceMesh, TissueState } from '../types';
+import type { InterAtrialBridge, SurfaceMesh, TissueState } from '../types';
 import { CONDUCTION } from '../params';
 import { MinHeap } from '../util/MinHeap';
 
@@ -29,7 +29,7 @@ export class CellularAutomaton {
   readonly tissue: TissueState;
   private pending: Float64Array; // 頂点ごとの「興奮到達予定時刻」（Infinity = なし）
   private queue = new MinHeap();
-  private bridgeNb: { u: number; cv: number }[][];
+  private bridgeNb: { u: number; cv: number; ms?: number }[][] = [];
   /** 辺 v→u を共有する三角形の第 3 頂点（key = v * n + u） */
   private opposite = new Map<number, number[]>();
   time = 0;
@@ -58,11 +58,19 @@ export class CellularAutomaton {
       const a = idx[t], b = idx[t + 1], c = idx[t + 2];
       addOpp(a, b, c); addOpp(b, a, c); addOpp(b, c, a); addOpp(c, b, a); addOpp(a, c, b); addOpp(c, a, b);
     }
+    this.setBridges(mesh.bridges ?? []);
+  }
+
+  /**
+   * 心房間の連結を差し替える（症例の基質で、このエンジンだけの連結にするとき。メッシュの bridges は変えない）
+   */
+  setBridges(bridges: readonly InterAtrialBridge[]) {
+    const n = this.mesh.positions.length / 3;
     this.bridgeNb = Array.from({ length: n }, () => []);
-    for (const b of mesh.bridges ?? []) {
+    for (const b of bridges) {
       for (const [a, c] of b.pairs) {
-        this.bridgeNb[a].push({ u: c, cv: b.cvMmPerMs });
-        this.bridgeNb[c].push({ u: a, cv: b.cvMmPerMs });
+        this.bridgeNb[a].push({ u: c, cv: b.cvMmPerMs, ms: b.crossingMs });
+        this.bridgeNb[c].push({ u: a, cv: b.cvMmPerMs, ms: b.crossingMs });
       }
     }
   }
@@ -153,8 +161,10 @@ export class CellularAutomaton {
       }
       this.schedule(u, arrival);
     }
-    for (const { u, cv: bcv } of this.bridgeNb[v]) {
+    for (const { u, cv: bcv, ms } of this.bridgeNb[v]) {
       if (t.phase[u] !== 0 || t.viability[u] <= 0) continue;
+      // 渡る時間が決まっている連結は、その時間（傷害で viability が下がると長くなる）
+      if (ms !== undefined) { this.schedule(u, ta + ms / t.viability[u]); continue; }
       const dist = Math.hypot(p[3 * u] - p[3 * v], p[3 * u + 1] - p[3 * v + 1], p[3 * u + 2] - p[3 * v + 2]);
       const cv = bcv * t.viability[u];
       if (cv <= 0) continue;

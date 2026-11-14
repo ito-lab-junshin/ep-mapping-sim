@@ -62,8 +62,10 @@ export interface InterAtrialBridge {
   name: 'bachmann' | 'fossa_rim' | 'cs_musculature';
   /** [RA の頂点, LA の頂点] の組 */
   pairs: [number, number][];
-  /** 連結の伝導速度 mm/ms（遅延 = 頂点間距離 / この値） */
+  /** 連結の伝導速度 mm/ms（遅延 = 頂点間距離 / この値。crossingMs があればそちらを使う） */
   cvMmPerMs: number;
+  /** 連結を渡る時間 ms（頂点間の距離によらない。AFL の基質で使う。Phase 7 の追補） */
+  crossingMs?: number;
 }
 
 /** 頂点ごとの電気生理状態（セルオートマトン） */

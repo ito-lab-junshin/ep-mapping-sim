@@ -3,7 +3,8 @@ import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { avnrtScenario } from './avnrt';
 import { wpwScenario } from './wpw';
-import { aflCtiScenario, tricuspidRingPhases } from './aflCti';
+import { aflCtiCwScenario, aflCtiScenario, tricuspidRingPhases } from './aflCti';
+import { applyStandardAblation } from '../research/strategies';
 import { ConductionSystem } from '../conduction/ConductionSystem';
 import { afScenario, AF_TRIGGER_PVS, sleeveTip } from './af';
 import { PV_NAMES, PV_OSTIUM, REGION_ID, type PvName } from '../geometry/regions';
@@ -189,11 +190,22 @@ describe('通常型 AFL（CTI）', () => {
     expect(vInt.every((x) => x > cl * 1.5)).toBe(true);
   }, 300_000);
 
-  it('CTI に三尖弁輪から IVC までの線を引くと、両方向性ブロックになり非誘発', () => {
+  it('CTI に三尖弁輪から IVC までの RF の線（40 W・45 秒、画面と同じ通電）を引くと、両方向性ブロックになり非誘発（反時計回り・時計回りとも）', () => {
+    for (const sc of [aflCtiScenario, aflCtiCwScenario]) {
+      const e = new SimulationEngine(loadParametricSync('aflRemodeled')); sc.setupSubstrate(e);
+      applyStandardAblation(e, 'afl_cti', { energy: 'rf', powerW: 40, durationS: 45 });
+      const checks = verifyCure(e, sc, BURST);
+      expect(checks.every((c) => c.ok), `${sc.id} ${JSON.stringify(checks.filter((c) => !c.ok))}`).toBe(true);
+    }
+  }, 300_000);
+
+  it('簡易通電（半径 3 mm）の細い線では、線は完成と判定されても IVC 側で線の外側を回り込む粗動（周期長が長い）が残る', () => {
     const e = engine();
     ctiLine(e);
-    const checks = verifyCure(e, aflCtiScenario, BURST);
-    expect(checks.every((c) => c.ok), JSON.stringify(checks.filter((c) => !c.ok))).toBe(true);
+    expect(aflCtiScenario.structuralChecks(e).find((c) => c.id === 'cti-line')!.ok).toBe(true);
+    const r = tryInduce(e, aflCtiScenario, BURST);
+    expect(r.induced).toBe(true);
+    expect(r.engine.rhythm.currentCycleLength(r.engine.time)!).toBeGreaterThan(290);
   }, 300_000);
 
   it('線の中ほどに隙間が残ると、線は未完成と判定され、粗動は誘発される', () => {
@@ -202,5 +214,17 @@ describe('通常型 AFL（CTI）', () => {
     const checks = aflCtiScenario.structuralChecks(e);
     expect(checks.find((c) => c.id === 'cti-line')!.ok).toBe(false);
     expect(tryInduce(e, aflCtiScenario, BURST).induced).toBe(true);
+  }, 300_000);
+
+  it('時計回り（低位外側 RA からのバースト）では II の粗動波が陽性寄りになり、反時計回りと極性が逆になる（AFL の心房間の連結）', () => {
+    const r = tryInduce(new SimulationEngine(loadParametricSync('aflRemodeled')), aflCtiCwScenario, BURST);
+    expect(r.induced).toBe(true);
+    const e = r.engine;
+    e.tick(1500);
+    const cl = e.rhythm.currentCycleLength(e.time)!;
+    const ii: number[] = [];
+    for (let i = 0; i < Math.round((2 * cl) / e.sampleMs); i++) { e.stepOnce(); ii.push(e.ecg.atrial('II')); }
+    const negPos = ii.filter((x) => x < 0).reduce((a, x) => a - x, 0) / ii.filter((x) => x > 0).reduce((a, x) => a + x, 0);
+    expect(negPos).toBeLessThan(0.85);
   }, 300_000);
 });

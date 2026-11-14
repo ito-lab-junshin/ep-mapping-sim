@@ -102,4 +102,24 @@ describe('CellularAutomaton の精度と異方性', () => {
     for (let i = 0; i < 20; i++) ca.step(1);
     expect(ca.tissue.lastActivation[b]).toBeCloseTo(dist / 2.0, 3);
   });
+
+  it('渡る時間（crossingMs）が決まっている連結は距離によらずその時間で伝え、setBridges でエンジンごとに差し替えられる', () => {
+    const base = makeEllipsoidChamber('LA', { x: 10, y: 10, z: 10 }, 8);
+    const n = base.positions.length / 3;
+    const a = 0, b = n - 1;
+    const mesh = { ...base, neighbors: base.neighbors.map(() => new Int32Array(0)), bridges: [{ name: 'bachmann' as const, pairs: [[a, b] as [number, number]], cvMmPerMs: 2.0 }] };
+    const ca = new CellularAutomaton(mesh);
+    ca.setBridges([{ name: 'bachmann', pairs: [[a, b]], cvMmPerMs: 2.0, crossingMs: 5 }]);
+    ca.stimulate(a);
+    for (let i = 0; i < 20; i++) ca.step(1);
+    expect(ca.tissue.lastActivation[b]).toBeCloseTo(5, 3);
+    // メッシュの連結は変わらない
+    expect(mesh.bridges[0]).not.toHaveProperty('crossingMs');
+    // 連結を外すと伝わらない
+    const ca2 = new CellularAutomaton(mesh);
+    ca2.setBridges([]);
+    ca2.stimulate(a);
+    for (let i = 0; i < 20; i++) ca2.step(1);
+    expect(ca2.tissue.lastActivation[b]).toBe(-1);
+  });
 });

@@ -1,4 +1,5 @@
-import type { ArrhythmiaScenario, LearningGoal } from '../types';
+import type { ArrhythmiaScenario, InterAtrialBridge, LearningGoal } from '../types';
+import { LAYOUT } from '../geometry/parametric/dimensions';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID } from '../geometry/regions';
 import { AFL_SUBSTRATE, CONDUCTION } from '../params';
@@ -15,6 +16,33 @@ export interface AflParams {
   cristaTransverseCv: number;
   /** RA（CTI・稜・大静脈以外）の伝導速度 */
   raCv: number;
+}
+
+/**
+ * AFL の症例の心房間の連結（AFL_SUBSTRATE.interatrialCrossingMs）：Bachmann 束はそのまま、CS 筋束は LA 下部の中央へ、
+ * どちらも同じ時間で渡す。卵円窩縁は置かない。メッシュの連結（洞調律の症例が使う）は変えない
+ */
+export function aflBridges(engine: SimulationEngine, crossingMs = AFL_SUBSTRATE.interatrialCrossingMs): InterAtrialBridge[] {
+  const mesh = engine.mesh, P = mesh.positions, nLa = mesh.parts![0].vertexCount;
+  const bridges = mesh.bridges ?? [];
+  const bb = bridges.find((b) => b.name === 'bachmann');
+  const cs = bridges.find((b) => b.name === 'cs_musculature');
+  const out: InterAtrialBridge[] = [];
+  if (bb) out.push({ ...bb, crossingMs });
+  if (cs) {
+    // LA 下部の中央：高さ + 0.3 × LA の中心からの水平距離が最小の頂点と、そのまわり（連結の範囲の半径）
+    const c = engine.model.anatomy.la.center;
+    let best = 0, bs = Infinity;
+    for (let v = 0; v < nLa; v++) {
+      const s = P[3 * v + 1] + 0.3 * Math.hypot(P[3 * v] - c.x, P[3 * v + 2] - c.z);
+      if (s < bs) { bs = s; best = v; }
+    }
+    const la: number[] = [];
+    for (let v = 0; v < nLa; v++) if (Math.hypot(P[3 * v] - P[3 * best], P[3 * v + 1] - P[3 * best + 1], P[3 * v + 2] - P[3 * best + 2]) <= LAYOUT.bridgeRadius) la.push(v);
+    const ras = [...new Set(cs.pairs.map(([r]) => r))];
+    out.push({ name: 'cs_musculature', pairs: ras.map((r, i) => [r, la[i % la.length]] as [number, number]), cvMmPerMs: cs.cvMmPerMs, crossingMs });
+  }
+  return out;
 }
 
 /** RA の頂点 */
@@ -86,6 +114,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
   induction: { kind: 'burst', site: 'CS_OS' },
   setupSubstrate(engine) {
     applyAflSubstrate(engine);
+    engine.ca.setBridges(aflBridges(engine));
     // ハロー 20 極を三尖弁輪の側壁に置く（CS と合わせて旋回方向を読む）
     engine.setPlacement('halo', { kind: 'path', s: engine.paths.halo.defaultS, heightMm: 1 });
   },
