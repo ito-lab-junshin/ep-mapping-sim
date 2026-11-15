@@ -4,6 +4,7 @@ import { PV_NAMES, type PvName } from '../geometry/regions';
 import { seededRandom } from '../pacing/Stimulator';
 import { AF_SUBSTRATE, AF_TYPE_IDS, type AfType } from '../params';
 import { raBody, svcIsolated, svcTip, svcVertices } from './svc';
+import { applyPersistentSubstrate, seedPosteriorRotor } from './persistent';
 import { cloneWithSubstrate, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
 
@@ -18,6 +19,7 @@ export function afTypeOf(options?: CaseOptions): AfType {
 export const AF_TYPE_LABEL: Record<AfType, string> = {
   pv: '発作性（PV トリガー）',
   pvSvc: '発作性（PV と SVC のトリガー）',
+  persistent: '持続性（後壁の低電位領域）',
 };
 const hasSvcTrigger = (engine: SimulationEngine) => afTypeOf(engine.caseOptions) === 'pvSvc';
 /** SVC のトリガーがある型のゴールか */
@@ -81,6 +83,12 @@ export const afScenario: ArrhythmiaScenario = {
         t.erp[v] = AF_SUBSTRATE.svcSleeveErpMs;
       }
       engine.addFocus(svcTip(engine), AF_SUBSTRATE.svcTriggerClMs[0], AF_SUBSTRATE.svcTriggerClMs[1], 201);
+    }
+    // 持続性 AF（AF-3）：後壁の低電位領域に固定した旋回。少し進めてから旋回を始める（症例は AF が続いた状態で始まる）
+    if (type === 'persistent') {
+      const s = applyPersistentSubstrate(engine);
+      engine.tick(AF_SUBSTRATE.persistent.seedAtMs);
+      seedPosteriorRotor(engine, s);
     }
   },
   structuralChecks(engine) {

@@ -204,11 +204,38 @@ export const AF_SUBSTRATE = {
   svcSleeveCv: 0.5,
   svcSleeveErpMs: 180,
   svcTriggerClMs: [150, 250] as const,
+  /**
+   * 持続性 AF（AF-3、AF の型 persistent）：LA 後壁の低電位領域に固定した旋回。すべて仮定値（教育用近似）。
+   * 中心の瘢痕 → 遅い伝導の輪（channel）→ 線維化の輪（出口 1 か所）。全体の径 約 31 mm（後壁の約 3 × 3 cm）。
+   * channel を回る周期は 約 2π × 9.5 mm / 0.25 mm/ms ≒ 240 ms（ERP 160 ms より長いので旋回が続く）
+   */
+  persistent: {
+    coreRadiusMm: 6,
+    channelOuterMm: 13,
+    insulationWidthMm: 2.5,
+    exitGapMm: 6,
+    /** 出口の向き（後壁の x–y 面の角度。π = 右（−x）、右肺静脈の側） */
+    exitAngleRad: Math.PI,
+    channelCv: 0.25,
+    channelErpMs: 160,
+    /** channel の組織の電位係数（正常 2.5 に対する比で EGM の振幅が下がる）。ボルテージマップで 0.1〜0.5 mV に入る値 */
+    channelVoltage: [0.2, 0.4] as const,
+    scarVoltage: 0.05,
+    /** 旋回を始めるときの位相の周期 ms（channel を一周する時間の目安） */
+    seedCycleMs: 240,
+    /** 旋回を始める時刻 ms（症例を作るときに少し進めてから） */
+    seedAtMs: 300,
+    /** 後壁隔離の判定：線維化の輪からこの距離 mm より外側を「LA の残り」とする */
+    isolationMarginMm: 8,
+    /** 中心の位置の指定（useCenterHint = 1 のとき、この点に最も近い LA の表面。試算用） */
+    useCenterHint: 0,
+    centerHint: [0, 0, 0] as number[],
+  },
 };
 
-/** AF の型（症例の選択肢、§5.1）：pv = PV トリガーだけ（発作性、既定）、pvSvc = PV と SVC のトリガー（AF-2） */
-export type AfType = 'pv' | 'pvSvc';
-export const AF_TYPE_IDS: AfType[] = ['pv', 'pvSvc'];
+/** AF の型（症例の選択肢、§5.1）：pv = PV トリガーだけ（発作性、既定）、pvSvc = PV と SVC のトリガー（AF-2）、persistent = 持続性（後壁の低電位領域の旋回、AF-3） */
+export type AfType = 'pv' | 'pvSvc' | 'persistent';
+export const AF_TYPE_IDS: AfType[] = ['pv', 'pvSvc', 'persistent'];
 
 /**
  * 通常型 AFL の基質（§5.2）。解剖は拡大した RA（aflRemodeled：RA と三尖弁輪が正常の 1.2 倍）。
