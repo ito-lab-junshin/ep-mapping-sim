@@ -1,13 +1,28 @@
-import type { ArrhythmiaScenario, CureCheck } from '../types';
+import type { ArrhythmiaScenario, CaseOptions, CureCheck, GoalContext } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import { PV_NAMES, type PvName } from '../geometry/regions';
 import { seededRandom } from '../pacing/Stimulator';
-import { AF_SUBSTRATE } from '../params';
+import { AF_SUBSTRATE, AF_TYPE_IDS, type AfType } from '../params';
+import { raBody, svcIsolated, svcTip, svcVertices } from './svc';
 import { cloneWithSubstrate, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
 
 export { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
 import { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
+
+export function afTypeOf(options?: CaseOptions): AfType {
+  const t = options?.afType;
+  return t && AF_TYPE_IDS.includes(t) ? t : 'pv';
+}
+/** AF の型の表示名 */
+export const AF_TYPE_LABEL: Record<AfType, string> = {
+  pv: '発作性（PV トリガー）',
+  pvSvc: '発作性（PV と SVC のトリガー）',
+};
+const hasSvcTrigger = (engine: SimulationEngine) => afTypeOf(engine.caseOptions) === 'pvSvc';
+/** SVC のトリガーがある型のゴールか */
+const svcGoal = ({ engine }: GoalContext) => hasSvcTrigger(engine);
+
 
 /** トリガーを置く PV（最も多い上肺静脈 2 本） */
 export const AF_TRIGGER_PVS: PvName[] = ['LSPV', 'RSPV'];
@@ -28,7 +43,9 @@ export const afScenario: ArrhythmiaScenario = {
   chambers: ['LA'],
   anatomy: 'afRemodeled',
   induction: { kind: 'spontaneous', site: 'CS_PROX' },
-  setupSubstrate(engine) {
+  setupSubstrate(engine, options) {
+    const type = afTypeOf(options);
+    engine.caseOptions = { ...engine.caseOptions, ...options, afType: type };
     const t = engine.ca.tissue;
     const n = t.erp.length;
     // ERP の斑状のばらつき：乱数をメッシュ上でなめらかにし、範囲 160〜200 ms に伸ばす
@@ -57,6 +74,14 @@ export const afScenario: ArrhythmiaScenario = {
     // トリガー
     engine.foci = [];
     AF_TRIGGER_PVS.forEach((pv, i) => engine.addFocus(sleeveTip(engine, pv), AF_SUBSTRATE.triggerClMs[0], AF_SUBSTRATE.triggerClMs[1], 101 + i));
+    // 非 PV トリガー（AF-2）：SVC の心筋スリーブの先端
+    if (type === 'pvSvc') {
+      for (const v of svcVertices(engine)) {
+        t.conductionVelocity[v] = AF_SUBSTRATE.svcSleeveCv;
+        t.erp[v] = AF_SUBSTRATE.svcSleeveErpMs;
+      }
+      engine.addFocus(svcTip(engine), AF_SUBSTRATE.svcTriggerClMs[0], AF_SUBSTRATE.svcTriggerClMs[1], 201);
+    }
   },
   structuralChecks(engine) {
     const viab = engine.ca.tissue.viability;
@@ -66,6 +91,10 @@ export const afScenario: ArrhythmiaScenario = {
       return { id: `entrance-${pv}`, label: `${pv}：entrance block（PV 口を一周する病変で隔離）`, ok: separated(engine.mesh, viab, body, targets) };
     });
     checks.push({ id: 'exit-block', label: '全 PV：exit block（PV 内を刺激しても LA に伝わらない）', ok: exitBlock(engine) });
+    if (hasSvcTrigger(engine)) {
+      checks.push({ id: 'entrance-SVC', label: 'SVC：entrance block（SVC–RA 接合部を一周する病変で隔離）', ok: svcIsolated(engine) });
+      checks.push({ id: 'exit-block-SVC', label: 'SVC：exit block（SVC 内を刺激しても RA に伝わらない）', ok: svcExitBlock(engine) });
+    }
     return checks;
   },
   energies: ['rf', 'cryo', 'pfa'],
@@ -102,8 +131,51 @@ export const afScenario: ArrhythmiaScenario = {
       // 刺激したときに、環状カテーテルが接触していた PV がすでに隔離されていたこと
       achieved: ({ events }) => events.some((e) => e.kind === 'protocol' && e.site === 'CIRC' && e.contact && e.circPvIsolated),
     },
+    // ── AF の型 pvSvc（AF-2：非 PV トリガー）だけのゴール ──
+    {
+      id: 'svc-potential', label: 'PVI の後も続く AF で、環状カテーテルを SVC に置き、SVC 電位（速く不規則な興奮）を記録する',
+      hint: '4 本の PV を隔離しても AF が止まらなければ、PV 以外のトリガーを探す。環状カテーテルを SVC の中（SVC–RA 接合部より上）に置き、3 極以上を壁に接触させる',
+      applies: svcGoal,
+      achieved: ({ engine }) => {
+        if (isolatedPvs(engine).length !== PV_NAMES.length) return false;
+        const v = circularSvcContacts(engine);
+        return v.length >= 3 && recentlyActivated(engine, v, 1500) >= 3;
+      },
+    },
+    {
+      id: 'svc-isolation', label: 'SVC–RA 接合部を一周する病変で SVC を隔離する（洞結節・横隔神経に注意）',
+      hint: '接合部より少し上（SVC 側）を一周する。前外側の洞結節の近くと、後外側の右横隔神経の走行に近い通電では注意が出る',
+      applies: svcGoal,
+      achieved: ({ engine }) => svcIsolated(engine),
+    },
+    {
+      id: 'af-stopped', label: 'AF が止まり、洞調律に戻ったことを確認する',
+      hint: 'PV と SVC の隔離が終わると、トリガーは隔離された静脈の中だけで発火する（解離）',
+      applies: svcGoal,
+      achieved: ({ engine }) => svcIsolated(engine) && isolatedPvs(engine).length === PV_NAMES.length
+        && engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing',
+    },
   ],
 };
+
+/** SVC のスリーブ先端を刺激し、RA 本体が興奮しないこと（複製したエンジンで確かめる） */
+function svcExitBlock(engine: SimulationEngine): boolean {
+  const c = cloneWithSubstrate(engine, afScenario);
+  c.sinusEnabled = false;
+  c.foci = [];
+  c.ca.stimulate(svcTip(c));
+  c.tick(300);
+  return !raBody(c).some((v) => c.ca.tissue.lastActivation[v] >= 0);
+}
+
+/** 環状カテーテルの電極のうち、SVC のスリーブに接触している頂点 */
+export function circularSvcContacts(engine: SimulationEngine): number[] {
+  const c = engine.catheter('circ');
+  if (!c?.placed) return [];
+  const svc = new Set(svcVertices(engine));
+  return c.electrodes.map((e) => e.contactVertex).filter((v) => v >= 0 && svc.has(v));
+}
+
 
 /** 各 PV のスリーブ先端を刺激し、LA 本体が興奮しないこと（複製したエンジンで確かめる） */
 function exitBlock(engine: SimulationEngine): boolean {

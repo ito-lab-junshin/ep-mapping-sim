@@ -5,6 +5,8 @@ import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SCENARIOS } from '../arrhythmia';
 import { tryInduce } from '../arrhythmia/common';
 import { isolatedPvs } from '../arrhythmia/pv';
+import { afTypeOf } from '../arrhythmia/af';
+import { svcIsolated } from '../arrhythmia/svc';
 import { PV_NAMES } from '../geometry/regions';
 import { withParams, type ParamOverrides } from './params';
 import { applyStandardAblation, type AblationPlan } from './strategies';
@@ -34,7 +36,7 @@ export interface BatchConfig {
   /** 既定の症例の選択肢 */
   options?: CaseOptions;
   /** 値の組み合わせ（直積）で振る副伝導路の部位など（例：{ apSite: ['leftFreeWall', 'posteroseptal'] }） */
-  optionSweep?: { apSite?: CaseOptions['apSite'][] };
+  optionSweep?: { apSite?: CaseOptions['apSite'][]; afType?: CaseOptions['afType'][] };
   /** すべての条件に共通の上書き */
   base?: ParamOverrides;
   /** 値の組み合わせ（直積）で条件を作る */
@@ -64,6 +66,8 @@ export interface BatchRow {
   /** 隔離できた PV の数と PVI の完了（AF だけ） */
   isolatedPvs: number | null;
   pviComplete: boolean | null;
+  /** SVC の隔離（AF の型 pvSvc だけ） */
+  svcIsolated?: boolean | null;
   inducedAfterAblation: boolean | null;
 }
 
@@ -75,13 +79,21 @@ export function expandConditions(cfg: BatchConfig): ExpandedCondition[] {
   const keys = Object.keys(cfg.sweep ?? {});
   let combos: ParamOverrides[] = [{}];
   for (const k of keys) combos = combos.flatMap((c) => cfg.sweep![k].map((v) => ({ ...c, [k]: v })));
-  const sites = cfg.optionSweep?.apSite?.length ? cfg.optionSweep.apSite : [undefined];
+  // 選択肢の直積（副伝導路の部位 × AF の型）
+  let optCombos: { opt: CaseOptions; tag: string }[] = [{ opt: {}, tag: '' }];
+  const sweepOpt = <K extends 'apSite' | 'afType'>(key: K, prefix: string) => {
+    const vals = cfg.optionSweep?.[key];
+    if (!vals?.length) return;
+    optCombos = optCombos.flatMap((c) => vals.map((v, k) => ({ opt: { ...c.opt, [key]: v }, tag: [c.tag, `${prefix}${k + 1}`].filter(Boolean).join('-') })));
+  };
+  sweepOpt('apSite', 'ap');
+  sweepOpt('afType', 'af');
   const out: ExpandedCondition[] = [];
-  conds.forEach((c, i) => sites.forEach((site, k) => combos.forEach((combo, j) => {
+  conds.forEach((c, i) => optCombos.forEach((oc) => combos.forEach((combo, j) => {
     const scenario = c.scenario ?? cfg.scenario;
     if (!scenario || !SCENARIOS[scenario]) throw new Error(`症例がありません：${scenario}`);
-    const options: CaseOptions = { ...cfg.options, ...c.options, ...(site ? { apSite: site } : {}) };
-    const id = [c.id ?? (cfg.conditions?.length ? `c${i + 1}` : ''), site ? `ap${k + 1}` : '', keys.length ? `s${j + 1}` : ''].filter(Boolean).join('-') || 'c1';
+    const options: CaseOptions = { ...cfg.options, ...c.options, ...oc.opt };
+    const id = [c.id ?? (cfg.conditions?.length ? `c${i + 1}` : ''), oc.tag, keys.length ? `s${j + 1}` : ''].filter(Boolean).join('-') || 'c1';
     out.push({
       ...c, id, scenario, options,
       params: { ...cfg.base, ...c.params, ...combo },
@@ -123,7 +135,10 @@ export function runCondition(c: ExpandedCondition, inductionAfterAblation = true
       const t = base.lesions.map((l) => 100 * l.transmurality);
       row.lesions = t.length;
       if (t.length) { row.transmuralityMinPct = Math.min(...t); row.transmuralityMeanPct = t.reduce((a, b) => a + b, 0) / t.length; }
-      if (c.scenario === 'af') { row.isolatedPvs = isolatedPvs(base).length; row.pviComplete = row.isolatedPvs === PV_NAMES.length; }
+      if (c.scenario === 'af') {
+        row.isolatedPvs = isolatedPvs(base).length; row.pviComplete = row.isolatedPvs === PV_NAMES.length;
+        if (afTypeOf(base.caseOptions) === 'pvSvc') row.svcIsolated = svcIsolated(base);
+      }
       if (inductionAfterAblation) row.inducedAfterAblation = tryInduce(base, scenario, c.induction ?? {}).induced;
     }
     return row;
@@ -146,18 +161,18 @@ export function toCsv(rows: BatchRow[], cfg: BatchConfig, meta: Record<string, s
   lines.push('# ep-mapping-sim batch（教育用シミュレータ。値は教育用近似）');
   for (const [k, v] of Object.entries(meta)) lines.push(`# ${k}: ${v}`);
   lines.push(`# config: ${JSON.stringify(cfg)}`);
-  lines.push('# 列：p_wave_ms＝洞調律 1 拍の両心房の総興奮時間、tachy_cl_ms＝頻拍の周期長、transmurality_*＝病変の中心の貫壁性、pvi_complete＝4 本の PV の entrance block（AF のみ）、ap_site＝副伝導路の部位（WPW のみ）');
-  const header = ['id', 'scenario', 'ap_site', ...paramKeys, 'induced', 'tachy_cl_ms', 'p_wave_ms',
+  lines.push('# 列：p_wave_ms＝洞調律 1 拍の両心房の総興奮時間、tachy_cl_ms＝頻拍の周期長、transmurality_*＝病変の中心の貫壁性、pvi_complete＝4 本の PV の entrance block（AF のみ）、ap_site＝副伝導路の部位（WPW のみ）、af_type＝AF の型（AF のみ）');
+  const header = ['id', 'scenario', 'ap_site', 'af_type', ...paramKeys, 'induced', 'tachy_cl_ms', 'p_wave_ms',
     'energy', 'power_w', 'duration_s', 'height_mm', 'spacing_mm', 'push01', 'misalign_deg', 'pfa_shape', 'pfa_applications',
-    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'induced_after_ablation'];
+    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'svc_isolated', 'induced_after_ablation'];
   lines.push(header.join(','));
   for (const r of rows) {
     const a = r.ablation;
     lines.push([
-      r.id, r.scenario, r.scenario === 'wpw' ? (r.options.apSite ?? 'leftFreeWall') : '', ...paramKeys.map((k) => paramCell(r.params[k])),
+      r.id, r.scenario, r.scenario === 'wpw' ? (r.options.apSite ?? 'leftFreeWall') : '', r.scenario === 'af' ? (r.options.afType ?? 'pv') : '', ...paramKeys.map((k) => paramCell(r.params[k])),
       fmt(r.induced), fmt(r.tachyClMs, 0), fmt(r.pWaveMs, 0),
       a?.energy ?? '', fmt(a?.powerW), fmt(a?.durationS), fmt(a?.heightMm), fmt(a?.spacingMm), fmt(a?.push01, 2), fmt(a?.misalignDeg), a?.shape ?? '', fmt(a?.applications),
-      fmt(r.lesions), fmt(r.transmuralityMinPct, 0), fmt(r.transmuralityMeanPct, 0), fmt(r.isolatedPvs), fmt(r.pviComplete), fmt(r.inducedAfterAblation),
+      fmt(r.lesions), fmt(r.transmuralityMinPct, 0), fmt(r.transmuralityMeanPct, 0), fmt(r.isolatedPvs), fmt(r.pviComplete), fmt(r.svcIsolated), fmt(r.inducedAfterAblation),
     ].map(cell).join(','));
   }
   return lines.join('\n') + '\n';

@@ -197,12 +197,13 @@ function buildRightAtrium(D: AnatomyDimensions) {
   const c = v3(ORIENT.raCenter.x - (D.ra.minorDiameter / 2 - 19), ORIENT.raCenter.y, ORIENT.raCenter.z);
   const r = v3(D.ra.minorDiameter / 2, D.ra.majorDiameter / 2, D.ra.apDiameter / 2);
   const body = ellipsoid(c, r);
-  const vein = (dir: Vec3, diameter: number) => {
+  const svcLength = D.vein.svcLength ?? D.vein.length;
+  const vein = (dir: Vec3, diameter: number, length = D.vein.length) => {
     const d = norm(dir);
     const o = surfacePointAlong(body, c, d);
-    return tubeFrame(sub(o, scale(d, 6)), add(o, scale(d, D.vein.length)), diameter / 2, diameter / 2, v3(1, 0, 0));
+    return tubeFrame(sub(o, scale(d, 6)), add(o, scale(d, length)), diameter / 2, diameter / 2, v3(1, 0, 0));
   };
-  const svcF = vein(ORIENT.svc, D.vein.svc);
+  const svcF = vein(ORIENT.svc, D.vein.svc, svcLength);
   const ivcF = vein(ORIENT.ivc, D.vein.ivc);
   // 右心耳：先の閉じた楕円断面の袋。付け根を大きくなめらかにつなぎ、幅広い三角形の形に近づける
   const raaDir = norm(ORIENT.raa);
@@ -279,7 +280,7 @@ function buildRightAtrium(D: AnatomyDimensions) {
   const veinLabel = (o: Opening, p: Vec3, junctionBack: number) =>
     axialDistance(o, p) > -junctionBack && radialDistance(o, p) < o.radius * 1.5;
   const label = (p: Vec3): RegionName => {
-    if (veinLabel(svc, p, D.vein.length - 1)) return 'svc';
+    if (veinLabel(svc, p, svcLength - 1)) return 'svc';
     if (veinLabel(ivc, p, D.vein.length - 1)) return 'ivc';
     if (dist(p, P(hisV)) < 5) return 'his_region';
     if (dist(p, P(avV)) < 4) return 'av_node';

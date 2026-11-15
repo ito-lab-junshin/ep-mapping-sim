@@ -1,17 +1,19 @@
 import { useSim } from '../state/store';
 import { setCaseOptions } from '../state/engine';
-import { AP_SITE_IDS, type ApSite } from '../core/params';
+import { AF_TYPE_IDS, AP_SITE_IDS, type AfType, type ApSite } from '../core/params';
 import { AP_SITES, apSiteOf } from '../core/arrhythmia/wpw';
+import { AF_TYPE_LABEL, afTypeOf } from '../core/arrhythmia/af';
 import type { ArrhythmiaId } from '../core/types';
 
 /**
- * 症例の選択肢（docs/DESIGN.md §5.4）：WPW の副伝導路の部位と、部位を伏せるか。
+ * 症例の選択肢：AF の型（§5.1）、WPW の副伝導路の部位と部位を伏せるか（§5.4）。
  * 変えると症例を作り直す（病変・取得点・ゴールは消える）。
  * 部位を伏せると無作為に選び、学習ゴールに「体表 ECG から部位を推定する」設問が加わる。
  */
 export function CaseOptionsPanel() {
   const arrhythmia = useSim((s) => s.arrhythmia);
   const options = useSim((s) => s.caseOptions[s.arrhythmia]);
+  if (arrhythmia === 'af') return <AfOptions type={afTypeOf(options)} />;
   if (arrhythmia !== 'wpw') return null;
   const site = apSiteOf(options);
   const hidden = !!options?.apHidden;
@@ -39,6 +41,19 @@ export function CaseOptionsPanel() {
         <input type="checkbox" checked={hidden} onChange={(e) => hide(e.target.checked)} /> 部位を伏せる（無作為に選び、ECG から推定する設問を出す）
       </label>
       {hidden && <p className="note">チェックを外すと部位が表示されます（答え合わせ）。部位を変えると症例は最初の状態に戻ります。</p>}
+    </div>
+  );
+}
+
+function AfOptions({ type }: { type: AfType }) {
+  return (
+    <div className="case-options">
+      <label>AF の型
+        <select value={type} onChange={(e) => setCaseOptions('af', { afType: e.target.value as AfType })}>
+          {AF_TYPE_IDS.map((t) => <option key={t} value={t}>{AF_TYPE_LABEL[t]}</option>)}
+        </select>
+      </label>
+      {type === 'pvSvc' && <p className="note">PV に加えて SVC の心筋スリーブにもトリガーがあります。PVI の後も AF が続いたら、PV 以外の起源を探します。型を変えると症例は最初の状態に戻ります。</p>}
     </div>
   );
 }

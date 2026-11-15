@@ -27,7 +27,8 @@ export interface AnatomyDimensions {
   /** 右心耳：開口の長軸径 × 短軸径、開口から先端までの長さ（深さ） */
   raa: { ostiumMajor: number; ostiumMinor: number; length: number };
   annulus: { mitral: number; tricuspid: number };
-  vein: { svc: number; ivc: number; length: number; csOstium: number };
+  /** svcLength：SVC だけの長さ（省略すると length）。AF の SVC スリーブ（Phase 7 の追補 AF-2）で使う */
+  vein: { svc: number; ivc: number; length: number; csOstium: number; svcLength?: number };
 }
 
 const normal: AnatomyDimensions = {
@@ -89,6 +90,11 @@ const afRemodeled: AnatomyDimensions = {
     LIPV: { si: 16.1, ap: 12.4 },
     sleeveLength: normal.pv.sleeveLength,
   },
+  /**
+   * SVC は RA から先 20 mm（SVC の心筋スリーブ。AF-2 の SVC トリガーの発火元）。仮定値（教育用近似）。
+   * ほかの寸法セットは 12 mm のまま（normal・aflRemodeled のメッシュは変えない）
+   */
+  vein: { ...normal.vein, svcLength: 20 },
 };
 
 /** RA と三尖弁輪の拡大率（AFL）。仮定値（教育用近似）。目標の周期長（220〜260 ms）から調整する */

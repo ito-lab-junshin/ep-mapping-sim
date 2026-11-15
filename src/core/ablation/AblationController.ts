@@ -10,6 +10,7 @@ import { depositPfa, type PfaShape } from './pfa';
 import { seededRandom } from '../pacing/Stimulator';
 import { separated } from '../arrhythmia/common';
 import { laBody, sleeveVertices } from '../arrhythmia/af';
+import { phrenicNerveLine, segmentDistanceMm } from '../arrhythmia/svc';
 
 /** 通電中・直近の通電の指標（UI に出す。テーマの機能フラグで出し分ける） */
 export interface AblationMetrics {
@@ -38,6 +39,9 @@ export interface AblationMetrics {
   junctional?: boolean;
   /** RF：His 部位までの距離 mm（近いと注意） */
   hisDistanceMm?: number;
+  /** 先端から洞結節の部位・右横隔神経の走行（模式）までの距離 mm（AF-2） */
+  sinusNodeDistanceMm?: number;
+  phrenicDistanceMm?: number;
   message?: string;
 }
 
@@ -172,12 +176,22 @@ export class AblationController {
     }
     const his = e.model.anatomy.anchors.his.point;
     const hisD = Math.hypot(t.pos.x - his.x, t.pos.y - his.y, t.pos.z - his.z);
+    // 洞結節・右横隔神経（模式）の近くの注意（AF-2 の SVC 隔離など。合併症は再現しない）
+    const sn = e.model.anatomy.anchors.sinusNode.point;
+    const snD = Math.hypot(t.pos.x - sn.x, t.pos.y - sn.y, t.pos.z - sn.z);
+    const [pa, pb] = phrenicNerveLine(e);
+    const pnD = segmentDistanceMm(t.pos, pa, pb);
+    const warnings = [
+      hisD < ABLATION.hisWarningMm ? `注意：His 部位に近い（${hisD.toFixed(1)} mm）` : null,
+      snD < ABLATION.sinusNodeWarningMm ? `注意：洞結節の部位に近い（${snD.toFixed(1)} mm）` : null,
+      pnD < ABLATION.phrenicWarningMm ? `注意：右横隔神経の走行（模式）に近い（${pnD.toFixed(1)} mm）。横隔神経の刺激（ペーシング）で確かめる` : null,
+    ].filter((x): x is string => !!x);
     return {
       energy: 'rf', active: true, elapsedS: a.elapsedS, powerW: this.rf.powerW, contactForceG: t.cf,
       localImpedanceOhm: li.value, liDropOhm: li.drop, lesionIndexPct: index, rfTarget: target, radiusMm: r, depthMm: depth,
       wallMm: wall, transmuralityPct: transmural * 100,
-      junctional: a.junctional, hisDistanceMm: hisD,
-      message: hisD < ABLATION.hisWarningMm ? `注意：His 部位に近い（${hisD.toFixed(1)} mm）` : undefined,
+      junctional: a.junctional, hisDistanceMm: hisD, sinusNodeDistanceMm: snD, phrenicDistanceMm: pnD,
+      message: warnings.length ? warnings.join('／') : undefined,
     };
   }
 

@@ -61,6 +61,19 @@ describe('研究用：一括実行', () => {
     expect(e.conduction.ap!.ventricularDelayMs).toBe(90);
   });
 
+  it('AF の型を振る：optionSweep.afType で条件ができ、CSV の af_type・svc_isolated 列に出る', () => {
+    const cfg: BatchConfig = { scenario: 'af', optionSweep: { afType: ['pv', 'pvSvc'] } };
+    const c = expandConditions(cfg);
+    expect(c.map((x) => x.id)).toEqual(['af1', 'af2']);
+    expect(c.map((x) => x.options.afType)).toEqual(['pv', 'pvSvc']);
+    const row = { id: 'af2', scenario: 'af' as const, options: { afType: 'pvSvc' as const }, params: {}, induced: true, tachyClMs: 300, pWaveMs: 130,
+      ablation: null, lesions: 10, transmuralityMinPct: 100, transmuralityMeanPct: 100, isolatedPvs: 4, pviComplete: true, svcIsolated: true, inducedAfterAblation: false };
+    const lines = toCsv([row], cfg).trim().split('\n').filter((l) => !l.startsWith('#'));
+    const header = lines[0].split(','), cells = lines[1].split(',');
+    expect(cells[header.indexOf('af_type')]).toBe('pvSvc');
+    expect(cells[header.indexOf('svc_isolated')]).toBe('1');
+  });
+
   it('総興奮時間（P 波幅の指標）：normal で約 120 ms、伝導速度を下げると長くなる', () => {
     const base = totalActivationMs(new SimulationEngine(loadParametricSync('normal')));
     expect(base).toBeGreaterThan(105); expect(base).toBeLessThan(135);

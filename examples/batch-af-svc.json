@@ -1,0 +1,8 @@
+{
+  "name": "AF：PV トリガーだけ／PV と SVC のトリガー（RF 30 W・30 秒。pvSvc は SVC 隔離も）",
+  "scenario": "af",
+  "optionSweep": { "afType": ["pv", "pvSvc"] },
+  "conditions": [
+    { "id": "rf30", "ablation": { "energy": "rf", "powerW": 30, "durationS": 30 } }
+  ]
+}

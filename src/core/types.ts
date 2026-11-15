@@ -1,5 +1,5 @@
 import type { SimulationEngine, PacingSite } from './sim/SimulationEngine';
-import type { ApSite } from './params';
+import type { AfType, ApSite } from './params';
 
 /**
  * シミュレータ全体で共有する型定義。
@@ -202,6 +202,8 @@ export interface CaseOptions {
   apSite?: ApSite;
   /** 副伝導路の部位を伏せる（体表 ECG から部位を推定する設問を出す） */
   apHidden?: boolean;
+  /** AF の型（§5.1）。既定は pv（PV トリガーだけ） */
+  afType?: AfType;
 }
 
 /** シナリオ（不整脈ごとの基質定義と判定ロジック、docs/DESIGN.md §5） */

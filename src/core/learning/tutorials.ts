@@ -59,9 +59,9 @@ export const PVI_TUTORIAL: Tutorial = {
   steps: [
     {
       id: 'scenario', title: '症例を選ぶ', target: 'scenario',
-      instruction: '「不整脈」で「心房細動（PVI）」を選びます。PV（主に上肺静脈）の中のトリガーが高頻度に発火して AF が続いています。',
+      instruction: '「不整脈」で「心房細動（PVI）」を選びます。「AF の型」は「発作性（PV トリガー）」（既定）のままにします。PV（主に上肺静脈）の中のトリガーが高頻度に発火して AF が続いています。',
       hint: '操作パネルのいちばん上の「不整脈」の選択肢です。',
-      done: (c) => c.ui.arrhythmia === 'af',
+      done: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv',
     },
     {
       id: 'geometry-mode', title: '収集モードにする', target: 'geometry',

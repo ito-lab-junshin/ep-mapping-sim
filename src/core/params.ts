@@ -197,7 +197,18 @@ export const AF_SUBSTRATE = {
   triggerClMs: [150, 250] as const,
   /** ERP のばらつきをなめらかにする回数（斑状の不均一性の大きさ）。仮定値 */
   erpSmoothingIterations: 6,
+  /**
+   * SVC の心筋スリーブとトリガー（AF-2：非 PV トリガー、AF の型 pvSvc）。仮定値（教育用近似）：
+   * PV のスリーブと同じ伝導速度・ERP、発火周期も PV と同じ範囲。スリーブの長さは寸法セット（afRemodeled の vein.svcLength 20 mm）
+   */
+  svcSleeveCv: 0.5,
+  svcSleeveErpMs: 180,
+  svcTriggerClMs: [150, 250] as const,
 };
+
+/** AF の型（症例の選択肢、§5.1）：pv = PV トリガーだけ（発作性、既定）、pvSvc = PV と SVC のトリガー（AF-2） */
+export type AfType = 'pv' | 'pvSvc';
+export const AF_TYPE_IDS: AfType[] = ['pv', 'pvSvc'];
 
 /**
  * 通常型 AFL の基質（§5.2）。解剖は拡大した RA（aflRemodeled：RA と三尖弁輪が正常の 1.2 倍）。
@@ -291,4 +302,7 @@ export const ABLATION = {
   junctionalClMs: [500, 700] as const,
   /** His 部位にこれより近い通電には注意を出す（合併症は扱わない） */
   hisWarningMm: 5,
+  /** 洞結節の部位・右横隔神経の走行（模式）からこの距離 mm 以内の RF で注意を出す（AF-2。His と同じ距離、仮定値） */
+  sinusNodeWarningMm: 5,
+  phrenicWarningMm: 5,
 };
