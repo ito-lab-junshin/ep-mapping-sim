@@ -101,6 +101,9 @@ export function ControlPanel() {
       <p className="rhythm" style={{ color: s.tachycardia === 'tachycardia' ? theme.colors.accent : undefined }}>
         {RHYTHM_LABEL[s.tachycardia]}{s.cycleLengthMs ? `（周期長 ${Math.round(s.cycleLengthMs)} ms）` : ''}
       </p>
+      {s.running && s.simSpeed < 0.9 && (
+        <p className="warn">計算が追いつかず、実時間の {s.simSpeed.toFixed(1)} 倍で動いています（EGM・ECG・周期長の時間はシミュレーション時間で、正しいままです）。</p>
+      )}
     </aside>
   );
 }

@@ -105,6 +105,9 @@ interface SimState {
   bumpProtocol: () => void;
   setCureChecks: (c: CureCheck[] | null) => void;
   setRhythm: (t: TachycardiaState, cl: number | null) => void;
+  /** シミュレーションの進み / 実時間（直近 約 2 秒。計算が追いつかないと 1 未満） */
+  simSpeed: number;
+  setSimSpeed: (x: number) => void;
   setHoveredRegion: (r: string | null) => void;
   bumpPlacement: () => void;
 }
@@ -164,6 +167,8 @@ export const useSim = create<SimState>((set) => ({
   setProtocol: (protocol) => set({ protocol }),
   bumpProtocol: () => set((s) => ({ protocolTick: s.protocolTick + 1 })),
   setCureChecks: (cureChecks) => set({ cureChecks }),
+  simSpeed: 1,
+  setSimSpeed: (simSpeed) => set((s) => (Math.abs(s.simSpeed - simSpeed) < 0.05 ? s : { simSpeed })),
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   setShowTruth: (showTruth) => set({ showTruth }),
   setTutorialStep: (tutorialStep) => set(tutorialStep === 0 ? { tutorialStep, tutorialConfirmed: [] } : { tutorialStep }),

@@ -17,12 +17,19 @@ import type { SimulationEngine } from '../core/sim/SimulationEngine';
 /**
  * 実時間 1 s = シミュレーション 1 s でエンジンを進める（1 フレーム最大 50 ms）。
  * 刺激プロトコルを進め、調律の状態を 250 ms ごとに UI へ知らせる。
+ * 計算が追いつかずフレームが 50 ms を超えると、シミュレーションは実時間より遅れる。その割合（直近 約 2 秒）も知らせる。
  */
 function EngineClock({ engine, running }: { engine: SimulationEngine; running: boolean }) {
   const last = useRef(-Infinity);
+  const speed = useRef<{ wall: number; sim: number }[]>([]);
   useFrame((_, delta) => {
-    if (!running) return;
+    if (!running) { speed.current = []; return; }
     engine.tick(Math.min(delta * 1000, 50));
+    const q = speed.current, now = performance.now();
+    if (q.length && engine.time < q[q.length - 1].sim) q.length = 0; // 症例を作り直した
+    q.push({ wall: now, sim: engine.time });
+    while (q.length > 2 && now - q[0].wall > 2000) q.shift();
+    if (now - q[0].wall >= 1000) useSim.getState().setSimSpeed((q[q.length - 1].sim - q[0].sim) / (now - q[0].wall));
     updateProtocol();
     if (engine.time - last.current >= 250) {
       last.current = engine.time;

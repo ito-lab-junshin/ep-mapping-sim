@@ -123,3 +123,63 @@ describe('EgmGenerator の高速化（電流源を波面付近に限る）', () 
     expect(Math.abs(fast - full) / full).toBeLessThan(0.05);
   });
 });
+
+import { actionPotential } from './templates';
+
+/**
+ * 高速化（AF-1）の回帰：波面の近くだけを計算する update が、全頂点を走査する素直な実装と同じ値になる。
+ * 参照の実装は高速化の前の手順（全頂点の膜電位 → 波面とその隣接の頂点の膜電流 → 1/r の和）をそのまま書いたもの。
+ */
+function referenceUnipolar(mesh: ReturnType<typeof setup>['mesh'], ca: CellularAutomaton, pos: Vec3, now: number): number {
+  const t = ca.tissue, n = mesh.positions.length / 3, p = mesh.positions;
+  const vm = new Float64Array(n), recent = new Uint8Array(n);
+  for (let v = 0; v < n; v++) {
+    const la = t.lastActivation[v];
+    vm[v] = la < 0 ? 0 : actionPotential(now - la, t.erp[v] * 0.8);
+    recent[v] = la >= 0 && now - la < 16 ? 1 : 0;
+  }
+  // 余接重み（EgmGenerator と同じ）
+  const w: Map<number, number>[] = Array.from({ length: n }, () => new Map());
+  const idx = mesh.indices;
+  const add = (a: number, b: number, c: number) => {
+    const ux = p[3 * a] - p[3 * c], uy = p[3 * a + 1] - p[3 * c + 1], uz = p[3 * a + 2] - p[3 * c + 2];
+    const vx = p[3 * b] - p[3 * c], vy = p[3 * b + 1] - p[3 * c + 1], vz = p[3 * b + 2] - p[3 * c + 2];
+    const cross = Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx);
+    const cot = cross < 1e-12 ? 0 : Math.max(-10, Math.min(10, (ux * vx + uy * vy + uz * vz) / cross));
+    w[a].set(b, (w[a].get(b) ?? 0) + cot / 2); w[b].set(a, (w[b].get(a) ?? 0) + cot / 2);
+  };
+  for (let k = 0; k < idx.length; k += 3) { add(idx[k], idx[k + 1], idx[k + 2]); add(idx[k + 1], idx[k + 2], idx[k]); add(idx[k + 2], idx[k], idx[k + 1]); }
+  let phi = 0;
+  for (let v = 0; v < n; v++) {
+    if (t.viability[v] <= 0) continue;
+    const near = recent[v] === 1 || [...w[v].keys()].some((u) => recent[u] === 1);
+    if (!near) continue;
+    let s = 0;
+    for (const [u, wt] of w[v]) if (t.viability[u] > 0) s += wt * (vm[u] - vm[v]);
+    s *= t.voltage[v] / 2.5;
+    if (Math.abs(s) <= 1e-4) continue;
+    phi += s / Math.max(0.5, Math.hypot(p[3 * v] - pos.x, p[3 * v + 1] - pos.y, p[3 * v + 2] - pos.z));
+  }
+  return 2.0 * phi;
+}
+
+describe('EgmGenerator の高速化（AF-1）', () => {
+  it('波面の近くだけの計算が、全頂点を走査する参照の実装と一致する（病変・低電位を含む）', () => {
+    const { mesh, ca, egm } = setup();
+    const n = mesh.positions.length / 3;
+    for (let v = 0; v < n; v += 7) ca.tissue.voltage[v] = 0.5;
+    for (let v = 3; v < n; v += 53) ca.tissue.viability[v] = 0;
+    ca.stimulate(vertexTowards(mesh, { x: 1, y: 0, z: 0 }));
+    const pos = [inside({ x: 1, y: 0, z: 0 }, 1), inside({ x: 0, y: 1, z: 0 }, 2), inside({ x: -1, y: 0.2, z: 0.3 }, 5)];
+    let compared = 0;
+    for (let k = 0; k < 40; k++) {
+      ca.step(2);
+      for (const q of pos) {
+        const ref = referenceUnipolar(mesh, ca, q, ca.time);
+        expect(Math.abs(egm.unipolarAt(q, ca.time) - ref)).toBeLessThan(1e-5); // Float32 の保存による差だけ
+        if (Math.abs(ref) > 1e-3) compared++;
+      }
+    }
+    expect(compared).toBeGreaterThan(20);
+  });
+});

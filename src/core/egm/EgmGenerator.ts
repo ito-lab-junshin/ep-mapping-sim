@@ -39,7 +39,11 @@ export class EgmGenerator {
   private vm: Float32Array;
   private source: Float32Array;
   private active: Int32Array;
-  private recent: Uint8Array;
+  /** 電流源の候補（波面の頂点とその隣接）と、その時刻に処理したかの印 */
+  private cand: Int32Array;
+  private candStamp: Int32Array;
+  private vmStamp: Int32Array;
+  private stampId = 0;
   private activeCount = 0;
   private computedAt = NaN;
   private centroid: Vec3;
@@ -59,41 +63,63 @@ export class EgmGenerator {
     this.vm = new Float32Array(n);
     this.source = new Float32Array(n);
     this.active = new Int32Array(n);
-    this.recent = new Uint8Array(n);
+    this.cand = new Int32Array(n);
+    this.candStamp = new Int32Array(n);
+    this.vmStamp = new Int32Array(n);
     let cx = 0, cy = 0, cz = 0;
     for (let v = 0; v < n; v++) { cx += mesh.positions[3 * v]; cy += mesh.positions[3 * v + 1]; cz += mesh.positions[3 * v + 2]; }
     this.centroid = { x: cx / n, y: cy / n, z: cz / n };
   }
 
-  /** 時刻 now の電流源分布を計算する（同じ now では再計算しない） */
+  /**
+   * 時刻 now の電流源分布を計算する（同じ now では再計算しない）。
+   * 電流源の候補は「波面の頂点（活性化から FRONT_WINDOW_MS 以内）とその隣接」だけなので、
+   * 膜電位もその候補と隣接の分だけ求める（全頂点を見るのは活性化時刻の比較 1 回だけ。AF-1 の高速化）。
+   * 候補は頂点番号の順に並べ、和の順序を全頂点の走査と同じにして、結果を変えない。
+   */
   update(now: number) {
     if (now === this.computedAt) return;
     this.computedAt = now;
     const t = this.tissue;
     const n = this.vm.length;
+    const la = t.lastActivation, viab = t.viability, erp = t.erp;
+    const start = this.nbStart, index = this.nbIndex, weight = this.nbWeight;
+    const stamp = ++this.stampId;
+    const vmStamp = this.vmStamp, candStamp = this.candStamp, vm = this.vm;
+    // 1. 波面の頂点（立ち上がりの直後）。心房の再分極（Ta 波）は小さく、教育目的では省いてよい
+    const all = this.opts.frontOnly === false;
+    let nc = 0;
+    const cand = this.cand;
+    const addCand = (v: number) => { if (candStamp[v] !== stamp) { candStamp[v] = stamp; cand[nc++] = v; } };
     for (let v = 0; v < n; v++) {
-      const la = t.lastActivation[v];
-      this.vm[v] = la < 0 ? 0 : actionPotential(now - la, t.erp[v] * 0.8);
+      const x = la[v];
+      if (all || (x >= 0 && now - x < FRONT_WINDOW_MS)) {
+        addCand(v);
+        for (let k = start[v]; k < start[v + 1]; k++) addCand(index[k]);
+      }
     }
-    // 立ち上がり（脱分極）の直後の頂点だけを電流源の候補にする。心房の再分極（Ta 波）は
-    // 小さく、EGM・体表 ECG の教育目的では省いてよい。電流源が波面付近に限られ、計算量が大きく減る。
-    for (let v = 0; v < n; v++) {
-      const la = t.lastActivation[v];
-      this.recent[v] = this.opts.frontOnly === false || (la >= 0 && now - la < FRONT_WINDOW_MS) ? 1 : 0;
-    }
+    // 2. 候補を頂点番号の順に並べる（和の順序を変えないため）
+    const list = cand.subarray(0, nc);
+    list.sort();
+    const vmAt = (v: number) => {
+      if (vmStamp[v] !== stamp) {
+        vmStamp[v] = stamp;
+        const x = la[v];
+        vm[v] = x < 0 ? 0 : actionPotential(now - x, erp[v] * 0.8);
+      }
+      return vm[v];
+    };
+    // 3. 候補の頂点の膜電流（興奮しない頂点は電流源にならず、そこへ向かう電流もない：no-flux 境界）
     this.activeCount = 0;
-    for (let v = 0; v < n; v++) {
-      // 興奮しない頂点（病変・瘢痕）は電流源にならず、そこへ向かう電流もない（no-flux 境界）
-      if (t.viability[v] <= 0) { this.source[v] = 0; continue; }
-      let near = this.recent[v] === 1;
-      for (let k = this.nbStart[v]; !near && k < this.nbStart[v + 1]; k++) near = this.recent[this.nbIndex[k]] === 1;
-      if (!near) { this.source[v] = 0; continue; }
-      const vv = this.vm[v];
+    for (let i = 0; i < nc; i++) {
+      const v = list[i];
+      if (viab[v] <= 0) continue;
+      const vv = vmAt(v);
       let s = 0;
-      for (let k = this.nbStart[v]; k < this.nbStart[v + 1]; k++) {
-        const u = this.nbIndex[k];
-        if (t.viability[u] <= 0) continue;
-        s += this.nbWeight[k] * (this.vm[u] - vv);
+      for (let k = start[v]; k < start[v + 1]; k++) {
+        const u = index[k];
+        if (viab[u] <= 0) continue;
+        s += weight[k] * (vmAt(u) - vv);
       }
       s *= t.voltage[v] / NORMAL_VOLTAGE;
       this.source[v] = s;
@@ -106,10 +132,12 @@ export class EgmGenerator {
     this.update(now);
     const p = this.mesh.positions;
     let phi = 0;
+    const px = pos.x, py = pos.y, pz = pos.z, act = this.active, src = this.source;
     for (let i = 0; i < this.activeCount; i++) {
-      const v = this.active[i];
-      const r = Math.max(MIN_R_MM, Math.hypot(p[3 * v] - pos.x, p[3 * v + 1] - pos.y, p[3 * v + 2] - pos.z));
-      phi += this.source[v] / r;
+      const v = act[i];
+      const dx = p[3 * v] - px, dy = p[3 * v + 1] - py, dz = p[3 * v + 2] - pz;
+      const r = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      phi += src[v] / (r > MIN_R_MM ? r : MIN_R_MM);
     }
     return PHI_GAIN * phi;
   }

@@ -123,7 +123,7 @@ export class CellularAutomaton {
     const gx = t.fiber[3 * u], gy = t.fiber[3 * u + 1], gz = t.fiber[3 * u + 2];
     const s = fx * gx + fy * gy + fz * gz < 0 ? -1 : 1;
     fx += s * gx; fy += s * gy; fz += s * gz;
-    const fl = Math.hypot(fx, fy, fz);
+    const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
     if (fl === 0) return cvT;
     const c = (dx * fx + dy * fy + dz * fz) / (dist * fl);
     const c2 = c * c;
@@ -147,7 +147,7 @@ export class CellularAutomaton {
     for (const u of this.mesh.neighbors[v]) {
       if (t.phase[u] !== 0 || t.viability[u] <= 0) continue;
       const dx = p[3 * u] - p[3 * v], dy = p[3 * u + 1] - p[3 * v + 1], dz = p[3 * u + 2] - p[3 * v + 2];
-      const dist = Math.hypot(dx, dy, dz);
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const cv = this.edgeVelocity(v, u, dx, dy, dz, dist) * t.viability[u];
       if (cv <= 0) continue;
       let arrival = ta + dist / cv;
@@ -184,7 +184,8 @@ export class CellularAutomaton {
       const x = p[3 * v] + s * (p[3 * w] - p[3 * v]);
       const y = p[3 * v + 1] + s * (p[3 * w + 1] - p[3 * v + 1]);
       const z = p[3 * v + 2] + s * (p[3 * w + 2] - p[3 * v + 2]);
-      const d = Math.hypot(p[3 * u] - x, p[3 * u + 1] - y, p[3 * u + 2] - z);
+      const ex = p[3 * u] - x, ey = p[3 * u + 1] - y, ez = p[3 * u + 2] - z;
+      const d = Math.sqrt(ex * ex + ey * ey + ez * ez);
       const arr = tv + s * (tw - tv) + d / cv;
       if (arr < best) best = arr;
     }
