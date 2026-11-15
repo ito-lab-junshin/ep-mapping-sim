@@ -133,6 +133,12 @@ export const AV_NODE = {
    * radiusMm・modifyFraction・modifiedErpIncreaseMs は仮定値（教育用近似）。通電中の接合部調律は、ABL の先端が領域内のときに出る
    */
   slowRegion: { radiusMm: 3.5, blockFraction: 0.6, modifyFraction: 0.2, modifiedErpIncreaseMs: 60 },
+  /**
+   * アデノシン急速静注（先生と決定）：房室結節を blockMs のあいだ止める（順行・逆行とも。副伝導路は止めない）。
+   * AVNRT・順行性 AVRT は止まり、AFL・AF は心房の興奮が続いたまま心室への伝導だけが途切れる（粗動波・f 波が見えやすい）。
+   * 効き始めの遅れ・洞結節の抑制は扱わない。blockMs は仮定値（教育用近似。シミュレーション時間）
+   */
+  adenosine: { blockMs: 6000 },
 };
 /** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */
 export const HIS_ERP_MS = VENTRICLE_ERP_MS;

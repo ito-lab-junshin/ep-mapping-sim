@@ -169,3 +169,16 @@ test('収集モード：カテーテルを動かすと収集した面が増え�
   await expect.poll(async () => (await state(page)).laCoveragePct).toBeLessThan(1);
   expectNoErrors(o);
 });
+
+test('アデノシン負荷：誘発した AVNRT が、画面のボタンで房室結節が止まって停止する', async ({ page }) => {
+  const o = await open(page, 'case=avnrt');
+  await page.getByRole('button', { name: '刺激を開始' }).click();
+  expect(await runProtocol(page)).toContain('誘発されました');
+  await expect.poll(async () => (await state(page)).rhythm).toBe('tachycardia');
+  await page.getByRole('button', { name: 'アデノシン負荷' }).click();
+  await expect(page.locator('.reconnection')).toContainText('房室結節のブロック中');
+  await advance(page, 12000);
+  await expect.poll(async () => (await state(page)).rhythm).not.toBe('tachycardia');
+  await expect(page.locator('.rhythm')).not.toContainText('頻拍（tachycardia）');
+  expectNoErrors(o);
+});

@@ -165,7 +165,11 @@ export class AblationController {
   giveAdenosine() {
     this.adenosineUntil = this.engine.time + ABLATION.edema.adenosineMs;
     this.field.setAdenosine(true);
+    // 房室結節を一時的に止める（AVNRT・AVRT の停止、AFL・AF の粗動波・f 波の観察）
+    this.engine.conduction.blockAvNode(this.engine.time);
   }
+  /** アデノシンで房室結節が止まっている残りの時間 ms */
+  get avBlockRemainingMs() { return Math.max(0, this.engine.conduction.nodeBlockUntil - this.engine.time); }
   get adenosineActive() { return this.field.adenosineActive; }
   get adenosineRemainingMs() { return Math.max(0, this.adenosineUntil - this.engine.time); }
 

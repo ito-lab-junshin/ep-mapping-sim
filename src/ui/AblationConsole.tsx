@@ -3,7 +3,7 @@ import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
 import { giveAdenosine, useEngine, waitProcedure } from '../state/engine';
 import { SCENARIOS } from '../core/arrhythmia';
-import { ABLATION } from '../core/params';
+import { ABLATION, AV_NODE } from '../core/params';
 import { ENERGY_LABEL } from '../core/ablation/LesionModel';
 import { cryoOcclusion } from '../core/ablation/cryo';
 import { PV_NAMES, type PvName } from '../core/geometry/regions';
@@ -196,14 +196,15 @@ function ReconnectionPanel() {
   return (
     <div className="reconnection">
       <p className="note">処置の時計 {field.procedureMin.toFixed(1)} 分・浮腫のある頂点 {edemaN}{block ? '（浮腫だけで止まっている所がある）' : ''}
-        {ctl.adenosineActive ? `・アデノシン負荷中（残り ${(ctl.adenosineRemainingMs / 1000).toFixed(0)} 秒）` : ''}</p>
+        {ctl.adenosineActive ? `・アデノシン負荷中（残り ${(ctl.adenosineRemainingMs / 1000).toFixed(0)} 秒）` : ''}
+        {ctl.avBlockRemainingMs > 0 ? `・房室結節のブロック中（残り ${(ctl.avBlockRemainingMs / 1000).toFixed(0)} 秒）` : ''}</p>
       <div className="row">
         {[10, ABLATION.edema.waitMin, 30].map((m) => (
           <button key={m} disabled={!!ctl.active} onClick={() => wait(m)}>待機 {m} 分</button>
         ))}
         <button disabled={!!ctl.active || ctl.adenosineActive} onClick={adenosine}>アデノシン負荷</button>
       </div>
-      <p className="note">通電の直後は浮腫で伝導が止まって見えることがあります。待機（伝播は止めて浮腫の回復だけを進める）かアデノシン負荷（{ABLATION.edema.adenosineMs / 1000} 秒間、浮腫の効果を消す）で再伝導を確かめます。浮腫の値は教育用の仮定値です。</p>
+      <p className="note">通電の直後は浮腫で伝導が止まって見えることがあります。待機（伝播は止めて浮腫の回復だけを進める）かアデノシン負荷（{ABLATION.edema.adenosineMs / 1000} 秒間、浮腫の効果を消す）で再伝導を確かめます。アデノシンは房室結節も {AV_NODE.adenosine.blockMs / 1000} 秒ほど止めるので、AVNRT・AVRT は止まり、粗動・AF では心室への伝導が途切れて粗動波・f 波が見えやすくなります（副伝導路は止まりません）。値は教育用の仮定値です。</p>
     </div>
   );
 }

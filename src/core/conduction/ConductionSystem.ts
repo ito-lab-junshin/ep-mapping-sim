@@ -51,6 +51,12 @@ export class ConductionSystem {
   ventricleErpMs = VENTRICLE_ERP_MS;
   /** 房室伝導を止める（テスト・教育用） */
   blocked = false;
+  /** アデノシンで房室結節が止まっている終わりの時刻（AV_NODE.adenosine） */
+  nodeBlockUntil = -Infinity;
+
+  /** アデノシン：時刻 t から blockMs のあいだ房室結節を止める（順行・逆行。副伝導路は止めない） */
+  blockAvNode(t: number, blockMs = AV_NODE.adenosine.blockMs) { this.nodeBlockUntil = t + blockMs; }
+  private nodeBlocked(t: number) { return t < this.nodeBlockUntil; }
 
   lastH = -Infinity;
   lastV = -Infinity;
@@ -84,7 +90,7 @@ export class ConductionSystem {
   atrialArrival(k: number, t: number) {
     const p = this.pathways[k];
     if (k === 0) push(this.aTimes, t);
-    if (this.blocked) return;
+    if (this.blocked || this.nodeBlocked(t)) return;
     // 遅伝導路の領域の通電：離断なら伝導しない、修飾なら ERP が延びる
     const status = pathwayStatus(p);
     if (status === 'blocked') return;
@@ -135,6 +141,8 @@ export class ConductionSystem {
   }
 
   private onCommon(t: number, k: number) {
+    // アデノシン：房室結節（共通路）で止まる
+    if (this.nodeBlocked(t)) return;
     // His の不応期なら共通路でブロック（遅れて届いたもう一方の経路の興奮は不顕性伝導）
     if (t - this.lastH < this.hisErpMs) return;
     this.lastH = t;
@@ -175,7 +183,7 @@ export class ConductionSystem {
    * 出口は逆行できる経路（速伝導路）の入口頂点
    */
   private onHisRetro(t: number) {
-    if (this.blocked || t - this.lastH < this.hisErpMs) return;
+    if (this.blocked || this.nodeBlocked(t) || t - this.lastH < this.hisErpMs) return;
     this.lastH = t;
     const r = AV_NODE.retrograde;
     const c = t - this.retroNodeEnd;
@@ -217,6 +225,7 @@ export class ConductionSystem {
     for (const p of this.pathways) p.last = -Infinity;
     if (this.ap) this.ap.last = -Infinity;
     this.lastH = this.lastV = -Infinity;
+    this.nodeBlockUntil = -Infinity;
     this.retroNodeEnd = -Infinity;
     this.aTimes = []; this.hTimes = []; this.vBeats = [];
     this.queue = []; this.exits = []; this.exitLog = [];
