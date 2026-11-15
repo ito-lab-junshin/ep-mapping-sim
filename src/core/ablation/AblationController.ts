@@ -1,7 +1,7 @@
 import type { EnergyId, Lesion, Vec3 } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { PvName } from '../geometry/regions';
-import { ABLATION } from '../params';
+import { ABLATION, AV_NODE } from '../params';
 import { LesionField } from './LesionModel';
 import { contactForceG, depositRf, lesionIndexPct, localImpedanceOhm, rfDepthFromDose, rfDoseRate, rfRadiusFromDepth } from './rf';
 import { ablationSites, type AblationSites, type RfTarget } from './sites';
@@ -197,7 +197,7 @@ export class AblationController {
     const li = localImpedanceOhm(t.cf, transmural);
     // 接合部調律：遅伝導路部位の近くで通電しているあいだ、周期 500〜700 ms で接合部の興奮
     const sp = e.model.anatomy.anchors.slowPathway.point;
-    const near = Math.hypot(t.pos.x - sp.x, t.pos.y - sp.y, t.pos.z - sp.z) <= ABLATION.junctionalRadiusMm + 1;
+    const near = Math.hypot(t.pos.x - sp.x, t.pos.y - sp.y, t.pos.z - sp.z) <= AV_NODE.slowRegion.radiusMm;
     if (near && e.time >= a.nextJunctional) {
       e.conduction.junctionalBeat(e.time);
       const [lo, hi] = ABLATION.junctionalClMs;
@@ -215,6 +215,8 @@ export class AblationController {
       hisD < ABLATION.hisWarningMm ? `注意：His 部位に近い（${hisD.toFixed(1)} mm）` : null,
       snD < ABLATION.sinusNodeWarningMm ? `注意：洞結節の部位に近い（${snD.toFixed(1)} mm）` : null,
       pnD < ABLATION.phrenicWarningMm ? `注意：右横隔神経の走行（模式）に近い（${pnD.toFixed(1)} mm）。横隔神経の刺激（ペーシング）で確かめる` : null,
+      // 副伝導路のある症例で頻拍（AVRT）中に通電：止まるときにカテーテルがずれやすい（ずれは再現しない）
+      e.conduction.ap && e.rhythm.state === 'tachycardia' ? '注意：AVRT 中の通電。頻拍が止まるときにカテーテルがずれやすい（洞調律か心房ペーシング中の通電が標準）' : null,
     ].filter((x): x is string => !!x);
     return {
       energy: 'rf', active: true, elapsedS: a.elapsedS, powerW: this.rf.powerW, contactForceG: t.cf,

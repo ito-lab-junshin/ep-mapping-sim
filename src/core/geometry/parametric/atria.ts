@@ -2,7 +2,7 @@ import type { ChamberId, InterAtrialBridge, MeshPart, SurfaceMesh, Vec3 } from '
 import { buildNeighbors } from '../buildNeighbors';
 import { REGIONS, REGION_ID, PV_NAMES, PV_OSTIUM, PV_SLEEVE, type PvName, type RegionName } from '../regions';
 import { DIMENSION_SETS, LAYOUT, MESH_GRID_MM, type AnatomyDimensions, type DimensionSetId } from './dimensions';
-import { CONDUCTION } from '../../params';
+import { AV_NODE, CONDUCTION } from '../../params';
 import {
   add, dist, dot, ellipsoid, norm, projectToSurface, scale, smoothUnion, sub, tube, tubeFrame, v3,
   type Sdf, type TubeFrame,
@@ -284,7 +284,8 @@ function buildRightAtrium(D: AnatomyDimensions) {
     if (veinLabel(ivc, p, D.vein.length - 1)) return 'ivc';
     if (dist(p, P(hisV)) < 5) return 'his_region';
     if (dist(p, P(avV)) < 4) return 'av_node';
-    if (dist(p, P(slowV)) < 5) return 'slow_pathway';
+    // 遅伝導路の領域（AV_NODE.slowRegion.radiusMm。遅伝導路の入口の領域と同じ半径）
+    if (dist(p, P(slowV)) <= AV_NODE.slowRegion.radiusMm) return 'slow_pathway';
     if (axialDistance(csOs, p) > -3 && radialDistance(csOs, p) < csOs.radius * 1.8) return 'cs_os';
     // CTI は三尖弁輪の縁まで続く（弁輪の帯より優先しないと、弁輪沿いに通常の速さの抜け道が残る）
     if (segmentDistance(p, P(ctiIvc), P(ctiTv)) < 7) return 'cti';

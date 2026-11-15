@@ -2,6 +2,26 @@ import type { ArrhythmiaScenario } from '../types';
 import { slowPathway } from '../conduction/AvNode';
 import { distance, protocolEvents, protocolsAfterLastLesion } from '../learning/conditions';
 import { reconnectionGoal } from './common';
+import { AV_NODE } from '../params';
+import type { SimulationEngine } from '../sim/SimulationEngine';
+
+/** 遅伝導路の領域の頂点のうち、焼けた（伝導しない）割合 */
+export function slowPathwayAblatedFraction(engine: SimulationEngine): number {
+  const region = slowPathwayRegion(engine), viab = engine.ca.tissue.viability;
+  return region.length ? region.filter((v) => viab[v] <= 0).length / region.length : 0;
+}
+
+/** 遅伝導路の領域（RA の、遅伝導路の目印から AV_NODE.slowRegion.radiusMm 以内の頂点） */
+export function slowPathwayRegion(engine: SimulationEngine): number[] {
+  const c = engine.model.anatomy.anchors.slowPathway.point, ra = engine.mesh.parts![1];
+  const out: number[] = [];
+  for (let v = ra.vertexStart; v < ra.vertexStart + ra.vertexCount; v++) {
+    const p = engine.query.position(v);
+    if (Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z) <= AV_NODE.slowRegion.radiusMm) out.push(v);
+  }
+  return out;
+}
+
 
 /**
  * AVNRT（遅伝導路、通常型。docs/DESIGN.md §5.3）
@@ -26,11 +46,18 @@ export const avnrtScenario: ArrhythmiaScenario = {
   setupSubstrate(engine) {
     const c = engine.conduction;
     c.pathways = c.pathways.slice(0, 1);
-    c.pathways.push(slowPathway(engine.model.anatomy.anchors.slowPathway.vertex));
+    const sp = slowPathway(engine.model.anatomy.anchors.slowPathway.vertex);
+    sp.region = slowPathwayRegion(engine);
+    c.pathways.push(sp);
   },
   structuralChecks(engine) {
-    const v = engine.model.anatomy.anchors.slowPathway.vertex;
-    return [{ id: 'slow-pathway-lesion', label: '遅伝導路の部位（Koch 三角の後下方）に病変がある', ok: engine.ca.tissue.viability[v] <= 0 }];
+    const f = slowPathwayAblatedFraction(engine), R = AV_NODE.slowRegion;
+    const state = f >= R.blockFraction ? '離断' : f >= R.modifyFraction ? '修飾' : '未治療';
+    return [{
+      id: 'slow-pathway-lesion',
+      label: `遅伝導路の領域（Koch 三角の後下方）を通電した：焼けた割合 ${Math.round(f * 100)} %・${state}（${Math.round(R.modifyFraction * 100)} % 以上で修飾、${Math.round(R.blockFraction * 100)} % 以上で離断）`,
+      ok: f >= R.modifyFraction,
+    }];
   },
   energies: ['rf'],
   goals: [
@@ -50,14 +77,14 @@ export const avnrtScenario: ArrhythmiaScenario = {
     },
     {
       id: 'junctional', label: '遅伝導路（CS 口と三尖弁輪の間）で通電し接合部調律を確認する',
-      hint: 'ABL を CS 口の前方・三尖弁輪の近く（Koch 三角の後下方）に置いて RF 通電する',
+      hint: 'ABL を CS 口の前方・三尖弁輪の近く（Koch 三角の後下方、「遅伝導路部位」の領域の中）に置いて RF 通電する',
       achieved: ({ engine }) => !!engine.ablation.active?.last.junctional || !!engine.ablation.last?.junctional,
     },
     {
       id: 'noninducible', label: '同じプロトコルで非誘発を確認する',
       hint: '通電の後に、もう一度期外刺激を行う',
       achieved: (ctx) => protocolsAfterLastLesion(ctx).some((e) => e.status === 'noninducible')
-        && ctx.engine.ca.tissue.viability[ctx.engine.model.anatomy.anchors.slowPathway.vertex] <= 0,
+        && slowPathwayAblatedFraction(ctx.engine) >= AV_NODE.slowRegion.modifyFraction,
     },
     reconnectionGoal(() => avnrtScenario),
   ],

@@ -217,7 +217,18 @@ export class SimulationEngine {
 
     // 房室結節の経路の入口頂点・副伝導路の心房付着部に興奮が届いたか
     this.conduction.pathways.forEach((p, k) => {
-      const la = t.lastActivation[p.vertex];
+      let la = t.lastActivation[p.vertex];
+      if (p.region) {
+        // 遅伝導路の領域：焼けた割合を更新し、入口頂点が焼けていれば領域の生きている頂点のうち最も早く興奮したものを入口にする
+        let dead = 0, first = Infinity;
+        for (const v of p.region) {
+          if (t.viability[v] <= 0) { dead++; continue; }
+          const x = t.lastActivation[v];
+          if (x > (this.lastEntry[k] ?? -1) && x < first) first = x;
+        }
+        p.ablatedFraction = dead / p.region.length;
+        if (t.viability[p.vertex] <= 0) la = first < Infinity ? first : -1;
+      }
       if (la > (this.lastEntry[k] ?? -1)) {
         this.lastEntry[k] = la;
         this.conduction.atrialArrival(k, la);
@@ -225,6 +236,8 @@ export class SimulationEngine {
     });
     const ap = this.conduction.ap;
     if (ap) {
+      // 副伝導路は 1 本の束：心房側の付着部のどれか 1 点が焼ければ、順行・逆行とも途絶える
+      ap.interrupted = ap.vertices.some((v) => t.viability[v] <= 0);
       let first = Infinity;
       for (const v of ap.vertices) if (t.lastActivation[v] > this.lastApSeen) first = Math.min(first, t.lastActivation[v]);
       if (first < Infinity) {

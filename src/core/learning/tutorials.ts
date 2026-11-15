@@ -97,7 +97,7 @@ export const PVI_TUTORIAL: Tutorial = {
     },
     {
       id: 'ablate-lspv', title: 'LSPV を隔離する', target: 'ablation',
-      instruction: 'エネルギーを RF にして、ABL を LSPV の口の前庭部（口から 1 cm ほど LA 側）に当て、隙間なく一周するように通電します。',
+      instruction: 'エネルギーを RF にして、ABL を LSPV の口の前庭部（口から 1 cm ほど LA 側）に当て、隙間なく一周するように通電します。PVI は洞調律でも AF 中でも行います。隔離の確認は、PV 電位の消失または解離（LA と無関係なリズム）で判定します。',
       hint: '目安は 30 W・30 秒、点の間隔は約 5 mm 以内です。1 つの向きからは口の半周ほどしか見えないので、視点を回して後ろ側も焼きます（領域の名前「LSPV 口」を目安に）。接触圧が低いと病変が浅くなります。貫壁性の表示も見てください。',
       done: (c) => isolatedPvs(c.engine).includes('LSPV'),
     },
@@ -183,7 +183,7 @@ function aflTutorial(direction: 'ccw' | 'cw'): Tutorial {
       },
       {
         id: 'cti-line', title: 'CTI に線を引く', target: 'ablation',
-        instruction: 'ABL を三尖弁輪側の CTI に置き、IVC まで点状の通電を並べて連続した線にします。',
+        instruction: 'ABL を三尖弁輪側の CTI に置き、IVC まで点状の通電を並べて連続した線にします。粗動中に CTI へ通電するのが標準です。通電中に粗動が止まるのが良い所見で、その後に両方向性ブロックを確かめます。',
         hint: '三尖弁輪側は壁が厚い（5 mm）ので、30 W では貫壁しにくくなります。40 W か、接触圧を上げた長めの通電にします。貫壁性の表示を見ながら進めます。',
         done: (c) => c.goals.isAchieved('cti-line'),
       },
@@ -226,8 +226,8 @@ export const AVNRT_TUTORIAL: Tutorial = {
     },
     {
       id: 'junctional', title: '遅伝導路で通電する', target: 'ablation',
-      instruction: 'ABL を Koch 三角の後下方（CS 口と三尖弁輪の間）に置き、RF で通電します。接合部調律が出ることを確かめます。',
-      hint: 'His 部位に近づきすぎると注意が出ます（房室ブロックの危険）。CS 口の高さより下で通電します。',
+      instruction: 'ABL を Koch 三角の後下方（CS 口と三尖弁輪の間、「遅伝導路部位」の領域の中）に置き、RF で通電します。洞調律で通電するのが標準で、通電中の接合部調律が目印です。接合部調律のときに VA ブロック（房室ブロックの兆候）が出たら、すぐ通電を止めます。',
+      hint: '頻拍が続いているときは、「症例をリセット」で洞調律から始め直してから通電します（この時点ではまだ病変がないので、リセットしても失うものはありません）。His 部位に近づきすぎると注意が出ます（房室ブロックの危険）。CS 口の高さより下で通電します。遅伝導路は領域なので、一部だけ焼けた状態（修飾）でも、jump は残ってエコーが出ず非誘発になることがあります。',
       done: (c) => c.goals.isAchieved('junctional'),
     },
     {
@@ -265,8 +265,8 @@ export const WPW_TUTORIAL: Tutorial = {
     },
     {
       id: 'ablate', title: '副伝導路を焼く', target: 'ablation',
-      instruction: '最早期の部位に ABL を置き、RF で通電します。通電中にデルタ波が消えることを見ます。',
-      hint: '僧帽弁輪の縁に近い部位です。',
+      instruction: '最早期の部位に ABL を置き、RF で通電します。洞調律（デルタ波の消失を目印に）か心房ペーシング中に通電するのが標準です。AVRT 中の通電もできますが、頻拍が止まるときにカテーテルがずれやすいので注意します。',
+      hint: '僧帽弁輪の縁に近い部位です。副伝導路は 1 本の束なので、心房側の付着部が病変に入れば伝導は途絶えます。頻拍が続いているときは、「症例をリセット」で洞調律から始め直してもかまいません（取得点は消えます）。',
       done: (c) => c.goals.isAchieved('ap-ablation'),
     },
     {

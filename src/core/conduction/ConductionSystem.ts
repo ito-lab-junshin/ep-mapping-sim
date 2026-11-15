@@ -1,5 +1,5 @@
 import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS, type ApSite } from '../params';
-import { antegradeTime, fastPathway, type PathwayState } from './AvNode';
+import { antegradeTime, fastPathway, pathwayStatus, type PathwayState } from './AvNode';
 
 /** 心室の興奮（QRS 開始）の記録 */
 export interface VentricularBeat {
@@ -24,6 +24,8 @@ export interface AccessoryPathwayState {
   antegradeErpMs: number;
   retrogradeErpMs: number;
   ventricularDelayMs: number;
+  /** 付着部のどれかが焼けて伝導が途絶えた（副伝導路は 1 本の束なので、1 点で途絶える。エンジンが毎刻み更新する） */
+  interrupted?: boolean;
 }
 
 type Event =
@@ -83,7 +85,11 @@ export class ConductionSystem {
     const p = this.pathways[k];
     if (k === 0) push(this.aTimes, t);
     if (this.blocked) return;
-    const ah = antegradeTime(p.params, t - p.last);
+    // 遅伝導路の領域の通電：離断なら伝導しない、修飾なら ERP が延びる
+    const status = pathwayStatus(p);
+    if (status === 'blocked') return;
+    const params = status === 'modified' ? { ...p.params, erpMs: p.params.erpMs + AV_NODE.slowRegion.modifiedErpIncreaseMs } : p.params;
+    const ah = antegradeTime(params, t - p.last);
     if (ah === null) return; // 不応期でブロック
     p.last = t;
     this.schedule({ time: t + ah, kind: 'common', pathway: k });
@@ -92,7 +98,7 @@ export class ConductionSystem {
   /** 副伝導路の心房付着部に興奮が届いた（順行） */
   apAtrialArrival(t: number) {
     const ap = this.ap;
-    if (!ap || t - ap.last < ap.antegradeErpMs) return;
+    if (!ap || ap.interrupted || t - ap.last < ap.antegradeErpMs) return;
     ap.last = t;
     this.schedule({ time: t + ap.conductionMs, kind: 'ventricle', source: 'ap' });
   }
@@ -134,7 +140,8 @@ export class ConductionSystem {
     this.lastH = t;
     push(this.hTimes, t);
     this.schedule({ time: t + this.hvMs, kind: 'ventricle', source: 'his' });
-    // 共通路から、いま通らなかった経路を逆行して心房へ（エコー）
+    // 共通路から、いま通らなかった経路を逆行して心房へ（エコー）。修飾された遅伝導路を下行した興奮はエコーにならない
+    if (k >= 0 && pathwayStatus(this.pathways[k]) === 'modified') return;
     this.pathways.forEach((p, j) => {
       if (j === k || p.params.retroMs === undefined) return;
       if (t - p.last < (p.params.retroErpMs ?? p.params.erpMs)) return;
@@ -183,6 +190,7 @@ export class ConductionSystem {
 
   private onApRetro(t: number) {
     const ap = this.ap;
+    if (ap?.interrupted) return;
     if (!ap || t - ap.last < ap.retrogradeErpMs) return;
     ap.last = t;
     for (const v of ap.vertices) this.addExit({ time: t + ap.conductionMs, vertex: v, via: 'ap' });

@@ -128,3 +128,28 @@ describe('WPW の根治の基準：デルタ波の消失', () => {
     expect(wpwScenario.structuralChecks(t).find((c) => c.id === 'no-delta')!.ok).toBe(false);
   }, 120_000);
 });
+
+describe('WPW：副伝導路は 1 本の束（付着部の 1 点で途絶える）', () => {
+  it('心房側の付着部の 1 頂点だけが焼けても、デルタ波が消え、RV 刺激で副伝導路を逆行せず、非誘発', () => {
+    const e = make('leftFreeWall');
+    const ap = e.conduction.ap!.vertices;
+    e.ablation.field.raise(ap[0], 1);
+    expect(e.ca.tissue.viability[ap[1]]).toBeGreaterThan(0);
+    e.tick(2500);
+    expect(e.conduction.ap!.interrupted).toBe(true);
+    expect(e.conduction.vBeats.filter((b) => b.time > 1000).every((b) => b.source === 'his')).toBe(true);
+    const checks = verifyCure(e, wpwScenario, PROTOCOL);
+    expect(checks.every((c) => c.ok), JSON.stringify(checks)).toBe(true);
+  }, 120_000);
+
+  it('AVRT 中の RF 通電では「頻拍が止まるときにカテーテルがずれやすい」注意が出る', () => {
+    const r = tryInduce(make('leftFreeWall'), wpwScenario, PROTOCOL);
+    const e = r.engine;
+    expect(e.rhythm.state).toBe('tachycardia');
+    const ap = e.conduction.ap!.vertices;
+    e.setPlacement('abl', { kind: 'free', point: e.query.position(ap[0]), heightMm: 1, rotationDeg: 0 });
+    expect(e.ablation.start('rf')).toBeNull();
+    e.ablation.step(e.sampleMs);
+    expect(e.ablation.metrics()?.message ?? '').toContain('AVRT 中の通電');
+  }, 120_000);
+});

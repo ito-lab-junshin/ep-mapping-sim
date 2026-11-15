@@ -24,6 +24,19 @@ export interface PathwayState {
   vertex: number;
   /** 最後に興奮した時刻（順行・逆行のどちらでも） */
   last: number;
+  /** 入口の領域の頂点（遅伝導路。AV_NODE.slowRegion）。なければ入口頂点だけ */
+  region?: number[];
+  /** 領域の頂点のうち焼けた割合（エンジンが毎刻み更新する） */
+  ablatedFraction?: number;
+}
+
+/** 経路の状態：離断（伝導しない）・修飾（ERP 延長・エコーなし）・正常 */
+export function pathwayStatus(p: PathwayState): 'blocked' | 'modified' | 'intact' {
+  const f = p.ablatedFraction ?? 0, R = AV_NODE.slowRegion;
+  if (!p.region) return 'intact';
+  if (f >= R.blockFraction) return 'blocked';
+  if (f >= R.modifyFraction) return 'modified';
+  return 'intact';
 }
 
 export function fastPathway(vertex: number): PathwayState {

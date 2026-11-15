@@ -125,6 +125,14 @@ export const AV_NODE = {
    * 刺激周期 600 ms で VA 約 130 ms、400 ms で VA が延びてから途絶える（逆行性 Wenckebach）、380 ms で 3:2
    */
   retrograde: { vhMs: 40, baseMs: 88, decrementMaxMs: 70, decrementTauMs: 70, erpMs: 245 },
+  /**
+   * 遅伝導路の領域（QA の追補、先生と決定）：遅伝導路は 1 点ではなく、Koch 三角の後下方（CS 口と三尖弁輪の間）の数 mm の領域。
+   * 入口は遅伝導路の目印から半径 radiusMm の頂点の集まり（表示の「遅伝導路部位」も同じ半径）。
+   * 領域の頂点のうち焼けた（伝導しない）割合が blockFraction 以上で離断（遅伝導路の伝導が消える。先生の指定 60 %）、
+   * modifyFraction 以上で修飾：ERP が modifiedErpIncreaseMs 延び、遅伝導路を下行した興奮は速伝導路を逆行しない（jump は残るがエコーが出ず非誘発）。
+   * radiusMm・modifyFraction・modifiedErpIncreaseMs は仮定値（教育用近似）。通電中の接合部調律は、ABL の先端が領域内のときに出る
+   */
+  slowRegion: { radiusMm: 3.5, blockFraction: 0.6, modifyFraction: 0.2, modifiedErpIncreaseMs: 60 },
 };
 /** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */
 export const HIS_ERP_MS = VENTRICLE_ERP_MS;
@@ -351,8 +359,7 @@ export const ABLATION = {
     flowerOuterMm: 6,
     antralMm: 6,
   },
-  /** 接合部調律：遅伝導路部位から junctionalRadiusMm 以内で RF 通電中、周期 junctionalClMs で接合部の興奮 */
-  junctionalRadiusMm: 5,
+  /** 接合部調律：遅伝導路の領域内（AV_NODE.slowRegion.radiusMm 以内）で RF 通電中、周期 junctionalClMs で接合部の興奮 */
   junctionalClMs: [500, 700] as const,
   /** His 部位にこれより近い通電には注意を出す（合併症は扱わない） */
   hisWarningMm: 5,

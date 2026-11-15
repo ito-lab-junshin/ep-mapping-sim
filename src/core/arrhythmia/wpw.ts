@@ -66,10 +66,11 @@ const INDUCTION: Record<ApSite, InductionMethod> = {
   anteroseptal: { kind: 'extrastimulus', site: 'HRA' },
 };
 
-/** 副伝導路の心房付着部がすべて焼けている */
+/** 副伝導路が途絶えた（心房付着部のどれかが焼けた） */
 export function apAblated(engine: SimulationEngine): boolean {
+  // 副伝導路は 1 本の束なので、付着部のどれか 1 点が焼ければ伝導は途絶える（先生と決定）
   const ap = engine.conduction.ap;
-  return !!ap && ap.vertices.every((v) => engine.ca.tissue.viability[v] <= 0);
+  return !!ap && ap.vertices.some((v) => engine.ca.tissue.viability[v] <= 0);
 }
 
 /** 体表 ECG（デルタ波）から副伝導路の部位を推定する設問の id（answer の question） */
