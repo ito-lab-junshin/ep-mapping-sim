@@ -92,6 +92,18 @@ export class AblationController {
     return { pos: e.position, vertex: e.contactVertex, cf: contactForceG(e.heightMm) };
   }
 
+  /** RF の先端が、前の RF 通電の中心から touchUpMm 以内にあれば（同じ部位への焼き足し）先端の頂点 */
+  private touchUpVertex(): number | undefined {
+    const t = this.tip();
+    if (!t || t.vertex < 0) return undefined;
+    const near = this.engine.lesions.some((l) => {
+      if (l.energy !== 'rf') return false;
+      const c = this.engine.query.position(l.centerVertex);
+      return Math.hypot(c.x - t.pos.x, c.y - t.pos.y, c.z - t.pos.z) <= ABLATION.edema.touchUpMm;
+    });
+    return near ? t.vertex : undefined;
+  }
+
   /** 通電を始める。始められなければ理由を返す */
   start(energy: 'rf' | 'cryo'): string | null {
     if (this.active) return 'すでに通電中です';
@@ -105,6 +117,7 @@ export class AblationController {
       isolatedAtS: null, nextIsolationCheckS: 0, nextJunctional: this.engine.time, junctional: false,
       last: { energy, active: true, elapsedS: 0 },
     };
+    this.field.beginApplication(energy === 'rf' ? this.touchUpVertex() : undefined);
     return null;
   }
 
@@ -142,9 +155,26 @@ export class AblationController {
     } as Lesion);
   }
 
+  /**
+   * 待機時間（分）：伝播は計算せず、処置の時計を進めて浮腫を回復させる（再伝導の確認）
+   */
+  wait(minutes: number = ABLATION.edema.waitMin) { this.field.wait(minutes); }
+
+  /** アデノシン負荷：シミュレーション時間で adenosineMs のあいだ浮腫の効果を消す（休眠伝導） */
+  private adenosineUntil = -Infinity;
+  giveAdenosine() {
+    this.adenosineUntil = this.engine.time + ABLATION.edema.adenosineMs;
+    this.field.setAdenosine(true);
+  }
+  get adenosineActive() { return this.field.adenosineActive; }
+  get adenosineRemainingMs() { return Math.max(0, this.adenosineUntil - this.engine.time); }
+
   /** エンジンの 1 刻み（simDtMs）ごとに呼ぶ */
   step(simDtMs: number) {
+    // 処置の時計：シミュレーション時間で進む（通電中は通電の時計の倍速の分も）
     const a = this.active;
+    this.field.advance((simDtMs / 60000) * (a ? this.speed : 1));
+    if (this.field.adenosineActive && this.engine.time >= this.adenosineUntil) this.field.setAdenosine(false);
     if (!a) return;
     const dtS = (simDtMs / 1000) * this.speed;
     a.elapsedS += dtS;

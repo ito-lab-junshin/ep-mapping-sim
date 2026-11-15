@@ -1,4 +1,5 @@
 import type { ArrhythmiaId, CaseOptions } from '../types';
+import { ABLATION } from '../params';
 import type { ProtocolConfig } from '../pacing/ProtocolSession';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { loadParametricSync } from '../geometry/ChamberLoader';
@@ -48,6 +49,8 @@ export interface BatchConfig {
   induction?: Partial<ProtocolConfig>;
   /** 通電の後にもう一度誘発を試す（既定 true） */
   inductionAfterAblation?: boolean;
+  /** 浮腫・再伝導：通電の後の待機時間（分。既定 ABLATION.edema.waitMin = 20）。0 で待機後の結果を出さない */
+  waitMin?: number;
 }
 
 export interface BatchRow {
@@ -72,6 +75,9 @@ export interface BatchRow {
   /** 天蓋の旋回が止まった（AF の型 persistent だけ） */
   roofDriverStopped?: boolean | null;
   inducedAfterAblation: boolean | null;
+  /** 待機時間（分）と、待機の後の結果（浮腫が引いた後。再伝導があれば隔離が崩れる） */
+  waitMin?: number | null;
+  after?: { isolatedPvs: number | null; pviComplete: boolean | null; svcIsolated: boolean | null; roofDriverStopped: boolean | null; induced: boolean | null } | null;
 }
 
 /** 条件の展開：base → 条件の params → sweep の組み合わせ の順に重ねる */
@@ -120,7 +126,7 @@ export function totalActivationMs(e: SimulationEngine): number {
 }
 
 /** 1 つの条件を実行する */
-export function runCondition(c: ExpandedCondition, inductionAfterAblation = true): BatchRow {
+export function runCondition(c: ExpandedCondition, inductionAfterAblation = true, waitMin: number = ABLATION.edema.waitMin): BatchRow {
   return withParams(c.params, () => {
     const scenario = SCENARIOS[c.scenario];
     const make = () => { const e = new SimulationEngine(loadParametricSync(scenario.anatomy)); scenario.setupSubstrate(e, c.options); return e; };
@@ -138,12 +144,28 @@ export function runCondition(c: ExpandedCondition, inductionAfterAblation = true
       const t = base.lesions.map((l) => 100 * l.transmurality);
       row.lesions = t.length;
       if (t.length) { row.transmuralityMinPct = Math.min(...t); row.transmuralityMeanPct = t.reduce((a, b) => a + b, 0) / t.length; }
-      if (c.scenario === 'af') {
-        row.isolatedPvs = isolatedPvs(base).length; row.pviComplete = row.isolatedPvs === PV_NAMES.length;
-        if (afTypeOf(base.caseOptions) === 'pvSvc') row.svcIsolated = svcIsolated(base);
-        if (afTypeOf(base.caseOptions) === 'persistent') row.roofDriverStopped = roofAreaIsolated(base) || !roofDriverActive(base, scenario);
+      const measure = () => {
+        const af = c.scenario === 'af', type = afTypeOf(base.caseOptions);
+        const iso = af ? isolatedPvs(base).length : null;
+        return {
+          isolatedPvs: iso, pviComplete: af ? iso === PV_NAMES.length : null,
+          svcIsolated: af && type === 'pvSvc' ? svcIsolated(base) : null,
+          roofDriverStopped: af && type === 'persistent' ? roofAreaIsolated(base) || !roofDriverActive(base, scenario) : null,
+          induced: inductionAfterAblation ? tryInduce(base, scenario, c.induction ?? {}).induced : null,
+        };
+      };
+      // 通電の直後（浮腫あり）
+      const acute = measure();
+      row.isolatedPvs = acute.isolatedPvs; row.pviComplete = acute.pviComplete;
+      if (acute.svcIsolated !== null) row.svcIsolated = acute.svcIsolated;
+      if (acute.roofDriverStopped !== null) row.roofDriverStopped = acute.roofDriverStopped;
+      row.inducedAfterAblation = acute.induced;
+      // 待機の後（浮腫が引いた後。再伝導）
+      if (waitMin > 0) {
+        base.ablation.wait(waitMin);
+        row.waitMin = waitMin;
+        row.after = measure();
       }
-      if (inductionAfterAblation) row.inducedAfterAblation = tryInduce(base, scenario, c.induction ?? {}).induced;
     }
     return row;
   });
@@ -151,7 +173,7 @@ export function runCondition(c: ExpandedCondition, inductionAfterAblation = true
 
 export function runBatch(cfg: BatchConfig, onRow?: (row: BatchRow, index: number, total: number) => void): BatchRow[] {
   const conds = expandConditions(cfg);
-  return conds.map((c, i) => { const r = runCondition(c, cfg.inductionAfterAblation ?? true); onRow?.(r, i, conds.length); return r; });
+  return conds.map((c, i) => { const r = runCondition(c, cfg.inductionAfterAblation ?? true, cfg.waitMin ?? ABLATION.edema.waitMin); onRow?.(r, i, conds.length); return r; });
 }
 
 const fmt = (x: number | null | boolean | undefined, d = 1) => (x === null || x === undefined ? '' : typeof x === 'boolean' ? (x ? '1' : '0') : Number.isInteger(x) ? String(x) : x.toFixed(d));
@@ -165,10 +187,11 @@ export function toCsv(rows: BatchRow[], cfg: BatchConfig, meta: Record<string, s
   lines.push('# ep-mapping-sim batch（教育用シミュレータ。値は教育用近似）');
   for (const [k, v] of Object.entries(meta)) lines.push(`# ${k}: ${v}`);
   lines.push(`# config: ${JSON.stringify(cfg)}`);
-  lines.push('# 列：p_wave_ms＝洞調律 1 拍の両心房の総興奮時間、tachy_cl_ms＝頻拍の周期長、transmurality_*＝病変の中心の貫壁性、pvi_complete＝4 本の PV の entrance block（AF のみ）、ap_site＝副伝導路の部位（WPW のみ）、af_type＝AF の型（AF のみ）');
+  lines.push('# 列：p_wave_ms＝洞調律 1 拍の両心房の総興奮時間、tachy_cl_ms＝頻拍の周期長、transmurality_*＝病変の中心の貫壁性、pvi_complete＝4 本の PV の entrance block（AF のみ）、ap_site＝副伝導路の部位（WPW のみ）、af_type＝AF の型（AF のみ）。通電の結果の列は通電の直後（浮腫あり）、*_after_wait は wait_min 分の待機の後（浮腫が引いた後、再伝導）');
   const header = ['id', 'scenario', 'ap_site', 'af_type', ...paramKeys, 'induced', 'tachy_cl_ms', 'p_wave_ms',
     'energy', 'power_w', 'duration_s', 'height_mm', 'spacing_mm', 'push01', 'misalign_deg', 'pfa_shape', 'pfa_applications',
-    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'svc_isolated', 'roof_driver_stopped', 'induced_after_ablation'];
+    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'svc_isolated', 'roof_driver_stopped', 'induced_after_ablation',
+    'wait_min', 'isolated_pvs_after_wait', 'pvi_complete_after_wait', 'svc_isolated_after_wait', 'roof_driver_stopped_after_wait', 'induced_after_wait'];
   lines.push(header.join(','));
   for (const r of rows) {
     const a = r.ablation;
@@ -177,6 +200,7 @@ export function toCsv(rows: BatchRow[], cfg: BatchConfig, meta: Record<string, s
       fmt(r.induced), fmt(r.tachyClMs, 0), fmt(r.pWaveMs, 0),
       a?.energy ?? '', fmt(a?.powerW), fmt(a?.durationS), fmt(a?.heightMm), fmt(a?.spacingMm), fmt(a?.push01, 2), fmt(a?.misalignDeg), a?.shape ?? '', fmt(a?.applications),
       fmt(r.lesions), fmt(r.transmuralityMinPct, 0), fmt(r.transmuralityMeanPct, 0), fmt(r.isolatedPvs), fmt(r.pviComplete), fmt(r.svcIsolated), fmt(r.roofDriverStopped), fmt(r.inducedAfterAblation),
+      fmt(r.waitMin), fmt(r.after?.isolatedPvs), fmt(r.after?.pviComplete), fmt(r.after?.svcIsolated), fmt(r.after?.roofDriverStopped), fmt(r.after?.induced),
     ].map(cell).join(','));
   }
   return lines.join('\n') + '\n';

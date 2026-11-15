@@ -5,7 +5,7 @@ import { avnrtScenario } from '../arrhythmia/avnrt';
 import { wpwScenario } from '../arrhythmia/wpw';
 import { aflCtiScenario } from '../arrhythmia/aflCti';
 import { afScenario } from '../arrhythmia/af';
-import { verifyCure } from '../arrhythmia/common';
+import { reconnectionCheck, verifyCure } from '../arrhythmia/common';
 import { PV_NAMES, REGION_ID, type PvName } from '../geometry/regions';
 import type { ArrhythmiaScenario, Vec3 } from '../types';
 import type { AnatomyDimensionSet } from '../types';
@@ -56,10 +56,14 @@ describe('回帰：RF で 4 症例', () => {
     }
   };
 
-  it('通常型 AFL：30 W・30 秒の線では三尖弁輪側（壁厚 5 mm）が貫壁せず、線は未完成', () => {
+  it('通常型 AFL：30 W・30 秒の線では三尖弁輪側（壁厚 5 mm）が貫壁せず、直後は浮腫でブロックに見えるが、20 分の待機で再伝導（線は未完成）', () => {
     const e = make('aflRemodeled', aflCtiScenario);
     ctiLine(e, 30, 30);
-    expect(aflCtiScenario.structuralChecks(e).find((c) => c.id === 'cti-line')!.ok).toBe(false);
+    const line = () => aflCtiScenario.structuralChecks(e).find((c) => c.id === 'cti-line')!.ok;
+    expect(line(), '通電の直後（浮腫あり）').toBe(true);
+    expect(reconnectionCheck(e, aflCtiScenario).ok).toBe(false);
+    e.ablation.wait(20);
+    expect(line(), '20 分の待機の後').toBe(false);
   }, 120_000);
 
   it('通常型 AFL：40 W・45 秒の線で両方向性ブロック・非誘発', () => {

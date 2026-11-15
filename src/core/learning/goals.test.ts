@@ -28,6 +28,12 @@ const protocol = (e: SimulationEngine, site: PacingSite, status: 'induced' | 'no
 });
 const ids = (t: GoalTracker) => [...t.achievedAt.keys()];
 
+/** 待機時間（既定 20 分）を進め、学習の出来事として記録する */
+function waitAndRecord(t: GoalTracker, e: SimulationEngine) {
+  e.ablation.wait();
+  t.record({ kind: 'wait', time: e.time, minutes: 20, lesionCount: e.lesions.length });
+}
+
 describe('学習ゴール：AF（PVI）', () => {
   it('環状カテーテルで PV 電位 → 4 本の隔離 → 環状カテーテルからの刺激で exit block の順に達成する', () => {
     const e = make('afRemodeled', afScenario);
@@ -68,6 +74,11 @@ describe('学習ゴール：AF（PVI）', () => {
     expect(protocolStartState(e, 'CIRC')).toEqual({ contact: true, circPv: 'LSPV', circPvIsolated: true });
     t.record(protocol(e, 'CIRC', 'noninducible', protocolStartState(e, 'CIRC')));
     t.update(e);
+    // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
+    expect(t.isAchieved('reconnection')).toBe(false);
+    waitAndRecord(t, e);
+    t.update(e);
+    expect(t.activeGoals().filter((g) => !t.isAchieved(g.id)).map((g) => g.id)).toEqual([]);
     expect(t.allAchieved).toBe(true);
   }, 120_000);
 });
@@ -137,6 +148,11 @@ describe('学習ゴール：AVNRT', () => {
     expect(t.isAchieved('noninducible')).toBe(false);
     t.record(protocol(e, 'HRA', 'noninducible'));
     t.update(e);
+    // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
+    expect(t.isAchieved('reconnection')).toBe(false);
+    waitAndRecord(t, e);
+    t.update(e);
+    expect(t.activeGoals().filter((g) => !t.isAchieved(g.id)).map((g) => g.id)).toEqual([]);
     expect(t.allAchieved).toBe(true);
   }, 120_000);
 });
@@ -154,10 +170,16 @@ describe('学習ゴール：WPW', () => {
     t.update(e, [pt(ap[0], 0, 1), ...others]);
     expect(t.isAchieved('earliest')).toBe(true);
     rf(e, e.query.position(ap[Math.floor(ap.length / 2)]));
+    e.tick(2500); // デルタ波の消失の判定に洞調律の拍が要る
     t.update(e);
     expect(t.isAchieved('ap-ablation')).toBe(true);
     t.record(protocol(e, 'CS_DIST', 'noninducible'));
     t.update(e);
+    // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
+    expect(t.isAchieved('reconnection')).toBe(false);
+    waitAndRecord(t, e);
+    t.update(e);
+    expect(t.activeGoals().filter((g) => !t.isAchieved(g.id)).map((g) => g.id)).toEqual([]);
     expect(t.allAchieved).toBe(true);
   }, 120_000);
 });

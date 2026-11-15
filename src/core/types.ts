@@ -288,7 +288,10 @@ export type LearningEvent =
     circPvIsolated: boolean;
   }
   | { kind: 'answer'; time: number; question: 'afl-direction'; value: 'ccw' | 'cw'; correct: boolean }
-  | { kind: 'answer'; time: number; question: 'ap-site'; value: ApSite; correct: boolean };
+  | { kind: 'answer'; time: number; question: 'ap-site'; value: ApSite; correct: boolean }
+  /** 再伝導の確認（浮腫・再伝導）：待機時間（分）またはアデノシン負荷。lesionCount はそのときの病変の数 */
+  | { kind: 'wait'; time: number; minutes: number; lesionCount: number }
+  | { kind: 'adenosine'; time: number; lesionCount: number };
 
 /** ゴールの判定に渡す材料 */
 export interface GoalContext {

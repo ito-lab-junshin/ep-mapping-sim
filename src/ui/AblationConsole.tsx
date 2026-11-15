@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
-import { useEngine } from '../state/engine';
+import { giveAdenosine, useEngine, waitProcedure } from '../state/engine';
 import { SCENARIOS } from '../core/arrhythmia';
 import { ABLATION } from '../core/params';
 import { ENERGY_LABEL } from '../core/ablation/LesionModel';
@@ -54,7 +54,7 @@ export function AblationConsole() {
         const dt = (q[q.length - 1].wall - q[0].wall) / 1000;
         if (dt >= 0.8) effective.current = (q[q.length - 1].sim - q[0].sim) / dt;
       } else { clockSamples.current = []; effective.current = null; }
-      if (ctl.active || changed) force((x) => x + 1);
+      if (ctl.active || changed || ctl.adenosineActive) force((x) => x + 1);
     }, 200);
     return () => clearInterval(id);
   }, [engine, ctl]);
@@ -160,6 +160,7 @@ export function AblationConsole() {
           {shown.message && <dd className="warn full">{shown.message}</dd>}
         </dl>
       )}
+      <ReconnectionPanel />
       {f.ablationIndex && energy === 'rf' && (
         <p className="note">病変指標は本アプリ独自の尺度（その部位の目標量 = 100 %。30 W・20 g で後壁は約 30 秒、前壁は約 40 秒）で、実機の指標・目標値とは異なります。</p>
       )}
@@ -174,5 +175,35 @@ function PvSelect(props: { value: PvName; disabled?: boolean; onChange: (pv: PvN
         {PV_NAMES.map((pv) => <option key={pv} value={pv}>{pv}</option>)}
       </select>
     </label>
+  );
+}
+
+/**
+ * 浮腫・再伝導（docs/DESIGN.md §7）：処置の時計、浮腫の残り、待機時間とアデノシン負荷。
+ * 通電の直後は病変の周りの浮腫で伝導が止まって見える。待機で浮腫が引くと、浅い病変の所は伝導が戻る（再伝導）。
+ */
+function ReconnectionPanel() {
+  const arrhythmia = useSim((s) => s.arrhythmia);
+  useSim((s) => s.placementTick);
+  const engine = useEngine();
+  const ctl = engine.ablation;
+  const [, force] = useState(0);
+  const field = ctl.field;
+  const edemaN = field.edemaVertexCount;
+  const block = field.hasEdemaBlock;
+  const wait = (m: number) => { waitProcedure(engine, arrhythmia, m); force((x) => x + 1); };
+  const adenosine = () => { giveAdenosine(engine, arrhythmia); force((x) => x + 1); };
+  return (
+    <div className="reconnection">
+      <p className="note">処置の時計 {field.procedureMin.toFixed(1)} 分・浮腫のある頂点 {edemaN}{block ? '（浮腫だけで止まっている所がある）' : ''}
+        {ctl.adenosineActive ? `・アデノシン負荷中（残り ${(ctl.adenosineRemainingMs / 1000).toFixed(0)} 秒）` : ''}</p>
+      <div className="row">
+        {[10, ABLATION.edema.waitMin, 30].map((m) => (
+          <button key={m} disabled={!!ctl.active} onClick={() => wait(m)}>待機 {m} 分</button>
+        ))}
+        <button disabled={!!ctl.active || ctl.adenosineActive} onClick={adenosine}>アデノシン負荷</button>
+      </div>
+      <p className="note">通電の直後は浮腫で伝導が止まって見えることがあります。待機（伝播は止めて浮腫の回復だけを進める）かアデノシン負荷（{ABLATION.edema.adenosineMs / 1000} 秒間、浮腫の効果を消す）で再伝導を確かめます。浮腫の値は教育用の仮定値です。</p>
+    </div>
   );
 }

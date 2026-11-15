@@ -50,9 +50,15 @@ export function lesionIndexPct(doseRefS: number, target: RfTarget): number {
 /** 点 center のまわりに RF 病変を置く：深さは中心で depthMm、半径 r の球冠の形で浅くなる */
 export function depositRf(field: LesionField, mesh: SurfaceMesh, center: Vec3, radiusMm: number, depthMm: number) {
   const p = mesh.positions;
+  const margin = ABLATION.edema.marginMm;
   for (let v = 0; v < p.length / 3; v++) {
-    const d = Math.hypot(p[3 * v] - center.x, p[3 * v + 1] - center.y, p[3 * v + 2] - center.z);
+    const dx = p[3 * v] - center.x, dy = p[3 * v + 1] - center.y, dz = p[3 * v + 2] - center.z;
+    const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (d >= radiusMm + margin) continue;
+    // 浮腫：病変の範囲は 1、縁から margin 外側へ直線的に 0
+    field.raiseEdema(v, d < radiusMm ? 1 : 1 - (d - radiusMm) / margin);
     if (d >= radiusMm) continue;
-    field.raiseDepth(v, depthMm * Math.sqrt(1 - (d / radiusMm) ** 2));
+    // 浮腫のある所に重ねて通電すると深く入りにくい（通電を始めたときの浮腫で決める）
+    field.raiseDepth(v, depthMm * Math.sqrt(1 - (d / radiusMm) ** 2) * field.efficacy(v));
   }
 }

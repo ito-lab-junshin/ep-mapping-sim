@@ -8,6 +8,7 @@ import type { Placement } from '../core/catheter/placement';
 import type { CatheterSpec } from '../core/catheter/catalog';
 import type { SystemTheme } from '../systems';
 import { SCENARIOS } from '../core/arrhythmia';
+import { reconnectionCheck } from '../core/arrhythmia/common';
 import { useSim } from './store';
 import { PointCollection } from '../core/mapping/PointCollection';
 import { acquirePoints } from '../core/mapping/acquire';
@@ -188,6 +189,7 @@ export function updateProtocol() {
  */
 export function checkCure(engine: SimulationEngine, id: ArrhythmiaId): CureCheck[] {
   const checks = SCENARIOS[id].structuralChecks(engine);
+  checks.push(reconnectionCheck(engine, SCENARIOS[id]));
   const spontaneous = SCENARIOS[id].induction.kind === 'spontaneous';
   const afterLastLesion = !!session && session.done && sessionLesionCount === engine.lesions.length && engine.lesions.length > 0;
   const noninducible = spontaneous
@@ -233,6 +235,22 @@ export function answerFlutterDirection(engine: SimulationEngine, id: ArrhythmiaI
   if (!actual) return null;
   recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: 'afl-direction', value, correct: value === actual });
   return value === actual;
+}
+
+/** 待機時間（分）：浮腫の回復だけを進め（伝播は計算しない）、学習の出来事として記録する（再伝導の確認） */
+export function waitProcedure(engine: SimulationEngine, id: ArrhythmiaId, minutes: number) {
+  engine.ablation.wait(minutes);
+  recordLearningEvent(engine, id, { kind: 'wait', time: engine.time, minutes, lesionCount: engine.lesions.length });
+  const s = useSim.getState();
+  s.setCureChecks(null);
+  s.bumpPlacement();
+}
+
+/** アデノシン負荷（浮腫の効果を 20 秒消す）を記録する（再伝導の確認） */
+export function giveAdenosine(engine: SimulationEngine, id: ArrhythmiaId) {
+  engine.ablation.giveAdenosine();
+  recordLearningEvent(engine, id, { kind: 'adenosine', time: engine.time, lesionCount: engine.lesions.length });
+  useSim.getState().setCureChecks(null);
 }
 
 /** 副伝導路の部位の設問に答える（部位を伏せた WPW）。正解なら true、副伝導路がなければ null */

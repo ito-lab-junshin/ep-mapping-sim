@@ -42,6 +42,7 @@ npm run batch -- examples/batch-af-types.json results.csv       # AF の型（PV
 | `ablation` | 症例ごとの標準の通電（下表）。省くと通電しない |
 | `induction` | 誘発の刺激プロトコルの上書き（`s1Beats`・`s2StartMs`・`observeMs`・`site` など）。`site` を省くと症例の推奨（WPW は部位ごと：左側自由壁は CS 遠位、ほかは HRA） |
 | `inductionAfterAblation` | 通電の後にもう一度誘発を試す（既定 true） |
+| `waitMin` | 浮腫・再伝導：通電の後の待機時間（分、既定 20）。待機の後の結果を `*_after_wait` の列に出す。0 で出さない |
 
 上書きは `base` → 条件の `params` → `sweep` の順に重なる。
 
@@ -85,11 +86,12 @@ RF は `powerW`・`durationS`・`heightMm`（先端の壁からの距離。接�
 | `isolated_pvs`・`pvi_complete` | 隔離できた PV の数と PVI の完了（AF のみ） |
 | `svc_isolated` | SVC の隔離（AF の型 pvSvc のみ） |
 | `roof_driver_stopped` | 天蓋の旋回が止まった（channel を横切る病変か領域の隔離。AF の型 persistent のみ） |
-| `induced_after_ablation` | 通電の後の誘発 |
+| `induced_after_ablation` | 通電の後の誘発（通電の直後＝浮腫あり。隔離などの列も同じ） |
+| `wait_min`・`isolated_pvs_after_wait`・`pvi_complete_after_wait`・`svc_isolated_after_wait`・`roof_driver_stopped_after_wait`・`induced_after_wait` | 待機時間（分）と、待機の後（浮腫が引いた後）の結果。再伝導があると直後の結果と食い違う |
 
 ## 2. 症例の状態の書き出し・読み込み（ブラウザ）
 
-操作パネルの「研究用（JSON）」：パラメータ（上書きできる全項目）・症例の選択肢（`options`：WPW の副伝導路の部位と伏せるか。古い JSON にはなく、既定の選択肢になる）・カテーテルの配置・病変（頂点ごとの貫壁性と病変タグ）を JSON にする。
+操作パネルの「研究用（JSON）」：パラメータ（上書きできる全項目）・症例の選択肢（`options`：WPW の副伝導路の部位と伏せるか。古い JSON にはなく、既定の選択肢になる）・浮腫（`edema`）と処置の時計（`procedureMin`）・カテーテルの配置・病変（頂点ごとの貫壁性と病変タグ）を JSON にする。
 読み込むと、パラメータを反映して症例を作り直し、配置と病変を戻す。パラメータはページを再読み込みすると既定に戻る。
 形式は `src/core/research/caseState.ts` の `CaseState`（`format: "ep-mapping-sim/case"`、`version: 1`）。
 

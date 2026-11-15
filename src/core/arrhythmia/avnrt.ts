@@ -1,6 +1,7 @@
 import type { ArrhythmiaScenario } from '../types';
 import { slowPathway } from '../conduction/AvNode';
 import { distance, protocolEvents, protocolsAfterLastLesion } from '../learning/conditions';
+import { reconnectionGoal } from './common';
 
 /**
  * AVNRT（遅伝導路、通常型。docs/DESIGN.md §5.3）
@@ -58,5 +59,6 @@ export const avnrtScenario: ArrhythmiaScenario = {
       achieved: (ctx) => protocolsAfterLastLesion(ctx).some((e) => e.status === 'noninducible')
         && ctx.engine.ca.tissue.viability[ctx.engine.model.anatomy.anchors.slowPathway.vertex] <= 0,
     },
+    reconnectionGoal(() => avnrtScenario),
   ],
 };

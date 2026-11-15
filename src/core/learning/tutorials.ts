@@ -52,6 +52,14 @@ export interface Tutorial { id: string; title: string; scenario: ArrhythmiaId; s
 export const TUTORIAL_LA_COVERAGE_PCT = 70;
 export const TUTORIAL_COVERAGE_RANGE_PCT = [30, 95] as const;
 
+/** 再伝導の確認（浮腫・再伝導）：根治判定の前に、待機時間かアデノシン負荷で再伝導がないことを確かめる */
+const reconnection: TutorialStep = {
+  id: 'reconnection', title: '再伝導を確かめる（待機・アデノシン）', target: 'ablation',
+  instruction: '通電の直後は、病変の周りの浮腫で伝導が止まって見えることがあります。通電欄の「待機（20 分）」か「アデノシン負荷」を押し、伝導が戻らないか（再伝導）を確かめます。戻ったら、その部位に焼き足して、もう一度確かめます。',
+  hint: '浮腫は処置の時計で引いていきます（時定数 15 分）。アデノシン負荷のあいだ（20 秒）は浮腫の効果が消え、浅い病変の所の伝導が見えます（休眠伝導）。',
+  done: (c) => c.goals.isAchieved('reconnection'),
+};
+
 export const PVI_TUTORIAL: Tutorial = {
   id: 'pvi-rf',
   title: 'PVI（RF）',
@@ -112,6 +120,7 @@ export const PVI_TUTORIAL: Tutorial = {
       hint: '刺激の方法はバーストでもかまいません。環状カテーテルが壁に接触していないと捕捉しません。',
       done: (c) => c.goals.isAchieved('exit-block'),
     },
+    reconnection,
     {
       id: 'cure', title: '根治を判定する', target: 'cure',
       instruction: '「根治を判定」を押し、4 本の entrance block・exit block と、AF が止まったことを確かめます。',
@@ -184,6 +193,7 @@ function aflTutorial(direction: 'ccw' | 'cw'): Tutorial {
         hint: '線の後に、両側から 1 回ずつ刺激プロトコルを行います。',
         done: (c) => c.goals.isAchieved('bidirectional'),
       },
+      reconnection,
       cure,
     ],
   };
@@ -226,6 +236,7 @@ export const AVNRT_TUTORIAL: Tutorial = {
       hint: '速伝導路は保たれるので、長い連結期の AH は変わりません。',
       done: (c) => c.goals.isAchieved('noninducible'),
     },
+    reconnection,
     cure,
   ],
 };
@@ -264,6 +275,7 @@ export const WPW_TUTORIAL: Tutorial = {
       hint: '刺激の部位は「CS 遠位（1-2）」です。',
       done: (c) => c.goals.isAchieved('delta-gone'),
     },
+    reconnection,
     cure,
   ],
 };

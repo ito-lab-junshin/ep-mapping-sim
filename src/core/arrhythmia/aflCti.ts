@@ -3,7 +3,7 @@ import { LAYOUT } from '../geometry/parametric/dimensions';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID } from '../geometry/regions';
 import { AFL_SUBSTRATE, CONDUCTION } from '../params';
-import { separated } from './common';
+import { reconnectionGoal, separated } from './common';
 import { protocolsAfterLastLesion } from '../learning/conditions';
 
 export interface AflParams {
@@ -130,7 +130,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
     ];
   },
   energies: ['rf'],
-  goals: aflGoals('ccw'),
+  goals: [...aflGoals('ccw'), reconnectionGoal(() => aflCtiScenario)],
 };
 
 /**
@@ -256,5 +256,5 @@ export const aflCtiCwScenario: ArrhythmiaScenario = {
   id: 'afl_cti_cw',
   label: '通常型心房粗動（CTI、時計回り）',
   induction: { kind: 'burst', site: 'LOW_LATERAL_RA' },
-  goals: aflGoals('cw'),
+  goals: [...aflGoals('cw'), reconnectionGoal(() => aflCtiCwScenario)],
 };

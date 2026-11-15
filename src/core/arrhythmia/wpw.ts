@@ -2,6 +2,7 @@ import type { ArrhythmiaScenario, CaseOptions, InductionMethod, LearningGoal } f
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import { AP_SITE_IDS, WPW_AP_VERTICES, WPW_AV_NODE_ERP_MS, type ApSite } from '../params';
 import { distance, protocolsAfterLastLesion } from '../learning/conditions';
+import { reconnectionGoal } from './common';
 
 /** 副伝導路の部位の表示名と、心房付着部の説明（§5.4） */
 export const AP_SITES: Record<ApSite, { label: string; where: string }> = {
@@ -143,5 +144,5 @@ export const wpwScenario: ArrhythmiaScenario = {
     ];
   },
   energies: ['rf'],
-  goals,
+  goals: [...goals, reconnectionGoal(() => wpwScenario)],
 };

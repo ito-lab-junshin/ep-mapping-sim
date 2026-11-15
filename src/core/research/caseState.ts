@@ -19,6 +19,10 @@ export interface CaseState {
   placements: Record<string, Placement | null>;
   /** 貫壁性が 0 でない頂点：[頂点 index, 貫壁性] */
   transmurality: [number, number][];
+  /** 浮腫が残っている頂点：[頂点 index, 浮腫]（浮腫・再伝導。古い JSON にはない） */
+  edema?: [number, number][];
+  /** 処置の時計（分） */
+  procedureMin?: number;
   lesions: Lesion[];
 }
 
@@ -27,9 +31,12 @@ export function exportCase(engine: SimulationEngine, scenario: ArrhythmiaId): Ca
   for (const s of engine.specs) if (s.mode !== 'synthetic') placements[s.catheter.id] = s.placement ? JSON.parse(JSON.stringify(s.placement)) : null;
   const transmurality: [number, number][] = [];
   engine.ablation.field.transmurality.forEach((t, v) => { if (t > 0) transmurality.push([v, Math.round(t * 1e4) / 1e4]); });
+  engine.ablation.field.flushRecovery();
+  const edema: [number, number][] = [];
+  engine.ablation.field.edema.forEach((r, v) => { if (r > 0) edema.push([v, Math.round(r * 1e4) / 1e4]); });
   return {
     format: 'ep-mapping-sim/case', version: 1, scenario, options: { ...engine.caseOptions }, params: snapshotParams(),
-    placements, transmurality, lesions: engine.lesions.map((l) => ({ ...l, tags: { ...l.tags } })),
+    placements, transmurality, edema, procedureMin: engine.ablation.field.procedureMin, lesions: engine.lesions.map((l) => ({ ...l, tags: { ...l.tags } })),
   };
 }
 
@@ -47,6 +54,8 @@ export function importCase(engine: SimulationEngine, state: CaseState) {
     if (v < 0 || v >= n) throw new Error('頂点の index がメッシュと合いません（別の解剖の状態です）');
     engine.ablation.field.raise(v, t);
   }
+  for (const [v, r] of state.edema ?? []) if (v >= 0 && v < n) engine.ablation.field.raiseEdema(v, r);
+  if (state.procedureMin !== undefined) engine.ablation.field.procedureMin = state.procedureMin;
   for (const [id, p] of Object.entries(state.placements)) if (engine.spec(id)) engine.setPlacement(id, p);
   engine.lesions.push(...state.lesions.map((l) => ({ ...l, tags: { ...l.tags } })));
 }

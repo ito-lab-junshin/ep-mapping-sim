@@ -1,4 +1,5 @@
-import type { ArrhythmiaScenario, CaseOptions, CureCheck, SurfaceMesh } from '../types';
+import type { ArrhythmiaScenario, CaseOptions, CureCheck, LearningGoal, SurfaceMesh } from '../types';
+import { ABLATION } from '../params';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { defaultProtocol, runProtocol, type ProtocolConfig, type ProtocolSession } from '../pacing/ProtocolSession';
 
@@ -43,11 +44,23 @@ export function tryInduce(engine: SimulationEngine, scenario: ArrhythmiaScenario
   return { induced: session.status === 'induced', session, engine: c };
 }
 
-/** 根治の判定：構造的な基準 + 同じプロトコルで非誘発 */
+/**
+ * 再伝導の確認（浮腫・再伝導）：浮腫を除いた状態（恒久的な病変だけ）で、構造的な基準をすべて満たすか。
+ * 待機時間で浮腫が引いた後、またはアデノシン負荷で休眠伝導が見えたときと同じ状態
+ */
+export function reconnectionCheck(engine: SimulationEngine, scenario: ArrhythmiaScenario): CureCheck {
+  const ok = engine.ablation.field.withoutEdema(() => scenario.structuralChecks(engine).every((c) => c.ok));
+  return { id: 'no-reconnection', label: '待機・アデノシン負荷で再伝導がない（浮腫を除いた病変だけで基準を満たす）', ok };
+}
+
+/**
+ * 根治の判定：構造的な基準（通電の直後＝浮腫を含む）+ 再伝導がない（浮腫を除く）+ 同じプロトコルで非誘発（浮腫を除いた状態で確かめる）
+ */
 export function verifyCure(engine: SimulationEngine, scenario: ArrhythmiaScenario, overrides: Partial<ProtocolConfig> = {}): CureCheck[] {
   const checks = scenario.structuralChecks(engine);
-  const r = tryInduce(engine, scenario, overrides);
-  checks.push({ id: 'noninducible', label: '同じプロトコルで非誘発', ok: !r.induced });
+  checks.push(reconnectionCheck(engine, scenario));
+  const r = engine.ablation.field.withoutEdema(() => tryInduce(engine, scenario, overrides));
+  checks.push({ id: 'noninducible', label: '同じプロトコルで非誘発（浮腫が引いた状態）', ok: !r.induced });
   return checks;
 }
 
@@ -70,4 +83,23 @@ export function separated(mesh: SurfaceMesh, viability: Float32Array, seeds: num
     }
   }
   return true;
+}
+
+/**
+ * 学習ゴール（全症例、浮腫・再伝導）：最後の通電の後に、待機時間（既定 20 分以上、通算）かアデノシン負荷で再伝導を確かめ、
+ * 再伝導がない（浮腫を除いた病変だけで構造的な基準を満たす）。再伝導があれば焼き足して、もう一度確かめる
+ */
+export function reconnectionGoal(scenario: () => ArrhythmiaScenario): LearningGoal {
+  return {
+    id: 'reconnection', label: '待機時間かアデノシン負荷で再伝導がないことを確かめる（あれば焼き足す）',
+    hint: `通電の直後は浮腫で伝導が止まって見えることがある。通電欄の「待機（${ABLATION.edema.waitMin} 分）」か「アデノシン負荷」の後に、もう一度隔離・ブロックを確かめる`,
+    achieved: ({ engine, events }) => {
+      const n = engine.lesions.length;
+      if (!n) return false;
+      const waited = events.filter((e) => e.kind === 'wait' && e.lesionCount === n).reduce((a, e) => a + (e.kind === 'wait' ? e.minutes : 0), 0);
+      const adenosine = events.some((e) => e.kind === 'adenosine' && e.lesionCount === n);
+      if (waited < ABLATION.edema.waitMin && !adenosine) return false;
+      return reconnectionCheck(engine, scenario()).ok;
+    },
+  };
 }

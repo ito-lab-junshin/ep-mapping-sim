@@ -107,7 +107,8 @@ describe('研究用：一括実行', () => {
     const data = lines.filter((l) => !l.startsWith('#')).slice(1);
     expect(data).toHaveLength(2);
     const rf = Object.fromEntries(header.map((h, i) => [h, data[1].split(',')[i]]));
-    expect(rf).toMatchObject({ id: 'rf', scenario: 'avnrt', induced: '1', energy: 'rf', power_w: '30', induced_after_ablation: '0' });
+    expect(rf).toMatchObject({ id: 'rf', scenario: 'avnrt', induced: '1', energy: 'rf', power_w: '30', induced_after_ablation: '0', wait_min: '20', induced_after_wait: '0' });
+    expect(rows[1].after?.induced).toBe(false);
   }, 300_000);
 });
 
@@ -140,6 +141,20 @@ describe('研究用：症例の状態の書き出し・読み込み', () => {
     expect(b.lesions.map((l) => l.tags.applications)).toEqual([1, 2, 1]);
     expect(b.spec('circ')!.placement).toEqual(a.spec('circ')!.placement);
     expect(state.params['CONDUCTION.atrialCv']).toBe(1);
+  });
+
+  it('浮腫と処置の時計も書き出し・読み込みで再現される（浮腫・再伝導）', () => {
+    const make = () => { const e = new SimulationEngine(loadParametricSync('normal')); wpwScenario.setupSubstrate(e); return e; };
+    const a = make();
+    a.ablation.field.raise(10, 0.6); a.ablation.field.raiseEdema(10, 1); a.ablation.field.raiseEdema(11, 0.4);
+    a.ablation.wait(5);
+    const state = JSON.parse(JSON.stringify(exportCase(a, 'wpw')));
+    const b = make();
+    importCase(b, state);
+    expect(b.ablation.field.procedureMin).toBeCloseTo(5);
+    expect(b.ablation.field.edema[10]).toBeCloseTo(a.ablation.field.edema[10], 3);
+    expect(b.ca.tissue.viability[10]).toBe(a.ca.tissue.viability[10]);
+    expect(b.ca.tissue.viability[11]).toBeCloseTo(a.ca.tissue.viability[11], 3); // 浮腫は小数 4 桁で保存
   });
 
   it('WPW の副伝導路の部位（選択肢）を書き出す', () => {

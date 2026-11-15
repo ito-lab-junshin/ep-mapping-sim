@@ -282,6 +282,26 @@ export const ABLATION = {
   wallThicknessMm: { la: 2, pv: 1.5, ra: 2, ctiTv: 5, ctiIvc: 3.5, koch: 2 },
   /** 貫壁性 t < 1 の頂点の viability = 1 − partialSlowing × t（伝導は遅くなるが残る） */
   partialSlowing: 0.7,
+  /**
+   * 浮腫（可逆的な傷害）と再伝導。すべて仮定値（教育用近似、§7）。
+   *  - RF・クライオで、病変の範囲は浮腫 1、そこから marginMm 外側へ直線的に 0（PFA は浮腫なし）
+   *  - 処置の時計（分）で、浮腫 × exp(−経過 / tauMin)。t < 1 の所は浮腫が引くと伝導が戻る（再伝導）
+   *  - 同じ部位に焼き足すと（前の RF の中心から touchUpMm 以内）、その通電の深さの増え方が (1 − efficacyLoss × 先端の点の浮腫) 倍
+   *  - 待機時間の既定 waitMin、アデノシン負荷で浮腫の効果を消す時間 adenosineMs（シミュレーション時間）
+   */
+  edema: {
+    marginMm: 3,
+    tauMin: 15,
+    efficacyLoss: 0.5,
+    /** 同じ部位への焼き足し（touch-up）とみなす距離：RF の先端が前の RF 通電の中心からこの距離 mm 以内。隣に点を並べる通電（間隔 4〜5 mm）は弱めない */
+    touchUpMm: 2,
+    waitMin: 20,
+    adenosineMs: 20000,
+    /** これ未満の浮腫は 0 にする */
+    negligible: 0.01,
+    /** 回復をまとめて反映する間隔（分） */
+    recoveryStepMin: 0.05,
+  },
   rf: {
     powerRangeW: [25, 50] as const,
     defaultPowerW: 30,

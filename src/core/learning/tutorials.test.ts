@@ -77,6 +77,10 @@ describe('チュートリアル：PVI（RF）', () => {
       expect(step()).toBe(name === 'RIPV' ? 'exit-block' : 'entrance');
     }
     goals.record({ kind: 'protocol', time: e.time, site: 'CIRC', status: 'noninducible', results: [], lesionCount: e.lesions.length, ...protocolStartState(e, 'CIRC') });
+    // 再伝導の確認：20 分の待機
+    expect(step()).toBe('reconnection');
+    e.ablation.wait();
+    goals.record({ kind: 'wait', time: e.time, minutes: 20, lesionCount: e.lesions.length });
     expect(step()).toBe('cure');
     ui.cureOk = verifyCure(e, afScenario).every((c) => c.ok);
     expect(step()).toBe('done');
@@ -108,6 +112,11 @@ function runner(t: Tutorial, e: SimulationEngine, scenario: ArrhythmiaScenario) 
     setPoints: (p: MapPoint[]) => { points = p; },
     step: () => { goals.update(e, points); i = advanceTutorial(t, i, ctx()); return t.steps[i]?.id ?? 'done'; },
     skip: () => { expect(t.steps[i].optional).toBe(true); i++; },
+    /** 再伝導の確認：アデノシン負荷（出来事として記録する） */
+    waitReconnection: () => {
+      e.ablation.giveAdenosine();
+      goals.record({ kind: 'adenosine', time: e.time, lesionCount: e.lesions.length });
+    },
     protocol: (site: PacingSite, status: 'induced' | 'noninducible') => goals.record({
       kind: 'protocol', time: e.time, site, status, results: [], lesionCount: e.lesions.length, contact: true, circPv: null, circPvIsolated: false,
     } as LearningEvent),
@@ -148,6 +157,8 @@ describe('チュートリアル：通常型 AFL（反時計回り・時計回り
       expect(r.step()).toBe('bidirectional');
       r.protocol('CS_OS', 'noninducible');
       r.protocol('LOW_LATERAL_RA', 'noninducible');
+      expect(r.step()).toBe('reconnection');
+      r.waitReconnection();
       expect(r.step()).toBe('cure');
       r.ui.cureOk = verifyCure(e, scenario, { observeMs: 1000 }).every((c) => c.ok);
       expect(r.step()).toBe('done');
@@ -176,6 +187,8 @@ describe('チュートリアル：AVNRT', () => {
     e.ablation.speed = 250;
     while (e.ablation.active) e.ablation.step(e.sampleMs);
     r.protocol('HRA', 'noninducible');
+    expect(r.step()).toBe('reconnection');
+    r.waitReconnection();
     expect(r.step()).toBe('cure');
     r.ui.cureOk = verifyCure(e, avnrtScenario, { s1Beats: 4, s2StartMs: 360, observeMs: 1200 }).every((c) => c.ok);
     expect(r.step()).toBe('done');
@@ -202,6 +215,8 @@ describe('チュートリアル：WPW', () => {
     expect(r.step()).toBe('delta-gone');
     e.tick(2500);
     r.protocol('CS_DIST', 'noninducible');
+    expect(r.step()).toBe('reconnection');
+    r.waitReconnection();
     expect(r.step()).toBe('cure');
     r.ui.cureOk = verifyCure(e, wpwScenario, { s1Beats: 4, s2StartMs: 300, observeMs: 1200 }).every((c) => c.ok);
     expect(r.step()).toBe('done');

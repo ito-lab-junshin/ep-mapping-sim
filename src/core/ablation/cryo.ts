@@ -33,8 +33,38 @@ export function cryoCoverage(occlusion: number): number {
 export function depositCryo(field: LesionField, mesh: SurfaceMesh, pv: PvInfo, occlusion: number, leakAngleDeg: number, depthMm: number) {
   const covered = cryoCoverage(occlusion);
   const gapHalf = (1 - covered) * 180;
+  const band: number[] = [];
   for (const { v, c } of pvBand(mesh, pv, -C.antralMm, 3, 0, pv.radius + C.marginMm, true)) {
     if (gapHalf > 0 && angleDiff(c.angleDeg, leakAngleDeg) < gapHalf) continue;
     field.raiseDepth(v, depthMm);
+    band.push(v);
   }
+  depositEdemaAround(field, mesh, band);
+}
+
+/** 病変の帯の頂点は浮腫 1、そこから marginMm 外側へ直線的に 0（帯ごとに近い頂点の表を覚えておく） */
+const marginCache = new WeakMap<SurfaceMesh, Map<string, [number, number][]>>();
+function depositEdemaAround(field: LesionField, mesh: SurfaceMesh, band: number[]) {
+  if (!band.length) return;
+  const key = `${band.length}:${band[0]}:${band[band.length - 1]}`;
+  let m = marginCache.get(mesh);
+  if (!m) { m = new Map(); marginCache.set(mesh, m); }
+  let near = m.get(key);
+  if (!near) {
+    const margin = ABLATION.edema.marginMm, p = mesh.positions, inBand = new Set(band);
+    near = [];
+    for (let v = 0; v < p.length / 3; v++) {
+      if (inBand.has(v)) { near.push([v, 1]); continue; }
+      let d = Infinity;
+      for (const u of band) {
+        const dx = p[3 * v] - p[3 * u], dy = p[3 * v + 1] - p[3 * u + 1], dz = p[3 * v + 2] - p[3 * u + 2];
+        const x = dx * dx + dy * dy + dz * dz;
+        if (x < d) d = x;
+      }
+      d = Math.sqrt(d);
+      if (d < margin) near.push([v, 1 - d / margin]);
+    }
+    m.set(key, near);
+  }
+  for (const [v, r] of near) field.raiseEdema(v, r);
 }

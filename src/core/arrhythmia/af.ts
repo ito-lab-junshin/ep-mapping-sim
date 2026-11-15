@@ -5,7 +5,7 @@ import { seededRandom } from '../pacing/Stimulator';
 import { AF_SUBSTRATE, AF_TYPE_IDS, type AfType } from '../params';
 import { raBody, svcIsolated, svcTip, svcVertices } from './svc';
 import { applyPersistentSubstrate, distanceFromRoofCenter, roofAreaIsolated, roofDriverActive, seedRoofRotor } from './persistent';
-import { cloneWithSubstrate, separated } from './common';
+import { cloneWithSubstrate, reconnectionGoal, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
 
 export { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
@@ -197,6 +197,7 @@ export const afScenario: ArrhythmiaScenario = {
       achieved: ({ engine }) => svcIsolated(engine) && isolatedPvs(engine).length === PV_NAMES.length
         && engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing',
     },
+    reconnectionGoal(() => afScenario),
   ],
 };
 
