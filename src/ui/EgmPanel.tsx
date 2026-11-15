@@ -118,7 +118,7 @@ export function EgmPanel() {
         <span className="egm-note">教育用モデル：実機の波形・アルゴリズムではありません</span>
       </div>
       <div className="egm-scroll">
-        <canvas ref={canvasRef} className="egm-canvas" onClick={onClick} style={{ minHeight: rows.length * MIN_ROW_PX }} />
+        <canvas ref={canvasRef} className="egm-canvas" data-testid="egm-canvas" data-rows={rows.length} data-labels={rows.map((r) => r.id).join(",")} onClick={onClick} style={{ minHeight: rows.length * MIN_ROW_PX }} />
       </div>
     </section>
   );

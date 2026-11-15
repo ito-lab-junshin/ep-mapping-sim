@@ -6,5 +6,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: process.env.GITHUB_PAGES ? '/ep-mapping-sim/' : '/',
-  test: { environment: 'node' },
+  // 単体テスト（vitest）は src の *.test.ts だけ。e2e/ は Playwright（npm run e2e）
+  test: { environment: 'node', include: ['src/**/*.test.ts'] },
 });

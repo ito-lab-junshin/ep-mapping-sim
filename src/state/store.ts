@@ -21,6 +21,9 @@ interface SimState {
   arrhythmia: ArrhythmiaId;
   /** 症例ごとの選択肢（WPW の副伝導路の部位・部位を伏せるか）。変えると症例を作り直す（state/engine.ts の setCaseOptions） */
   caseOptions: Partial<Record<ArrhythmiaId, CaseOptions>>;
+  /** 症例のエンジンを作り直すたびに増える（useEngine が購読して、3D・EGM・操作パネルが新しいエンジンに切り替わる） */
+  caseVersion: number;
+  bumpCase: () => void;
   energy: EnergyId;
   geometryMode: GeometryMode;
   tachycardia: TachycardiaState;
@@ -116,6 +119,8 @@ export const useSim = create<SimState>((set) => ({
   system: 'carto',
   arrhythmia: 'af',
   caseOptions: {},
+  caseVersion: 0,
+  bumpCase: () => set((s) => ({ caseVersion: s.caseVersion + 1 })),
   energy: 'rf',
   geometryMode: 'preset',
   tachycardia: 'sinus',

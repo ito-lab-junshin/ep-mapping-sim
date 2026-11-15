@@ -13,13 +13,14 @@
 npm install
 npm run dev      # http://localhost:5173
 npm run test     # vitest（src/core の単体テスト）
-npm run lint     # tsc --noEmit
+npm run lint     # tsc --noEmit（src と e2e）
+npm run e2e      # ビルドして Playwright の E2E（e2e/、約 2.5 分。URL に ?e2e=1 で window.__ep）
 npm run build    # tsc -b && vite build
 npm run batch -- 条件.json 結果.csv   # 研究用の一括実行（docs/RESEARCH.md）
 npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリックモデルを glTF に書き出す
 ```
 
-変更のたびに `npm run lint && npm run test` を通してからコミットする。
+変更のたびに `npm run lint && npm run test` を通してからコミットする。画面の操作の流れに関わる変更では `npm run e2e` も通す。
 
 ## 構成とルール
 

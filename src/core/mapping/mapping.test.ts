@@ -179,6 +179,23 @@ describe('カテーテルからの点の取得', () => {
     for (const p of r.points) expect(p.voltageMv).toBeLessThan(0.1);
   });
 
+  it('ABL：先端が壁に接触していれば（傾いたシャフトで 2 極目が離れていても）遠位の双極で 1 点を先端の位置に取る。先端が離れていれば取れない', () => {
+    const target = laBodyPointTowards(model, { x: 1, y: 0, z: 0 });
+    const eng = new SimulationEngine(model);
+    eng.setPlacement('abl', { kind: 'free', point: target, heightMm: 1, rotationDeg: 0 });
+    const el = eng.catheter('abl')!.electrodes;
+    expect(el[0].contactVertex).toBeGreaterThanOrEqual(0);
+    expect(el[1].contactVertex).toBe(-1);
+    eng.tick(1500);
+    const r = acquirePoints(eng, 'abl', SETTINGS, { omnipolar: false, rhythm: 'sinus' });
+    expect(r.points).toHaveLength(1);
+    const d = Math.hypot(r.points[0].position.x - el[0].position.x, r.points[0].position.y - el[0].position.y, r.points[0].position.z - el[0].position.z);
+    expect(d).toBeLessThan(2);
+    eng.setPlacement('abl', { kind: 'free', point: target, heightMm: 6, rotationDeg: 0 });
+    eng.tick(1500);
+    expect(acquirePoints(eng, 'abl', SETTINGS, { omnipolar: false, rhythm: 'sinus' }).points).toHaveLength(0);
+  });
+
   it('接触していなければ点は取れない', () => {
     const eng = new SimulationEngine(model);
     eng.setPlacement('ms', { kind: 'free', point: laBodyPointTowards(model, { x: 1, y: 0, z: 0 }), heightMm: 6, rotationDeg: 0 });

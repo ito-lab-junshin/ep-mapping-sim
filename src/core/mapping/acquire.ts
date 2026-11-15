@@ -70,11 +70,14 @@ export function acquirePoints(
       points.push({ position: hit.point, vertex: hit.vertex, latMs: a.latMs, voltageMv: o.voltageMv, catheterId, signal: 'omnipolar', referenceTime: tRef });
     }
   } else {
-    for (const ch of spec.channels) {
+    // ABL は先端が壁に接触していれば遠位の双極（d）で点を取る（シャフトが傾くので 2 極目は壁から 2〜3 mm 離れる）。
+    // 点の位置は先端。近位の双極（p）は取らない。ほかのカテーテルは双極の 2 極とも接触しているときだけ
+    const ablTip = cath.kind === 'ablation_tip';
+    for (const [k, ch] of spec.channels.entries()) {
       const [a, b] = ch.pair;
-      if (!contact(a) || !contact(b)) continue;
+      if (ablTip ? k > 0 || !contact(a) : !contact(a) || !contact(b)) continue;
       const ann = annotate((t) => uni[a](t) - uni[b](t), uni[a], tRef, woi, dt, method);
-      const hit = surfacePoint([cath.electrodes[a].position, cath.electrodes[b].position]);
+      const hit = ablTip ? surfacePoint([cath.electrodes[a].position]) : surfacePoint([cath.electrodes[a].position, cath.electrodes[b].position]);
       points.push({ position: hit.point, vertex: hit.vertex, latMs: ann.latMs, voltageMv: ann.voltageMv, catheterId, signal: 'bipolar', referenceTime: tRef });
     }
   }

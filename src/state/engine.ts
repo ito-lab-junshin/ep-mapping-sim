@@ -39,8 +39,12 @@ export function getEngine(id: ArrhythmiaId): SimulationEngine {
   return e;
 }
 
-/** 選択中の症例のエンジン */
+/**
+ * 選択中の症例のエンジン。症例を作り直したとき（リセット・選択肢の変更・JSON の読み込み）にも新しいエンジンに切り替わるよう、
+ * caseVersion を購読する（購読しないと、3D の時計が古いエンジンを進め続け、EGM が止まって見える。E2E で見つかった不具合）
+ */
 export function useEngine(): SimulationEngine {
+  useSim((s) => s.caseVersion);
   return getEngine(useSim((s) => s.arrhythmia));
 }
 
@@ -51,6 +55,7 @@ export function resetCase(id: ArrhythmiaId) {
   pointSets.delete(e);
   stopProtocol();
   const s = useSim.getState();
+  s.bumpCase();
   s.bumpGeometry();
   s.bumpPlacement();
   s.bumpMap('症例を最初の状態に戻しました');
