@@ -1,5 +1,6 @@
 import { afTypeOf } from '../arrhythmia/af';
 import { svcRingPoints } from '../arrhythmia/svc';
+import { channelCutPoints } from '../arrhythmia/persistent';
 import type { ArrhythmiaId, Vec3 } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import { PV_NAMES } from '../geometry/regions';
@@ -61,15 +62,17 @@ export function ctiLinePoints(e: SimulationEngine, spacingMm = 4): Vec3[] {
 /**
  * 症例ごとの標準の通電：AF = 4 本の PVI（RF は前庭部を一周、クライオ・PFA は PV ごと）、
  * AFL = CTI の線、AVNRT = 遅伝導路の部位、WPW = 副伝導路の部位。クライオ・PFA は AF だけ。
- * AF の型 pvSvc では、PVI の後に SVC–RA 接合部の少し上を RF で一周する（SVC 隔離。クライオ・PFA の計画でも RF、
- * 出力・時間は計画の RF の値か 30 W・30 秒）
+ * AF の型 pvSvc では、PVI の後に SVC–RA 接合部の少し上を RF で一周する（SVC 隔離）。
+ * AF の型 persistent では、PVI の後に天蓋の低電位領域の channel を横切る線を RF で焼く。
+ * どちらもクライオ・PFA の計画でも RF（出力・時間は計画の RF の値か 30 W・30 秒）
  */
 export function applyStandardAblation(e: SimulationEngine, scenario: ArrhythmiaId, plan: AblationPlan) {
   applyPvOrOther(e, scenario, plan);
-  if (scenario === 'af' && afTypeOf(e.caseOptions) === 'pvSvc') {
-    const svcPlan: AblationPlan = plan.energy === 'rf' ? plan : { energy: 'rf', powerW: 30, durationS: 30 };
-    for (const p of svcRingPoints(e, plan.energy === 'rf' ? plan.spacingMm ?? 4 : 4)) rfAt(e, p, svcPlan);
-  }
+  if (scenario !== 'af') return;
+  const extra: AblationPlan = plan.energy === 'rf' ? plan : { energy: 'rf', powerW: 30, durationS: 30 };
+  const type = afTypeOf(e.caseOptions);
+  if (type === 'pvSvc') for (const p of svcRingPoints(e, plan.energy === 'rf' ? plan.spacingMm ?? 4 : 4)) rfAt(e, p, extra);
+  if (type === 'persistent') for (const p of channelCutPoints(e)) rfAt(e, p, extra);
 }
 
 function applyPvOrOther(e: SimulationEngine, scenario: ArrhythmiaId, plan: AblationPlan) {

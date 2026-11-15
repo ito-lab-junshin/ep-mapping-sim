@@ -53,6 +53,7 @@ function AfOptions({ type }: { type: AfType }) {
           {AF_TYPE_IDS.map((t) => <option key={t} value={t}>{AF_TYPE_LABEL[t]}</option>)}
         </select>
       </label>
+      {type === 'persistent' && <p className="note">LA 天蓋に低電位領域（中心の瘢痕と、その周りの遅い伝導の輪）があり、そこを回る旋回が AF を駆動しています。PVI だけでは止まりません。ボルテージマップで低電位領域を探し、旋回の道（channel）を横切るように通電します。型を変えると症例は最初の状態に戻ります。</p>}
       {type === 'pvSvc' && <p className="note">PV に加えて SVC の心筋スリーブにもトリガーがあります。PVI の後も AF が続いたら、PV 以外の起源を探します。型を変えると症例は最初の状態に戻ります。</p>}
     </div>
   );

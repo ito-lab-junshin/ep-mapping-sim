@@ -10,7 +10,7 @@ import type { PacingSite } from '../core/sim/SimulationEngine';
  * 症例と刺激プロトコルの設定を URL パラメータに保存する（§5.6：授業で共有）。
  * 例：?case=avnrt&kind=extrastimulus&site=HRA&s1=600&n=8&s2=500&s2min=150
  * WPW は副伝導路の部位（ap=leftFreeWall|rightFreeWall|posteroseptal|anteroseptal）と、部位を伏せるか（aphide=1）、
- * AF は AF の型（aftype=pv|pvSvc）も保存する。
+ * AF は AF の型（aftype=pv|pvSvc|persistent）も保存する。
  */
 const NUM: [keyof ProtocolConfig, string][] = [
   ['s1Ms', 's1'], ['s1Beats', 'n'], ['s2StartMs', 's2'], ['s2MinMs', 's2min'], ['s2StepMs', 'step'],

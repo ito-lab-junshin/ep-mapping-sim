@@ -72,7 +72,7 @@
 | `AblationController` / `AblationMetrics` | 通電の状態機械（`engine.ablation`）。RF・クライオは通電の時計（倍速）で病変を育て、PFA は 1 回ずつ瞬時。指標（`AblationMetrics`）を UI に渡し、通電を止めると病変タグ（`Lesion`）を残す |
 | `ArrhythmiaScenario` | 不整脈ごとの `setupSubstrate(engine, options?)`（基質。`options` は症例の選択肢 `CaseOptions`）、推奨の誘発法 `induction`（`extrastimulus`／`burst`／`spontaneous` と刺激部位。選択肢で変わる症例は `inductionFor(options)`、取り出しは `scenarioInduction`）、構造的な根治の基準 `structuralChecks(engine)`、学習ゴール `goals: LearningGoal[]`（Phase 6 で文字列から判定つきに変更）。主に表示する心腔 `chambers` と、使う解剖寸法セット `anatomy`（`'normal'`／`'afRemodeled'`／`'aflRemodeled'`、§9.1）。使えるエネルギー `energies`（クライオバルーン・PFA は AF だけ）。誘発と「同じプロトコルで非誘発」の確認は `src/core/arrhythmia/common.ts`（複製したエンジンで刺激プロトコルを走らせる） |
 | `CureCheck` | 根治判定の基準 1 つ分（id・説明・成否） |
-| `CaseOptions` / `ApSite` / `AfType` | 症例の選択肢（Phase 7 の追補）：WPW の副伝導路の部位 `apSite`（`leftFreeWall`／`rightFreeWall`／`posteroseptal`／`anteroseptal`、§5.4）と部位を伏せるか `apHidden`、AF の型 `afType`（`pv`＝PV トリガーだけ（既定）／`pvSvc`＝PV と SVC のトリガー、§5.1）。エンジンは `engine.caseOptions` に保ち、複製（`cloneWithSubstrate`）・`CaseState`・一括実行（`options`・`optionSweep`）・URL（`ap`・`aphide`・`aftype`）に引き継ぐ |
+| `CaseOptions` / `ApSite` / `AfType` | 症例の選択肢（Phase 7 の追補）：WPW の副伝導路の部位 `apSite`（`leftFreeWall`／`rightFreeWall`／`posteroseptal`／`anteroseptal`、§5.4）と部位を伏せるか `apHidden`、AF の型 `afType`（`pv`＝PV トリガーだけ（既定）／`pvSvc`＝PV と SVC のトリガー／`persistent`＝持続性：天蓋の低電位領域の旋回、§5.1）。エンジンは `engine.caseOptions` に保ち、複製（`cloneWithSubstrate`）・`CaseState`・一括実行（`options`・`optionSweep`）・URL（`ap`・`aphide`・`aftype`）に引き継ぐ |
 | `ConductionSystem` / `VentricularBeat` | 刺激伝導系（`src/core/conduction`）：房室結節の経路（入口頂点・伝導時間・ERP・減衰伝導・逆行）、His、心室の 1 コンパートメント、副伝導路。心室の拍は興奮の由来（`his`／`ap`／`pace`）と、早期興奮のときの His 経由の到達時刻・副伝導路の部位 `apSite`（デルタ波の向き）をもつ。副伝導路の状態 `AccessoryPathwayState` は部位 `site` をもつ |
 | `Stimulus` / `ProtocolConfig` / `TrainResult` | 刺激（時刻と対象 `StimTarget`：心房の頂点・心室・`none`（電極が接触していない＝刺激アーチファクトだけで捕捉しない、Phase 6））、刺激プロトコルの設定（§5.6）、列ごとの結果（捕捉・AH・エコー・誘発）（`src/core/pacing`） |
 
@@ -161,6 +161,7 @@
 | WPW の房室結節の ERP | 250 ms | 副伝導路の順行性 ERP（280 ms）より短くして誘発の窓をつくる |
 | AF：心房筋の ERP | 160〜200 ms（斑状のばらつき） | §5.1 の範囲 |
 | AF：PV スリーブ・トリガー | 0.5 mm/ms・ERP 180 ms、LSPV・RSPV の先端で周期 150〜250 ms | §4.2・§5.1 の値 |
+| AF：持続性の基質（AF-3、型 persistent） | LA 天蓋（PV の口・スリーブ・左心耳・僧帽弁輪・Bachmann 束から最も遠い天蓋の点、afRemodeled で 16.5 mm）を中心に、瘢痕（半径 6 mm、伝導しない）→ channel（外半径 13 mm、0.25 mm/ms・ERP 160 ms・電位係数 0.08〜0.15）→ 線維化の輪（幅 2.5 mm、出口 6 mm を右向きに 1 か所）。心房筋の ERP は 150〜240 ms（なめらかさ 2 回。既定の型は 160〜200 ms・6 回のまま） | 仮定値（教育用近似）。旋回の周期 約 195 ms（規則的）、CS の興奮は不規則（平均 約 295 ms・変動係数 約 0.27）。線維化の輪がないと旋回が続かない、後壁は PV の間が狭く（最大 6.8 mm）入らない、ERP のばらつきが狭いと心房全体が 1:1 で規則的になる（いずれも試算） |
 | AF：SVC の心筋スリーブ・トリガー（AF-2、型 pvSvc） | RA から先 20 mm（afRemodeled だけ）の SVC を 0.5 mm/ms・ERP 180 ms、先端で周期 150〜250 ms | 仮定値（教育用近似）：PV のスリーブ・トリガーと同じ値 |
 | AFL：RA | 伝導速度 0.6 mm/ms・ERP 180 ms（拡大した RA、§9.1） | 目標（周期長 220〜260 ms・興奮間隙 ≧ 20 ms・反時計回り）から逆算。このとき周期長 約 255 ms・興奮間隙 75 ms |
 | AFL：分界稜・Eustachian 稜 | 線に沿った向きは 1.0 mm/ms、横方向は 0（完全な機能的ブロック） | 「遅いが通れる」値だと稜を横切る興奮で回路が崩れる |
@@ -207,11 +208,15 @@
 - 誘発：トリガー発火で自然に始まる（spontaneous）
 - 根治判定：PV ごとに、生きている頂点だけをたどって LA 本体からスリーブに届かないこと（entrance block。`viability = 0` の閉曲線と同じ意味）。加えて各 PV のスリーブ先端を刺激しても LA 本体に伝わらないこと（exit block）。隔離後もトリガーは PV 内で発火し続ける（PV 電位の解離）
 - 学習ゴール：環状カテーテルで PV 電位を見る → 隔離線 → exit block 確認
-- **AF の型（症例の選択肢 `CaseOptions.afType`、Phase 7 の追補 AF-2）**：`pv`（既定・上のとおり）と `pvSvc`（非 PV トリガー）。チュートリアルは `pv` だけ
+- **AF の型（症例の選択肢 `CaseOptions.afType`、Phase 7 の追補 AF-2・AF-3）**：`pv`（既定・上のとおり）、`pvSvc`（非 PV トリガー）、`persistent`（持続性）。チュートリアルは `pv` だけ
   - `pvSvc` の基質：SVC の心筋スリーブ（afRemodeled の SVC は RA から先 20 mm）を PV のスリーブと同じ 0.5 mm/ms・ERP 180 ms にし、先端に周期 150〜250 ms のトリガーを加える。PVI の後も AF が続く
   - 根治判定（`pvSvc` で追加）：SVC の entrance block（接合部から 6 mm 以上上のスリーブが、生きている頂点だけをたどって RA 本体から届かない）と exit block（SVC の先端を刺激しても RA 本体に伝わらない）。接合部の 4 mm 上を一周すれば隔離になる（洞結節から約 10 mm 離れる）
   - 注意：洞結節の部位・右横隔神経の走行（模式）から 5 mm 以内の RF で注意を出す（§7）。洞機能不全・横隔神経麻痺は再現しない
   - 学習ゴール（`pvSvc` だけ、`LearningGoal.applies`）：PVI 後も続く AF で環状カテーテルを SVC に置き SVC 電位を記録 → SVC 隔離 → AF の停止
+  - `persistent` の基質（`src/core/arrhythmia/persistent.ts`、§4.2）：LA 天蓋の低電位領域に固定した旋回（局所の駆動源）と、周りの細動様伝導。中心の瘢痕の周りの遅い伝導の輪（channel）を、出口 1 か所の線維化の輪が囲む。旋回は症例を作るときに位相の初期化で始める（症例は AF が続いた状態で始まる。複製でも同じように始めるので、病変で旋回の道が断たれていれば再現しない）。PV のトリガーも残る
+  - 場所を後壁でなく天蓋にした理由（先生と決定）：このモデルの後壁は PV の間が狭く（PV の口・スリーブから最大 6.8 mm）約 3 × 3 cm の領域が入らない。小さくするとメッシュが粗く旋回が続かない。そのため後壁隔離（box）はこの症例の治療法に含めない
+  - 根治判定（`persistent` で追加）：天蓋の旋回が止まる＝ channel を横切る病変（同じ病変の複製で旋回を始め直し、channel が興奮し続けないこと）、または領域の隔離（channel が LA の残りから病変で隔てられる）。PVI だけでは AF が続く
+  - 学習ゴール（`persistent` だけ）：ボルテージマップで天蓋の 0.5 mV 未満の点を 5 点以上 → PVI 後も続く AF で旋回を通電で止める → AF の停止。双極の振幅は channel 約 0.3〜0.5 mV、瘢痕も 約 0.2〜0.5 mV（周りの心房の遠隔電位が乗るため 0.1 mV 未満にはならない）、正常 約 2.1〜2.4 mV
 
 ### 5.2 通常型心房粗動（CTI 依存性）
 
@@ -517,7 +522,7 @@
 | 4 ✅ | 4 シナリオ実装（基質・誘発・根治判定）・刺激プロトコル | 4 症例すべて誘発→治療→非誘発が成立 |
 | 5 ✅ | アブレーション 3 エネルギー・病変タグ・システム固有指標・クライオバルーン／PFA の配置・接触圧・局所インピーダンス・接合部調律 | RF／クライオ／PFA で病変形状が異なる |
 | 6 ✅ | 収集モード（FAM 風、未収集は穴）・学習ゴール判定・PVI（RF）のチュートリアル・ハロー 20 極・環状カテーテルからの刺激 | 初学者が指示だけで PVI を完遂できる（チュートリアルをスクリプトで最後まで実行できることをテストで確認） |
-| 7 ✅（7-5 を除く。7-5 は指摘を受けてから） | 専門家レビュー反映（7-5：指摘を受けてから）・12 誘導 ECG ✅（胸部誘導の近接補正を含む）・glTF ローダ ✅（ラベル JSON・半自動推定・往復テスト。画面からの読み込みと公開モデルの選定は別途）・研究用拡張口 ✅（パラメータ入出力、バッチ実行）・AFL・AVNRT・WPW の詳細なチュートリアル ✅・通常型 AFL の時計回り ✅（反時計回りとの鑑別：ハロー・CS の順序の違い）・免責と既知の限界のアプリ内表示 ✅・副伝導路の部位 4 か所 ✅（左側自由壁・右側自由壁・後中隔・前中隔。デルタ波の典型的な極性・部位を伏せる設問）・AF の課題：AF-1 計算の高速化 ✅（結果は不変、AF 約 2 倍・他 約 3 倍）・AF-2 SVC トリガー ✅（AF の型 pvSvc・SVC 隔離・洞結節／横隔神経の注意）・AF-3 持続性 AF（後壁の低電位領域） | — |
+| 7 ✅（7-5 を除く。7-5 は指摘を受けてから） | 専門家レビュー反映（7-5：指摘を受けてから）・12 誘導 ECG ✅（胸部誘導の近接補正を含む）・glTF ローダ ✅（ラベル JSON・半自動推定・往復テスト。画面からの読み込みと公開モデルの選定は別途）・研究用拡張口 ✅（パラメータ入出力、バッチ実行）・AFL・AVNRT・WPW の詳細なチュートリアル ✅・通常型 AFL の時計回り ✅（反時計回りとの鑑別：ハロー・CS の順序の違い）・免責と既知の限界のアプリ内表示 ✅・副伝導路の部位 4 か所 ✅（左側自由壁・右側自由壁・後中隔・前中隔。デルタ波の典型的な極性・部位を伏せる設問）・AF の課題：AF-1 計算の高速化 ✅（結果は不変、AF 約 2 倍・他 約 3 倍）・AF-2 SVC トリガー ✅（AF の型 pvSvc・SVC 隔離・洞結節／横隔神経の注意）・AF-3 持続性 AF ✅（天蓋の低電位領域の旋回と細動様伝導。後壁は PV の間が狭く入らないため天蓋に） | — |
 
 ---
 

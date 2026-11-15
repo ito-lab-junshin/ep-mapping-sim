@@ -4,6 +4,7 @@ import { PV_NAMES, type PvName } from '../geometry/regions';
 import { seededRandom } from '../pacing/Stimulator';
 import { AF_SUBSTRATE, AF_TYPE_IDS, type AfType } from '../params';
 import { raBody, svcIsolated, svcTip, svcVertices } from './svc';
+import { applyPersistentSubstrate, distanceFromRoofCenter, roofAreaIsolated, roofDriverActive, seedRoofRotor } from './persistent';
 import { cloneWithSubstrate, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
 
@@ -18,8 +19,14 @@ export function afTypeOf(options?: CaseOptions): AfType {
 export const AF_TYPE_LABEL: Record<AfType, string> = {
   pv: '発作性（PV トリガー）',
   pvSvc: '発作性（PV と SVC のトリガー）',
+  persistent: '持続性（天蓋の低電位領域）',
 };
 const hasSvcTrigger = (engine: SimulationEngine) => afTypeOf(engine.caseOptions) === 'pvSvc';
+const isPersistent = (engine: SimulationEngine) => afTypeOf(engine.caseOptions) === 'persistent';
+/** 持続性の型のゴールか */
+const persistentGoal = ({ engine }: GoalContext) => isPersistent(engine);
+/** 天蓋の旋回が止まった（channel を横切る通電、または領域の隔離） */
+const roofDriverStopped = (engine: SimulationEngine) => roofAreaIsolated(engine) || !roofDriverActive(engine, afScenario);
 /** SVC のトリガーがある型のゴールか */
 const svcGoal = ({ engine }: GoalContext) => hasSvcTrigger(engine);
 
@@ -49,9 +56,12 @@ export const afScenario: ArrhythmiaScenario = {
     const t = engine.ca.tissue;
     const n = t.erp.length;
     // ERP の斑状のばらつき：乱数をメッシュ上でなめらかにし、範囲 160〜200 ms に伸ばす
+    // （持続性の型は 150〜240 ms・なめらかさ弱め：規則的な旋回に 1:1 で追従できない所をつくる）
+    const persistent = type === 'persistent';
     const rng = seededRandom(20261111);
     let e = Float32Array.from({ length: n }, () => rng());
-    for (let it = 0; it < AF_SUBSTRATE.erpSmoothingIterations; it++) {
+    const smoothing = persistent ? AF_SUBSTRATE.persistent.erpSmoothingIterations : AF_SUBSTRATE.erpSmoothingIterations;
+    for (let it = 0; it < smoothing; it++) {
       const next = new Float32Array(n);
       for (let v = 0; v < n; v++) {
         let s = e[v], k = 1;
@@ -62,7 +72,7 @@ export const afScenario: ArrhythmiaScenario = {
     }
     let lo = Infinity, hi = -Infinity;
     e.forEach((x) => { lo = Math.min(lo, x); hi = Math.max(hi, x); });
-    const [eMin, eMax] = AF_SUBSTRATE.atrialErpMs;
+    const [eMin, eMax] = persistent ? AF_SUBSTRATE.persistent.atrialErpMs : AF_SUBSTRATE.atrialErpMs;
     for (let v = 0; v < n; v++) t.erp[v] = eMin + ((e[v] - lo) / (hi - lo || 1)) * (eMax - eMin);
     // PV スリーブ
     for (const pv of PV_NAMES) {
@@ -82,6 +92,12 @@ export const afScenario: ArrhythmiaScenario = {
       }
       engine.addFocus(svcTip(engine), AF_SUBSTRATE.svcTriggerClMs[0], AF_SUBSTRATE.svcTriggerClMs[1], 201);
     }
+    // 持続性 AF（AF-3）：天蓋の低電位領域に固定した旋回。少し進めてから旋回を始める（症例は AF が続いた状態で始まる）
+    if (persistent) {
+      const s = applyPersistentSubstrate(engine);
+      engine.tick(AF_SUBSTRATE.persistent.seedAtMs);
+      seedRoofRotor(engine, s);
+    }
   },
   structuralChecks(engine) {
     const viab = engine.ca.tissue.viability;
@@ -91,6 +107,12 @@ export const afScenario: ArrhythmiaScenario = {
       return { id: `entrance-${pv}`, label: `${pv}：entrance block（PV 口を一周する病変で隔離）`, ok: separated(engine.mesh, viab, body, targets) };
     });
     checks.push({ id: 'exit-block', label: '全 PV：exit block（PV 内を刺激しても LA に伝わらない）', ok: exitBlock(engine) });
+    if (isPersistent(engine)) {
+      checks.push({
+        id: 'roof-driver', label: '天蓋の低電位領域の旋回が止まる（channel を横切る通電、または領域の隔離）',
+        ok: roofAreaIsolated(engine) || !roofDriverActive(engine, afScenario),
+      });
+    }
     if (hasSvcTrigger(engine)) {
       checks.push({ id: 'entrance-SVC', label: 'SVC：entrance block（SVC–RA 接合部を一周する病変で隔離）', ok: svcIsolated(engine) });
       checks.push({ id: 'exit-block-SVC', label: 'SVC：exit block（SVC 内を刺激しても RA に伝わらない）', ok: svcExitBlock(engine) });
@@ -131,6 +153,26 @@ export const afScenario: ArrhythmiaScenario = {
       // 刺激したときに、環状カテーテルが接触していた PV がすでに隔離されていたこと
       achieved: ({ events }) => events.some((e) => e.kind === 'protocol' && e.site === 'CIRC' && e.contact && e.circPvIsolated),
     },
+    // ── AF の型 persistent（AF-3：持続性 AF）だけのゴール ──
+    {
+      id: 'lva-map', label: 'ボルテージマップで天蓋の低電位領域（0.5 mV 未満）を見つける',
+      hint: '多極カテーテルか ABL で LA 全体の点を取り、表示をボルテージにする。天蓋に 0.5 mV 未満の点を 5 点以上取る（中心は 0.1 mV 未満の瘢痕）',
+      applies: persistentGoal,
+      achieved: ({ engine, points }) => points.filter((p) => p.voltageMv < 0.5 && distanceFromRoofCenter(engine, p.position) <= 16).length >= 5,
+    },
+    {
+      id: 'roof-driver', label: 'PVI の後も続く AF で、天蓋の低電位領域の旋回を通電で止める（channel を横切る、または領域を隔離する）',
+      hint: '中心の瘢痕と周りの線維化の輪のあいだの、遅い伝導の輪（channel）が旋回の道。瘢痕の縁から線維化の輪まで、channel を横切るように焼く',
+      applies: persistentGoal,
+      achieved: ({ engine }) => isolatedPvs(engine).length === PV_NAMES.length && engine.lesions.length > 0 && roofDriverStopped(engine),
+    },
+    {
+      id: 'persistent-af-stopped', label: 'AF が止まり、洞調律に戻ったことを確認する',
+      hint: 'PVI と天蓋の旋回の通電が終わると、PV のトリガーは隔離された PV の中だけで発火する',
+      applies: persistentGoal,
+      achieved: ({ engine }) => isolatedPvs(engine).length === PV_NAMES.length && engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing'
+        && roofDriverStopped(engine),
+    },
     // ── AF の型 pvSvc（AF-2：非 PV トリガー）だけのゴール ──
     {
       id: 'svc-potential', label: 'PVI の後も続く AF で、環状カテーテルを SVC に置き、SVC 電位（速く不規則な興奮）を記録する',
@@ -163,6 +205,7 @@ function svcExitBlock(engine: SimulationEngine): boolean {
   const c = cloneWithSubstrate(engine, afScenario);
   c.sinusEnabled = false;
   c.foci = [];
+  c.ca.reset();
   c.ca.stimulate(svcTip(c));
   c.tick(300);
   return !raBody(c).some((v) => c.ca.tissue.lastActivation[v] >= 0);
@@ -184,6 +227,7 @@ function exitBlock(engine: SimulationEngine): boolean {
     const c = cloneWithSubstrate(engine, afScenario);
     c.sinusEnabled = false;
     c.foci = [];
+    c.ca.reset(); // 持続性の型の天蓋の旋回など、複製で始め直した興奮を消してから刺激する
     c.ca.stimulate(sleeveTip(c, pv));
     c.tick(300);
     if (body.some((v) => c.ca.tissue.lastActivation[v] >= 0)) return false;

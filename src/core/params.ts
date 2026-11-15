@@ -204,11 +204,45 @@ export const AF_SUBSTRATE = {
   svcSleeveCv: 0.5,
   svcSleeveErpMs: 180,
   svcTriggerClMs: [150, 250] as const,
+  /**
+   * 持続性 AF（AF-3、AF の型 persistent）：LA 天蓋の低電位領域に固定した旋回（局所の駆動源）と細動様伝導。すべて仮定値（教育用近似）。
+   * 中心の瘢痕 → 遅い伝導の輪（channel）→ 線維化の輪（出口 1 か所）。全体の径 約 31 mm（約 3 × 3 cm）。
+   * channel を回る周期は 約 195 ms（試算）。ERP 160 ms より長いので旋回が続く。
+   * 後壁ではなく天蓋に置く：このモデルの後壁は PV の間が狭く、領域が入らない（先生と決定）
+   */
+  persistent: {
+    coreRadiusMm: 6,
+    channelOuterMm: 13,
+    insulationWidthMm: 2.5,
+    exitGapMm: 6,
+    /** 出口の向き（中心の接平面の角度。0 = 左（+x）、π = 右（−x）） */
+    exitAngleRad: Math.PI,
+    channelCv: 0.25,
+    channelErpMs: 160,
+    /**
+     * channel の組織の電位係数（正常 2.5 に対する比で EGM の電流源が小さくなる。伝播には影響しない）。
+     * 周りの心房からの遠隔電位が乗るため、双極の振幅は 約 0.3〜0.5 mV（正常 約 2.1〜2.4 mV）になる（試算）
+     */
+    channelVoltage: [0.08, 0.15] as const,
+    scarVoltage: 0.05,
+    /** 旋回を始めるときの位相の周期 ms（channel を一周する時間の目安） */
+    seedCycleMs: 240,
+    /** 旋回を始める時刻 ms（症例を作るときに少し進めてから） */
+    seedAtMs: 300,
+    /** 領域の隔離の判定：線維化の輪からこの距離 mm より外側を「LA の残り」とする */
+    isolationMarginMm: 8,
+    /**
+     * 持続性の型だけの心房筋の ERP のばらつき（既定の型は atrialErpMs = 160〜200 ms のまま）。
+     * 範囲を広げ、なめらかさを弱めると、規則的な旋回（約 195 ms）に 1:1 で追従できない所ができ、心房全体が不規則になる（試算：CS の周期 平均 約 295 ms・変動係数 約 0.27）
+     */
+    atrialErpMs: [150, 240] as const,
+    erpSmoothingIterations: 2,
+  },
 };
 
-/** AF の型（症例の選択肢、§5.1）：pv = PV トリガーだけ（発作性、既定）、pvSvc = PV と SVC のトリガー（AF-2） */
-export type AfType = 'pv' | 'pvSvc';
-export const AF_TYPE_IDS: AfType[] = ['pv', 'pvSvc'];
+/** AF の型（症例の選択肢、§5.1）：pv = PV トリガーだけ（発作性、既定）、pvSvc = PV と SVC のトリガー（AF-2）、persistent = 持続性（後壁の低電位領域の旋回、AF-3） */
+export type AfType = 'pv' | 'pvSvc' | 'persistent';
+export const AF_TYPE_IDS: AfType[] = ['pv', 'pvSvc', 'persistent'];
 
 /**
  * 通常型 AFL の基質（§5.2）。解剖は拡大した RA（aflRemodeled：RA と三尖弁輪が正常の 1.2 倍）。

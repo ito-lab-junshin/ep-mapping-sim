@@ -7,6 +7,7 @@ import { tryInduce } from '../arrhythmia/common';
 import { isolatedPvs } from '../arrhythmia/pv';
 import { afTypeOf } from '../arrhythmia/af';
 import { svcIsolated } from '../arrhythmia/svc';
+import { roofAreaIsolated, roofDriverActive } from '../arrhythmia/persistent';
 import { PV_NAMES } from '../geometry/regions';
 import { withParams, type ParamOverrides } from './params';
 import { applyStandardAblation, type AblationPlan } from './strategies';
@@ -68,6 +69,8 @@ export interface BatchRow {
   pviComplete: boolean | null;
   /** SVC の隔離（AF の型 pvSvc だけ） */
   svcIsolated?: boolean | null;
+  /** 天蓋の旋回が止まった（AF の型 persistent だけ） */
+  roofDriverStopped?: boolean | null;
   inducedAfterAblation: boolean | null;
 }
 
@@ -138,6 +141,7 @@ export function runCondition(c: ExpandedCondition, inductionAfterAblation = true
       if (c.scenario === 'af') {
         row.isolatedPvs = isolatedPvs(base).length; row.pviComplete = row.isolatedPvs === PV_NAMES.length;
         if (afTypeOf(base.caseOptions) === 'pvSvc') row.svcIsolated = svcIsolated(base);
+        if (afTypeOf(base.caseOptions) === 'persistent') row.roofDriverStopped = roofAreaIsolated(base) || !roofDriverActive(base, scenario);
       }
       if (inductionAfterAblation) row.inducedAfterAblation = tryInduce(base, scenario, c.induction ?? {}).induced;
     }
@@ -164,7 +168,7 @@ export function toCsv(rows: BatchRow[], cfg: BatchConfig, meta: Record<string, s
   lines.push('# 列：p_wave_ms＝洞調律 1 拍の両心房の総興奮時間、tachy_cl_ms＝頻拍の周期長、transmurality_*＝病変の中心の貫壁性、pvi_complete＝4 本の PV の entrance block（AF のみ）、ap_site＝副伝導路の部位（WPW のみ）、af_type＝AF の型（AF のみ）');
   const header = ['id', 'scenario', 'ap_site', 'af_type', ...paramKeys, 'induced', 'tachy_cl_ms', 'p_wave_ms',
     'energy', 'power_w', 'duration_s', 'height_mm', 'spacing_mm', 'push01', 'misalign_deg', 'pfa_shape', 'pfa_applications',
-    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'svc_isolated', 'induced_after_ablation'];
+    'lesions', 'transmurality_min_pct', 'transmurality_mean_pct', 'isolated_pvs', 'pvi_complete', 'svc_isolated', 'roof_driver_stopped', 'induced_after_ablation'];
   lines.push(header.join(','));
   for (const r of rows) {
     const a = r.ablation;
@@ -172,7 +176,7 @@ export function toCsv(rows: BatchRow[], cfg: BatchConfig, meta: Record<string, s
       r.id, r.scenario, r.scenario === 'wpw' ? (r.options.apSite ?? 'leftFreeWall') : '', r.scenario === 'af' ? (r.options.afType ?? 'pv') : '', ...paramKeys.map((k) => paramCell(r.params[k])),
       fmt(r.induced), fmt(r.tachyClMs, 0), fmt(r.pWaveMs, 0),
       a?.energy ?? '', fmt(a?.powerW), fmt(a?.durationS), fmt(a?.heightMm), fmt(a?.spacingMm), fmt(a?.push01, 2), fmt(a?.misalignDeg), a?.shape ?? '', fmt(a?.applications),
-      fmt(r.lesions), fmt(r.transmuralityMinPct, 0), fmt(r.transmuralityMeanPct, 0), fmt(r.isolatedPvs), fmt(r.pviComplete), fmt(r.svcIsolated), fmt(r.inducedAfterAblation),
+      fmt(r.lesions), fmt(r.transmuralityMinPct, 0), fmt(r.transmuralityMeanPct, 0), fmt(r.isolatedPvs), fmt(r.pviComplete), fmt(r.svcIsolated), fmt(r.roofDriverStopped), fmt(r.inducedAfterAblation),
     ].map(cell).join(','));
   }
   return lines.join('\n') + '\n';

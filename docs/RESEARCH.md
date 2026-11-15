@@ -8,7 +8,7 @@
 ```bash
 npm run batch -- examples/batch-afl-ra-cv.json results.csv
 npm run batch -- examples/batch-wpw-ap-sites.json results.csv   # WPW の副伝導路 4 部位
-npm run batch -- examples/batch-af-svc.json results.csv         # AF の型（PV だけ／PV と SVC）
+npm run batch -- examples/batch-af-types.json results.csv       # AF の型（PV だけ／PV と SVC／持続性）
 ```
 
 - 第 1 引数：条件の JSON、第 2 引数：結果の CSV（省くと標準出力）。進み具合は標準エラーに出る
@@ -34,8 +34,8 @@ npm run batch -- examples/batch-af-svc.json results.csv         # AF の型（PV
 | 項目 | 意味 |
 |---|---|
 | `scenario` | 既定の症例：`af`／`afl_cti`（反時計回り）／`afl_cti_cw`（時計回り）／`avnrt`／`wpw` |
-| `options` | 既定の症例の選択肢。WPW の副伝導路の部位 `{"apSite": "posteroseptal"}`（`leftFreeWall`（既定）／`rightFreeWall`／`posteroseptal`／`anteroseptal`）、AF の型 `{"afType": "pvSvc"}`（`pv`（既定）／`pvSvc`） |
-| `optionSweep` | 選択肢の値の列：WPW の副伝導路の部位 `apSite`（id に「-ap番号」）と AF の型 `afType`（`["pv", "pvSvc"]`、id に「-af番号」）。直積で条件を作る |
+| `options` | 既定の症例の選択肢。WPW の副伝導路の部位 `{"apSite": "posteroseptal"}`（`leftFreeWall`（既定）／`rightFreeWall`／`posteroseptal`／`anteroseptal`）、AF の型 `{"afType": "pvSvc"}`（`pv`（既定）／`pvSvc`／`persistent`） |
+| `optionSweep` | 選択肢の値の列：WPW の副伝導路の部位 `apSite`（id に「-ap番号」）と AF の型 `afType`（`["pv", "pvSvc", "persistent"]`、id に「-af番号」）。直積で条件を作る |
 | `base` | すべての条件に共通のパラメータの上書き |
 | `sweep` | パラメータごとの値の列。直積で条件を作る |
 | `conditions` | 明示した条件（`id`・`scenario`・`options`・`params`・`ablation`・`induction`）。`sweep` があれば各条件に掛ける。id は「条件の id-s番号」 |
@@ -65,7 +65,7 @@ npm run batch -- examples/batch-af-svc.json results.csv         # AF の型（PV
 
 | 症例 | RF | クライオ・PFA |
 |---|---|---|
-| AF | 4 本の PV の前庭部を一周（口の半径 + 3 mm、点の間隔 `spacingMm`、既定 5 mm）。AF の型 pvSvc では、さらに SVC–RA 接合部の 4 mm 上を RF で一周（間隔 既定 4 mm。クライオ・PFA の計画でも SVC は RF 30 W・30 秒） | PV ごと（クライオ：`push01`・`misalignDeg`・`durationS`、PFA：`shape`・`applications`） |
+| AF | 4 本の PV の前庭部を一周（口の半径 + 3 mm、点の間隔 `spacingMm`、既定 5 mm）。AF の型 pvSvc では、さらに SVC–RA 接合部の 4 mm 上を RF で一周（間隔 既定 4 mm）。AF の型 persistent では、さらに天蓋の低電位領域の channel を横切る線（瘢痕の縁から線維化の輪まで、間隔 2.5 mm）を RF で焼く。どちらもクライオ・PFA の計画では RF 30 W・30 秒 | PV ごと（クライオ：`push01`・`misalignDeg`・`durationS`、PFA：`shape`・`applications`） |
 | AFL | CTI の線（三尖弁輪 → IVC、間隔 既定 4 mm） | — |
 | AVNRT | 遅伝導路の部位 1 点 | — |
 | WPW | 副伝導路の部位 1 点 | — |
@@ -84,6 +84,7 @@ RF は `powerW`・`durationS`・`heightMm`（先端の壁からの距離。接�
 | `lesions`・`transmurality_min_pct`・`transmurality_mean_pct` | 病変の数と、病変の中心の貫壁性 % |
 | `isolated_pvs`・`pvi_complete` | 隔離できた PV の数と PVI の完了（AF のみ） |
 | `svc_isolated` | SVC の隔離（AF の型 pvSvc のみ） |
+| `roof_driver_stopped` | 天蓋の旋回が止まった（channel を横切る病変か領域の隔離。AF の型 persistent のみ） |
 | `induced_after_ablation` | 通電の後の誘発 |
 
 ## 2. 症例の状態の書き出し・読み込み（ブラウザ）
