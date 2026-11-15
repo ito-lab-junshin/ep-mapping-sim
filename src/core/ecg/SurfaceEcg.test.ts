@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { SurfaceEcg, ecgLeadsFor, ECG_LEAD_OPTIONS, LEAD_VECTOR, ATRIAL_ECG_GAIN, PRECORDIAL_LEADS, PROXIMITY_GAIN } from './SurfaceEcg';
+import { SurfaceEcg, ecgLeadsFor, ECG_LEAD_OPTIONS, LEAD_VECTOR, ATRIAL_ECG_GAIN, ATRIAL_ECG_FILTER_HZ, PRECORDIAL_LEADS, PROXIMITY_GAIN } from './SurfaceEcg';
 import { gaussSum } from '../egm/templates';
-import { QT_MS } from '../params';
+import { QT_MS, SAMPLE_MS } from '../params';
 import type { VentricularBeat } from '../conduction/ConductionSystem';
 import type { ApSite } from '../params';
 import type { EcgLead } from '../types';
@@ -17,7 +17,7 @@ describe('SurfaceEcg', () => {
   });
 
   it('心房成分は電気ベクトルの誘導方向への投影：左下向きの興奮は I・II で陽性、上向きは II で陰性', () => {
-    const ecg = new SurfaceEcg();
+    const ecg = new SurfaceEcg(SAMPLE_MS, 0); // 投影だけを見る（低域通過フィルタなし）
     ecg.setAtrialDipole({ x: 50, y: -50, z: 0 });
     expect(ecg.atrial('I')).toBeCloseTo(ATRIAL_ECG_GAIN * 50);
     expect(ecg.atrial('II')).toBeGreaterThan(0);
@@ -66,6 +66,22 @@ describe('SurfaceEcg', () => {
     for (let t = from; t <= to; t++) { const x = at(ecg, t, lead, beat); if (Math.abs(x) > Math.abs(best)) best = x; }
     return best;
   };
+
+  it('心房成分の低域通過フィルタ（40 Hz・2 段）：一定の電気ベクトルには数十 ms で追いつき、2〜8 ms 周期のギザギザは小さくなる', () => {
+    expect(ATRIAL_ECG_FILTER_HZ).toBe(40);
+    const ecg = new SurfaceEcg();
+    for (let i = 0; i < 25; i++) ecg.setAtrialDipole({ x: 100, y: 0, z: 0 }); // 50 ms
+    expect(ecg.atrial('I')).toBeCloseTo(ATRIAL_ECG_GAIN * 100, 3);
+    /** 周期 periodSamples × 2 ms の矩形波を通したあとの振幅の、入力に対する比 */
+    const ratio = (half: number) => {
+      const f = new SurfaceEcg();
+      const amp: number[] = [];
+      for (let i = 0; i < 300; i++) { f.setAtrialDipole({ x: Math.floor(i / half) % 2 ? 100 : -100, y: 0, z: 0 }); if (i > 150) amp.push(Math.abs(f.atrial('I'))); }
+      return Math.max(...amp) / (ATRIAL_ECG_GAIN * 100);
+    };
+    expect(ratio(1)).toBeLessThan(0.1); // 周期 4 ms
+    expect(ratio(2)).toBeLessThan(0.2); // 周期 8 ms
+  });
 
   it('肢誘導は Einthoven の関係を満たす（III = II − I、aVR + aVL + aVF = 0）', () => {
     const ecg = new SurfaceEcg();
@@ -121,9 +137,10 @@ describe('SurfaceEcg', () => {
     const transition = rs.findIndex((x) => x.R > x.S);
     expect(transition === 2 || transition === 3, `移行帯 V${transition + 1}`).toBe(true);
     for (const g of Object.values(PROXIMITY_GAIN)) { expect(g.qrs).toBeGreaterThan(0); expect(g.t).toBeGreaterThan(0); }
-    // 心房成分（P 波・粗動波）には近接補正を掛けない
-    ecg.setAtrialDipole({ x: 0, y: 0, z: 100 });
-    expect(ecg.atrial('V2')).toBeCloseTo(ATRIAL_ECG_GAIN * 100);
+    // 心房成分（P 波・粗動波）には近接補正を掛けない（投影だけを見るのでフィルタなし）
+    const raw = new SurfaceEcg(SAMPLE_MS, 0);
+    raw.setAtrialDipole({ x: 0, y: 0, z: 100 });
+    expect(raw.atrial('V2')).toBeCloseTo(ATRIAL_ECG_GAIN * 100);
   });
 
   it('左側自由壁の副伝導路のデルタ波：V1 で陽性、I・aVL で陰性、下壁誘導（II・III・aVF）で陽性', () => {

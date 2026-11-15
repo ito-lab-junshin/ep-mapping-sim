@@ -1,7 +1,7 @@
 import type { EcgLead, EcgLeadCount, Vec3 } from '../types';
 import type { ApSite } from '../params';
 import type { VentricularBeat } from '../conduction/ConductionSystem';
-import { QT_MS } from '../params';
+import { QT_MS, SAMPLE_MS } from '../params';
 
 /**
  * 体表 ECG（docs/DESIGN.md §5.5、教育用近似）。12 誘導（Phase 7）。
@@ -77,6 +77,13 @@ export const PROXIMITY_GAIN: Record<EcgLead, { qrs: number; t: number }> = {
 /** 心房の電気ベクトル → mV の係数（洞調律の II の P 波のピーク ≈ 0.15 mV になるよう較正） */
 export const ATRIAL_ECG_GAIN = 0.0018;
 
+/**
+ * 心房成分の低域通過フィルタ（実機の心電図のフィルタに相当する処理）：1 次の低域通過を 2 段（遮断周波数 ATRIAL_ECG_FILTER_HZ）。
+ * メッシュ上の離散的な興奮で心房の電気ベクトルに出る 2〜8 ms 周期のギザギザ（高周波）を除く。
+ * 波形が数 ms 遅れる（40 Hz・2 段で約 8 ms）。心室成分（QRS・T）は拍ごとのなめらかな式なのでかけない。遮断周波数は仮定値（教育用近似）
+ */
+export const ATRIAL_ECG_FILTER_HZ = 40;
+
 /** 心室の電気ベクトルの成分：[中心 ms, 幅 ms, 向きと大きさ（mV 相当）] */
 type Component = readonly [number, number, Vec3];
 const T_PEAK_MS = QT_MS - 80;
@@ -128,9 +135,19 @@ function addComponents(out: Vec3, dt: number, comps: readonly Component[]) {
 
 export class SurfaceEcg {
   private dipole: Vec3 = { x: 0, y: 0, z: 0 };
+  /** 低域通過フィルタの 1 段目 */
+  private stage1: Vec3 = { x: 0, y: 0, z: 0 };
+  /** sampleMs：setAtrialDipole を呼ぶ間隔 ms。filterHz：0 でフィルタなし */
+  constructor(readonly sampleMs = SAMPLE_MS, readonly filterHz = ATRIAL_ECG_FILTER_HZ) {}
 
   /** 毎サンプル、心房の電気ベクトルを渡す */
-  setAtrialDipole(p: Vec3) { this.dipole = p; }
+  setAtrialDipole(p: Vec3) {
+    if (!(this.filterHz > 0)) { this.dipole = p; return; }
+    const rc = 1000 / (2 * Math.PI * this.filterHz), a = this.sampleMs / (rc + this.sampleMs);
+    const s = this.stage1, d = this.dipole;
+    s.x += a * (p.x - s.x); s.y += a * (p.y - s.y); s.z += a * (p.z - s.z);
+    this.dipole = { x: d.x + a * (s.x - d.x), y: d.y + a * (s.y - d.y), z: d.z + a * (s.z - d.z) };
+  }
 
   /** 心房成分 mV */
   atrial(lead: EcgLead): number {
@@ -184,5 +201,5 @@ export class SurfaceEcg {
     return this.atrial(lead) + this.ventricular(now, lead, beats);
   }
 
-  reset() { this.dipole = { x: 0, y: 0, z: 0 }; this.cache = null; }
+  reset() { this.dipole = { x: 0, y: 0, z: 0 }; this.stage1 = { x: 0, y: 0, z: 0 }; this.cache = null; }
 }
