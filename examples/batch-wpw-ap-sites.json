@@ -1,0 +1,9 @@
+{
+  "name": "WPW：副伝導路の部位ごとの誘発と RF（30 W・30 秒）",
+  "scenario": "wpw",
+  "optionSweep": { "apSite": ["leftFreeWall", "rightFreeWall", "posteroseptal", "anteroseptal"] },
+  "conditions": [
+    { "id": "rf30", "ablation": { "energy": "rf", "powerW": 30, "durationS": 30 } }
+  ],
+  "induction": { "s1Beats": 4, "s2StartMs": 300, "observeMs": 1200 }
+}

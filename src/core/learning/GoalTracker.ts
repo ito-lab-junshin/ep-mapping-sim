@@ -11,6 +11,8 @@ export class GoalTracker {
   readonly achievedAt = new Map<string, number>();
   /** 確認済みの項目（"ゴールの id:項目の id"） */
   readonly itemsDone = new Set<string>();
+  /** この症例の設定では扱わないゴール（applies が false。直近の update で決める） */
+  readonly skipped = new Set<string>();
 
   constructor(readonly goals: LearningGoal[]) {}
 
@@ -25,6 +27,8 @@ export class GoalTracker {
     const ctx = this.context(engine, points);
     const out: string[] = [];
     for (const g of this.goals) {
+      if (g.applies && !g.applies(ctx)) { this.skipped.add(g.id); continue; }
+      this.skipped.delete(g.id);
       if (this.achievedAt.has(g.id)) continue;
       let ok: boolean;
       if (g.items) {
@@ -45,5 +49,10 @@ export class GoalTracker {
     return g?.items ? g.items(ctx).map((it) => ({ id: it.id, label: it.label, done: this.itemsDone.has(`${goalId}:${it.id}`) })) : [];
   }
 
-  get allAchieved() { return this.goals.every((g) => this.achievedAt.has(g.id)); }
+  /** この症例の設定で扱うゴール */
+  activeGoals(ctx?: GoalContext): LearningGoal[] {
+    return this.goals.filter((g) => (ctx && g.applies ? g.applies(ctx) : !this.skipped.has(g.id)));
+  }
+
+  get allAchieved() { return this.activeGoals().every((g) => this.achievedAt.has(g.id)); }
 }

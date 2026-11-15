@@ -161,3 +161,26 @@ describe('学習ゴール：WPW', () => {
     expect(t.allAchieved).toBe(true);
   }, 120_000);
 });
+
+describe('学習ゴール：WPW の部位を伏せたときの設問', () => {
+  it('伏せないときは設問を扱わない。伏せると、正しい部位を答えるまで未達成', () => {
+    const shown = new SimulationEngine(loadParametricSync('normal'));
+    wpwScenario.setupSubstrate(shown, { apSite: 'posteroseptal' });
+    const a = new GoalTracker(wpwScenario.goals);
+    a.update(shown);
+    expect(a.activeGoals().map((g) => g.id)).not.toContain('ap-site');
+
+    const hidden = new SimulationEngine(loadParametricSync('normal'));
+    wpwScenario.setupSubstrate(hidden, { apSite: 'posteroseptal', apHidden: true });
+    expect(hidden.caseOptions).toEqual({ apSite: 'posteroseptal', apHidden: true });
+    const t = new GoalTracker(wpwScenario.goals);
+    t.update(hidden);
+    expect(t.activeGoals().map((g) => g.id)[0]).toBe('ap-site');
+    t.record({ kind: 'answer', time: 0, question: 'ap-site', value: 'anteroseptal', correct: false });
+    t.update(hidden);
+    expect(t.isAchieved('ap-site')).toBe(false);
+    t.record({ kind: 'answer', time: 0, question: 'ap-site', value: 'posteroseptal', correct: true });
+    t.update(hidden);
+    expect(t.isAchieved('ap-site')).toBe(true);
+  });
+});

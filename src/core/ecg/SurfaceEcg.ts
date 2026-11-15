@@ -1,4 +1,5 @@
 import type { EcgLead, EcgLeadCount, Vec3 } from '../types';
+import type { ApSite } from '../params';
 import type { VentricularBeat } from '../conduction/ConductionSystem';
 import { QT_MS } from '../params';
 
@@ -98,10 +99,21 @@ const PACED: Component[] = [[50, 25, v(0.8, 1.501, -0.826)]];
 const PACED_T: Component[] = [[T_PEAK_MS + 20, 50, v(-0.25, -0.433, 0.245)]];
 
 /**
- * デルタ波のベクトル（左側自由壁の副伝導路）：副伝導路の心室付着部（左側方）から離れる向き＝右・前方・下方。
- * I・aVL で陰性、V1 で陽性（A 型）、下壁誘導で陽性。値はデルタ波の終わりの振幅（I −0.25、II +0.2、V1 +0.35 mV）
+ * デルタ波のベクトル（部位ごと。§5.5）：副伝導路の心室付着部から離れる向き。値はデルタ波の終わりの振幅（mV 相当）。
+ * 代表的な局在アルゴリズムで知られる典型的な極性だけを合わせた仮定値（教育用近似）で、局在の精度は検証していない。
+ *  - 左側自由壁：右・前・下方。I・aVL 陰性、下壁陽性、V1 陽性（A 型）。I −0.25、II +0.2、V1 +0.35 mV
+ *  - 右側自由壁：左・後方・やや上方。I・aVL 陽性、下壁は平坦〜陰性、V1 陰性、移行帯は V3 より後（V4）
+ *  - 後中隔：左・上方。I・aVL 陽性、下壁陰性（III・aVF で深い）、V1 は平坦、V2 から陽性
+ *  - 前中隔：左・下・後方。I・aVL 陽性、下壁陽性、V1〜V3 陰性、移行帯 V3〜V4
  */
-export const DELTA_VECTOR: Vec3 = v(-0.25, -0.375, 0.297);
+export const DELTA_VECTORS: Record<ApSite, Vec3> = {
+  leftFreeWall: v(-0.25, -0.375, 0.297),
+  rightFreeWall: v(0.42, 0.15, -0.2),
+  posteroseptal: v(0.3, 0.35, 0.07),
+  anteroseptal: v(0.3, -0.3, -0.12),
+};
+/** 左側自由壁のデルタ波（後方互換） */
+export const DELTA_VECTOR: Vec3 = DELTA_VECTORS.leftFreeWall;
 /** 心室の興奮がすべて副伝導路から（His 経由が届かない）ときのデルタ波の長さ ms */
 const FULL_PREEXCITATION_MS = 60;
 
@@ -138,7 +150,8 @@ export class SurfaceEcg {
         // デルタ波：緩やかに立ち上がり、His 経由の QRS が始まるまで続く
         if (dt >= 0) {
           const k = amp * (dt < delta ? dt / delta : Math.exp(-(dt - delta) / 20));
-          qrs.x += k * DELTA_VECTOR.x; qrs.y += k * DELTA_VECTOR.y; qrs.z += k * DELTA_VECTOR.z;
+          const d = DELTA_VECTORS[b.apSite ?? 'leftFreeWall'];
+          qrs.x += k * d.x; qrs.y += k * d.y; qrs.z += k * d.z;
         }
         addComponents(qrs, dt - delta, NORMAL); addComponents(t, dt - delta, NORMAL_T);
         continue;

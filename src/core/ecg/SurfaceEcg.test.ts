@@ -3,6 +3,8 @@ import { SurfaceEcg, ecgLeadsFor, ECG_LEAD_OPTIONS, LEAD_VECTOR, ATRIAL_ECG_GAIN
 import { gaussSum } from '../egm/templates';
 import { QT_MS } from '../params';
 import type { VentricularBeat } from '../conduction/ConductionSystem';
+import type { ApSite } from '../params';
+import type { EcgLead } from '../types';
 
 const his = (time: number): VentricularBeat => ({ time, source: 'his' });
 
@@ -131,6 +133,39 @@ describe('SurfaceEcg', () => {
     expect(at(ecg, 25, 'I', pre)).toBeLessThan(0);
     expect(at(ecg, 25, 'aVL', pre)).toBeLessThan(0);
     for (const l of ['II', 'III', 'aVF'] as const) expect(at(ecg, 25, l, pre)).toBeGreaterThan(0);
+  });
+
+  /** デルタ波の途中（QRS 開始 +25 ms、His 経由の QRS が始まる前）の値 */
+  const deltaAt = (site: ApSite, lead: EcgLead) => at(new SurfaceEcg(), 25, lead, { time: 0, source: 'ap', hisArrival: 60, apSite: site });
+
+  it('右側自由壁のデルタ波：I・aVL 陽性、下壁は平坦〜陰性、V1 陰性、移行帯は V3 より後', () => {
+    expect(deltaAt('rightFreeWall', 'I')).toBeGreaterThan(0.05);
+    expect(deltaAt('rightFreeWall', 'aVL')).toBeGreaterThan(0.05);
+    for (const l of ['II', 'III', 'aVF'] as const) expect(deltaAt('rightFreeWall', l)).toBeLessThan(0.05);
+    expect(deltaAt('rightFreeWall', 'III')).toBeLessThan(0);
+    for (const l of ['V1', 'V2', 'V3'] as const) expect(deltaAt('rightFreeWall', l)).toBeLessThan(0);
+    for (const l of ['V4', 'V5', 'V6'] as const) expect(deltaAt('rightFreeWall', l)).toBeGreaterThan(0);
+  });
+
+  it('後中隔のデルタ波：I・aVL 陽性、下壁陰性（III・aVF）、V1 は平坦、V2 から陽性', () => {
+    expect(deltaAt('posteroseptal', 'I')).toBeGreaterThan(0.05);
+    expect(deltaAt('posteroseptal', 'aVL')).toBeGreaterThan(0.05);
+    for (const l of ['II', 'III', 'aVF'] as const) expect(deltaAt('posteroseptal', l)).toBeLessThan(0);
+    expect(deltaAt('posteroseptal', 'III')).toBeLessThan(deltaAt('posteroseptal', 'II'));
+    expect(Math.abs(deltaAt('posteroseptal', 'V1'))).toBeLessThan(0.03);
+    for (const l of ['V2', 'V3', 'V4', 'V5', 'V6'] as const) expect(deltaAt('posteroseptal', l)).toBeGreaterThan(0);
+  });
+
+  it('前中隔のデルタ波：I・aVL 陽性、下壁陽性、V1〜V3 陰性、移行帯 V3〜V4', () => {
+    expect(deltaAt('anteroseptal', 'I')).toBeGreaterThan(0.05);
+    expect(deltaAt('anteroseptal', 'aVL')).toBeGreaterThan(0);
+    for (const l of ['II', 'III', 'aVF'] as const) expect(deltaAt('anteroseptal', l)).toBeGreaterThan(0);
+    for (const l of ['V1', 'V2', 'V3'] as const) expect(deltaAt('anteroseptal', l)).toBeLessThan(0);
+    for (const l of ['V4', 'V5', 'V6'] as const) expect(deltaAt('anteroseptal', l)).toBeGreaterThan(0);
+  });
+
+  it('部位を指定しない早期興奮の拍は左側自由壁のデルタ波（後方互換）', () => {
+    expect(deltaAt('leftFreeWall', 'V1')).toBeCloseTo(at(new SurfaceEcg(), 25, 'V1', { time: 0, source: 'ap', hisArrival: 60 }));
   });
 
   it('RV 心尖ペーシング：上方軸（II・III・aVF で陰性、aVL で陽性）、V1〜V3 で陰性（左脚ブロック型）', () => {

@@ -1,4 +1,4 @@
-import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS } from '../params';
+import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS, type ApSite } from '../params';
 import { antegradeTime, fastPathway, type PathwayState } from './AvNode';
 
 /** 心室の興奮（QRS 開始）の記録 */
@@ -7,13 +7,17 @@ export interface VentricularBeat {
   source: 'his' | 'ap' | 'pace';
   /** 副伝導路から先に興奮した拍で、His 経由の興奮が後から届いた時刻（融合の程度 = これ − time） */
   hisArrival?: number;
+  /** 副伝導路から先に興奮した拍の、副伝導路の部位（デルタ波の向き） */
+  apSite?: ApSite;
 }
 
 /** 心房側への出口（逆行伝導・副伝導路の逆行）：時刻 time に頂点 vertex を興奮させる */
 export interface AtrialExit { time: number; vertex: number; via: 'fast' | 'slow' | 'ap' }
 
 export interface AccessoryPathwayState {
-  /** 心房付着部の頂点（僧帽弁輪上の 1〜3 頂点） */
+  /** 部位（§5.4） */
+  site: ApSite;
+  /** 心房付着部の頂点（弁輪上の 1〜3 頂点） */
   vertices: number[];
   last: number;
   conductionMs: number;
@@ -65,12 +69,12 @@ export class ConductionSystem {
 
   get vTimes(): number[] { return this.vBeats.map((b) => b.time); }
 
-  /** 副伝導路を置く（null で取り除く） */
-  setAccessoryPathway(vertices: number[] | null) {
+  /** 副伝導路を置く（null で取り除く）。部位で心室内の伝導時間とデルタ波の向きが変わる */
+  setAccessoryPathway(vertices: number[] | null, site: ApSite = 'leftFreeWall') {
     this.ap = vertices && vertices.length ? {
-      vertices, last: -Infinity, conductionMs: ACCESSORY_PATHWAY.conductionMs,
+      site, vertices, last: -Infinity, conductionMs: ACCESSORY_PATHWAY.conductionMs,
       antegradeErpMs: ACCESSORY_PATHWAY.antegradeErpMs, retrogradeErpMs: ACCESSORY_PATHWAY.retrogradeErpMs,
-      ventricularDelayMs: ACCESSORY_PATHWAY.ventricularDelayMs,
+      ventricularDelayMs: ACCESSORY_PATHWAY.sites[site].ventricularDelayMs,
     } : null;
   }
 
@@ -147,7 +151,7 @@ export class ConductionSystem {
       return;
     }
     this.lastV = t;
-    this.vBeats.push({ time: t, source });
+    this.vBeats.push(source === 'ap' && this.ap ? { time: t, source, apSite: this.ap.site } : { time: t, source });
     if (this.vBeats.length > KEEP) this.vBeats.shift();
     // 刺激による心室の興奮は His を逆行する（房室結節の逆行伝導、VA 伝導）
     if (source === 'pace') this.schedule({ time: t + AV_NODE.retrograde.vhMs, kind: 'hisRetro' });

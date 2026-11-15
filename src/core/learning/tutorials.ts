@@ -233,7 +233,10 @@ export const AVNRT_TUTORIAL: Tutorial = {
 export const WPW_TUTORIAL: Tutorial = {
   id: 'wpw', title: 'WPW（左側自由壁の副伝導路）', scenario: 'wpw',
   steps: [
-    chooseScenario('wpw', 'WPW（副伝導路）', '僧帽弁輪の側方（左側自由壁）に副伝導路がある症例です。'),
+    {
+      ...chooseScenario('wpw', 'WPW（副伝導路）', '「副伝導路の部位」は「左側自由壁」（既定）のままにし、「部位を伏せる」は外します。僧帽弁輪の側方に副伝導路がある症例です。'),
+      done: (c) => c.ui.arrhythmia === 'wpw' && c.engine.conduction.ap?.site === 'leftFreeWall' && !c.engine.caseOptions.apHidden,
+    },
     look('delta', 'デルタ波と短い PR を見る', 'goals',
       '洞調律の体表 ECG で、PR が短く、QRS の立ち上がりがなだらか（デルタ波）なことを確かめます。V1 で陽性、I で陰性または平坦なデルタ波は左側自由壁の副伝導路を示します。',
       'EGM パネルの最上段が体表 ECG です。フリーズしてキャリパーで PR を測ってもかまいません。'),

@@ -1,16 +1,18 @@
-import type { ArrhythmiaId, Lesion } from '../types';
+import type { ArrhythmiaId, CaseOptions, Lesion } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { Placement } from '../catheter/placement';
 import { snapshotParams, type ParamOverrides } from './params';
 
 /**
  * 症例の状態の書き出し・読み込み（研究用、Phase 7）：パラメータ・カテーテルの配置・病変（頂点ごとの貫壁性と病変タグ）。
- * 読み込むときは、パラメータを先に反映してからエンジンを作り（UI は症例をリセットする）、importCase を呼ぶ。
+ * 読み込むときは、パラメータと選択肢（options）を先に反映してからエンジンを作り（UI は症例をリセットする）、importCase を呼ぶ。
  */
 export interface CaseState {
   format: 'ep-mapping-sim/case';
   version: 1;
   scenario: ArrhythmiaId;
+  /** 症例の選択肢（WPW の副伝導路の部位など）。古い JSON にはない（既定の選択肢） */
+  options?: CaseOptions;
   /** 上書きできるパラメータの値（snapshotParams） */
   params: ParamOverrides;
   /** カテーテル id → 配置（null は置かれていない） */
@@ -26,7 +28,7 @@ export function exportCase(engine: SimulationEngine, scenario: ArrhythmiaId): Ca
   const transmurality: [number, number][] = [];
   engine.ablation.field.transmurality.forEach((t, v) => { if (t > 0) transmurality.push([v, Math.round(t * 1e4) / 1e4]); });
   return {
-    format: 'ep-mapping-sim/case', version: 1, scenario, params: snapshotParams(),
+    format: 'ep-mapping-sim/case', version: 1, scenario, options: { ...engine.caseOptions }, params: snapshotParams(),
     placements, transmurality, lesions: engine.lesions.map((l) => ({ ...l, tags: { ...l.tags } })),
   };
 }

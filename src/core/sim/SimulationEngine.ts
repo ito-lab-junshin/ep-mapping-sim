@@ -1,4 +1,4 @@
-import type { Catheter, EcgLead, EgmChannel, Lesion, SurfaceMesh } from '../types';
+import type { CaseOptions, Catheter, EcgLead, EgmChannel, Lesion, SurfaceMesh } from '../types';
 import { CellularAutomaton } from '../propagation/CellularAutomaton';
 import { applyPreferentialPathways } from '../propagation/preferentialPathways';
 import { EgmGenerator } from '../egm/EgmGenerator';
@@ -62,6 +62,8 @@ export class SimulationEngine {
   readonly rhythm = new RhythmMonitor();
   readonly monitorVertex: number;
   readonly ecg = new SurfaceEcg();
+  /** 症例の選択肢（シナリオの setupSubstrate が書く。複製・CaseState で引き継ぐ） */
+  caseOptions: CaseOptions = {};
   readonly query: MeshQuery;
   readonly paths: Record<GuidedPathId, GuidedPath>;
   readonly sinusVertex: number;

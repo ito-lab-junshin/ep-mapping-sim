@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { TUTORIAL_LA_COVERAGE_PCT } from '../core/learning/tutorials';
-import type { ArrhythmiaId, CureCheck, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
+import type { ArrhythmiaId, CaseOptions, CureCheck, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
 import type { ProtocolConfig } from '../core/pacing/ProtocolSession';
 import { MAP_DEFAULTS } from '../core/params';
 import type { SweepSpeed } from '../core/egm/display';
@@ -19,6 +19,8 @@ export const DEFAULT_MAP_SETTINGS: MapSettings = {
 interface SimState {
   system: MappingSystemId;
   arrhythmia: ArrhythmiaId;
+  /** 症例ごとの選択肢（WPW の副伝導路の部位・部位を伏せるか）。変えると症例を作り直す（state/engine.ts の setCaseOptions） */
+  caseOptions: Partial<Record<ArrhythmiaId, CaseOptions>>;
   energy: EnergyId;
   geometryMode: GeometryMode;
   tachycardia: TachycardiaState;
@@ -75,6 +77,7 @@ interface SimState {
   placementTick: number;
   setSystem: (s: MappingSystemId) => void;
   setArrhythmia: (a: ArrhythmiaId) => void;
+  setCaseOptionsRaw: (id: ArrhythmiaId, o: CaseOptions) => void;
   setEnergy: (e: EnergyId) => void;
   setGeometryMode: (m: GeometryMode) => void;
   setTachycardia: (t: TachycardiaState) => void;
@@ -109,6 +112,7 @@ interface SimState {
 export const useSim = create<SimState>((set) => ({
   system: 'carto',
   arrhythmia: 'af',
+  caseOptions: {},
   energy: 'rf',
   geometryMode: 'preset',
   tachycardia: 'sinus',
@@ -141,6 +145,7 @@ export const useSim = create<SimState>((set) => ({
   placementTick: 0,
   setSystem: (system) => set({ system }),
   setArrhythmia: (arrhythmia) => set({ arrhythmia, tachycardia: 'sinus', activeCatheter: null, protocol: null, cureChecks: null }),
+  setCaseOptionsRaw: (id, o) => set((s) => ({ caseOptions: { ...s.caseOptions, [id]: o }, protocol: s.arrhythmia === id ? null : s.protocol })),
   setEnergy: (energy) => set({ energy }),
   setGeometryMode: (geometryMode) => set({ geometryMode }),
   setTachycardia: (tachycardia) => set({ tachycardia }),

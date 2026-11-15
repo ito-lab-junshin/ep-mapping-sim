@@ -1,5 +1,7 @@
 import { ProtocolSession, type ProtocolConfig } from '../core/pacing/ProtocolSession';
-import type { ArrhythmiaId, CureCheck } from '../core/types';
+import type { ArrhythmiaId, CaseOptions, CureCheck } from '../core/types';
+import type { ApSite } from '../core/params';
+import { AP_SITE_QUESTION } from '../core/arrhythmia/wpw';
 import { SimulationEngine } from '../core/sim/SimulationEngine';
 import { loadParametricSync } from '../core/geometry/ChamberLoader';
 import type { Placement } from '../core/catheter/placement';
@@ -30,7 +32,7 @@ export function getEngine(id: ArrhythmiaId): SimulationEngine {
   if (!e) {
     const scenario = SCENARIOS[id];
     e = new SimulationEngine(loadParametricSync(scenario.anatomy));
-    scenario.setupSubstrate(e);
+    scenario.setupSubstrate(e, useSim.getState().caseOptions[id]);
     engines.set(id, e);
   }
   return e;
@@ -52,6 +54,12 @@ export function resetCase(id: ArrhythmiaId) {
   s.bumpPlacement();
   s.bumpMap('症例を最初の状態に戻しました');
   s.setCureChecks(null);
+}
+
+/** 症例の選択肢を変えて、その症例を作り直す（病変・取得点・刺激・ゴールは消える） */
+export function setCaseOptions(id: ArrhythmiaId, o: CaseOptions) {
+  useSim.getState().setCaseOptionsRaw(id, o);
+  resetCase(id);
 }
 
 /** カテーテルを置き直し、UI に知らせる */
@@ -224,6 +232,14 @@ export function answerFlutterDirection(engine: SimulationEngine, id: ArrhythmiaI
   const actual = flutterDirection(engine);
   if (!actual) return null;
   recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: 'afl-direction', value, correct: value === actual });
+  return value === actual;
+}
+
+/** 副伝導路の部位の設問に答える（部位を伏せた WPW）。正解なら true、副伝導路がなければ null */
+export function answerApSite(engine: SimulationEngine, id: ArrhythmiaId, value: ApSite): boolean | null {
+  const actual = engine.conduction.ap?.site;
+  if (!actual) return null;
+  recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: AP_SITE_QUESTION, value, correct: value === actual });
   return value === actual;
 }
 

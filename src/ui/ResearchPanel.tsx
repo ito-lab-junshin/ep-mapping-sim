@@ -31,6 +31,7 @@ export function ResearchPanel() {
       setParams(state.params);
       const s = useSim.getState();
       s.setArrhythmia(state.scenario);
+      s.setCaseOptionsRaw(state.scenario, state.options ?? {});
       resetCase(state.scenario);
       importCase(getEngine(state.scenario), state);
       s.bumpPlacement();
@@ -49,7 +50,7 @@ export function ResearchPanel() {
       <input ref={file} type="file" accept="application/json,.json" hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void load(f); e.target.value = ''; }} />
       {message && <p className="note">{message}</p>}
-      <p className="note">パラメータ（伝導速度・ERP・病変モデルの係数など）、カテーテルの配置、病変を保存します。条件を振った一括実行は npm run batch（docs/RESEARCH.md）。</p>
+      <p className="note">パラメータ（伝導速度・ERP・病変モデルの係数など）、症例の選択肢（副伝導路の部位など）、カテーテルの配置、病変を保存します。条件を振った一括実行は npm run batch（docs/RESEARCH.md）。</p>
     </div>
   );
 }

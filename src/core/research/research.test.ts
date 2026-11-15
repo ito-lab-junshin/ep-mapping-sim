@@ -44,6 +44,23 @@ describe('研究用：一括実行', () => {
     expect(() => expandConditions({ conditions: [{}] })).toThrow();
   });
 
+  it('副伝導路の部位を振る：optionSweep の部位ごとに条件ができ、CSV の ap_site 列に出る。部位ごとの値も上書きできる', () => {
+    const cfg: BatchConfig = { scenario: 'wpw', optionSweep: { apSite: ['leftFreeWall', 'posteroseptal'] }, conditions: [{ id: 'a' }] };
+    const c = expandConditions(cfg);
+    expect(c.map((x) => x.id)).toEqual(['a-ap1', 'a-ap2']);
+    expect(c.map((x) => x.options.apSite)).toEqual(['leftFreeWall', 'posteroseptal']);
+    expect(expandConditions({ scenario: 'wpw', options: { apSite: 'anteroseptal' } })[0].options.apSite).toBe('anteroseptal');
+    const row = { id: 'a-ap2', scenario: 'wpw' as const, options: { apSite: 'posteroseptal' as const }, params: {}, induced: true, tachyClMs: 260, pWaveMs: 120,
+      ablation: null, lesions: 0, transmuralityMinPct: null, transmuralityMeanPct: null, isolatedPvs: null, pviComplete: null, inducedAfterAblation: null };
+    const lines = toCsv([row], cfg).trim().split('\n').filter((l) => !l.startsWith('#'));
+    const header = lines[0].split(',');
+    expect(lines[1].split(',')[header.indexOf('ap_site')]).toBe('posteroseptal');
+    const e = withParams({ 'ACCESSORY_PATHWAY.sites.posteroseptal.ventricularDelayMs': 90 }, () => {
+      const x = new SimulationEngine(loadParametricSync('normal')); wpwScenario.setupSubstrate(x, { apSite: 'posteroseptal' }); return x;
+    });
+    expect(e.conduction.ap!.ventricularDelayMs).toBe(90);
+  });
+
   it('総興奮時間（P 波幅の指標）：normal で約 120 ms、伝導速度を下げると長くなる', () => {
     const base = totalActivationMs(new SimulationEngine(loadParametricSync('normal')));
     expect(base).toBeGreaterThan(105); expect(base).toBeLessThan(135);
@@ -82,6 +99,7 @@ describe('研究用：一括実行', () => {
 });
 
 import { exportCase, importCase, isCaseState } from './caseState';
+import { wpwScenario } from '../arrhythmia/wpw';
 import { afScenario } from '../arrhythmia/af';
 import { isolatedPvs } from '../arrhythmia/pv';
 
@@ -109,5 +127,13 @@ describe('研究用：症例の状態の書き出し・読み込み', () => {
     expect(b.lesions.map((l) => l.tags.applications)).toEqual([1, 2, 1]);
     expect(b.spec('circ')!.placement).toEqual(a.spec('circ')!.placement);
     expect(state.params['CONDUCTION.atrialCv']).toBe(1);
+  });
+
+  it('WPW の副伝導路の部位（選択肢）を書き出す', () => {
+    const e = new SimulationEngine(loadParametricSync('normal'));
+    wpwScenario.setupSubstrate(e, { apSite: 'rightFreeWall' });
+    const state = JSON.parse(JSON.stringify(exportCase(e, 'wpw')));
+    expect(isCaseState(state)).toBe(true);
+    expect(state.options).toEqual({ apSite: 'rightFreeWall' });
   });
 });

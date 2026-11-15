@@ -1,3 +1,4 @@
+import { CaseOptionsPanel } from './CaseOptionsPanel';
 import { SYSTEMS } from '../systems';
 import { SCENARIOS } from '../core/arrhythmia';
 import { useSim } from '../state/store';
@@ -41,6 +42,7 @@ export function ControlPanel() {
           {Object.values(SCENARIOS).map((sc) => <option key={sc.id} value={sc.id}>{sc.label}</option>)}
         </select>
       </label>
+      <CaseOptionsPanel />
 
       <div data-tutorial="geometry"><GeometryControls /></div>
 

@@ -1,4 +1,5 @@
 import type { SimulationEngine, PacingSite } from './sim/SimulationEngine';
+import type { ApSite } from './params';
 
 /**
  * シミュレータ全体で共有する型定義。
@@ -196,6 +197,13 @@ export interface InductionMethod {
   site: PacingSite;
 }
 
+/** 症例の選択肢（URL・CaseState・一括実行で指定する。いまは WPW の副伝導路の部位だけ） */
+export interface CaseOptions {
+  apSite?: ApSite;
+  /** 副伝導路の部位を伏せる（体表 ECG から部位を推定する設問を出す） */
+  apHidden?: boolean;
+}
+
 /** シナリオ（不整脈ごとの基質定義と判定ロジック、docs/DESIGN.md §5） */
 export interface ArrhythmiaScenario {
   id: ArrhythmiaId;
@@ -206,8 +214,10 @@ export interface ArrhythmiaScenario {
   anatomy: AnatomyDimensionSet;
   /** 推奨の誘発法（§5.6 の刺激部位） */
   induction: InductionMethod;
+  /** 選択肢で変わる推奨の誘発法（WPW は副伝導路の部位で刺激部位が変わる）。ないときは induction */
+  inductionFor?(options: CaseOptions): InductionMethod;
   /** エンジンに基質（遅伝導路、副伝導路、PV トリガー、CTI など）を設定する */
-  setupSubstrate(engine: SimulationEngine): void;
+  setupSubstrate(engine: SimulationEngine, options?: CaseOptions): void;
   /**
    * 構造的な根治の基準（病変の配置から判定できるもの）。
    * 「同じプロトコルで非誘発」は、刺激プロトコルの結果で別に判定する（common.ts の verifyCure）。
@@ -275,7 +285,8 @@ export type LearningEvent =
     /** そのとき環状カテーテルの PV が隔離されていたか */
     circPvIsolated: boolean;
   }
-  | { kind: 'answer'; time: number; question: 'afl-direction'; value: 'ccw' | 'cw'; correct: boolean };
+  | { kind: 'answer'; time: number; question: 'afl-direction'; value: 'ccw' | 'cw'; correct: boolean }
+  | { kind: 'answer'; time: number; question: 'ap-site'; value: ApSite; correct: boolean };
 
 /** ゴールの判定に渡す材料 */
 export interface GoalContext {
@@ -300,4 +311,6 @@ export interface LearningGoal {
   items?(ctx: GoalContext): GoalItem[];
   /** 途中経過（例："2/4 本"） */
   progress?(ctx: GoalContext): string | null;
+  /** この症例の設定で扱うゴールか（例：副伝導路の部位を伏せたときだけの設問）。省略すると常に扱う */
+  applies?(ctx: GoalContext): boolean;
 }

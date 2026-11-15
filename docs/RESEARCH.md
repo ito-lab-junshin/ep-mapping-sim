@@ -7,6 +7,7 @@
 
 ```bash
 npm run batch -- examples/batch-afl-ra-cv.json results.csv
+npm run batch -- examples/batch-wpw-ap-sites.json results.csv   # WPW の副伝導路 4 部位
 ```
 
 - 第 1 引数：条件の JSON、第 2 引数：結果の CSV（省くと標準出力）。進み具合は標準エラーに出る
@@ -32,11 +33,13 @@ npm run batch -- examples/batch-afl-ra-cv.json results.csv
 | 項目 | 意味 |
 |---|---|
 | `scenario` | 既定の症例：`af`／`afl_cti`（反時計回り）／`afl_cti_cw`（時計回り）／`avnrt`／`wpw` |
+| `options` | 既定の症例の選択肢。WPW の副伝導路の部位 `{"apSite": "posteroseptal"}`（`leftFreeWall`（既定）／`rightFreeWall`／`posteroseptal`／`anteroseptal`） |
+| `optionSweep` | 選択肢の値の列。いまは `{"apSite": ["leftFreeWall", "rightFreeWall", "posteroseptal", "anteroseptal"]}` だけ。部位ごとに条件を作り、id に「-ap番号」が付く |
 | `base` | すべての条件に共通のパラメータの上書き |
 | `sweep` | パラメータごとの値の列。直積で条件を作る |
-| `conditions` | 明示した条件（`id`・`scenario`・`params`・`ablation`・`induction`）。`sweep` があれば各条件に掛ける。id は「条件の id-s番号」 |
+| `conditions` | 明示した条件（`id`・`scenario`・`options`・`params`・`ablation`・`induction`）。`sweep` があれば各条件に掛ける。id は「条件の id-s番号」 |
 | `ablation` | 症例ごとの標準の通電（下表）。省くと通電しない |
-| `induction` | 誘発の刺激プロトコルの上書き（`s1Beats`・`s2StartMs`・`observeMs`・`site` など） |
+| `induction` | 誘発の刺激プロトコルの上書き（`s1Beats`・`s2StartMs`・`observeMs`・`site` など）。`site` を省くと症例の推奨（WPW は部位ごと：左側自由壁は CS 遠位、ほかは HRA） |
 | `inductionAfterAblation` | 通電の後にもう一度誘発を試す（既定 true） |
 
 上書きは `base` → 条件の `params` → `sweep` の順に重なる。
@@ -49,7 +52,7 @@ npm run batch -- examples/batch-afl-ra-cv.json results.csv
 |---|---|
 | `CONDUCTION` | `CONDUCTION.atrialCv`、`CONDUCTION.bridgeCv.bachmann` |
 | `AV_NODE` | `AV_NODE.fast.erpMs`、`AV_NODE.slow.ahMs` |
-| `ACCESSORY_PATHWAY` | `ACCESSORY_PATHWAY.antegradeErpMs` |
+| `ACCESSORY_PATHWAY` | `ACCESSORY_PATHWAY.antegradeErpMs`、`ACCESSORY_PATHWAY.sites.posteroseptal.ventricularDelayMs`（部位ごとの心室内伝導） |
 | `AF_SUBSTRATE` | `AF_SUBSTRATE.triggerClMs`（配列 [最小, 最大]）、`AF_SUBSTRATE.pvSleeveCv` |
 | `AFL_SUBSTRATE` | `AFL_SUBSTRATE.raCv`、`AFL_SUBSTRATE.ctiErpMs` |
 | `ABLATION` | `ABLATION.rf.dose.powerExp`、`ABLATION.rf.saturationDepthMm`、`ABLATION.wallThicknessMm.ctiTv`、`ABLATION.cryo.fullRingOcclusion` |
@@ -72,7 +75,7 @@ RF は `powerW`・`durationS`・`heightMm`（先端の壁からの距離。接�
 
 | 列 | 意味 |
 |---|---|
-| `id`・`scenario`・パラメータの列 | 条件 |
+| `id`・`scenario`・`ap_site`・パラメータの列 | 条件（`ap_site` は WPW の副伝導路の部位。ほかの症例は空） |
 | `induced` | 誘発の成否（1／0） |
 | `tachy_cl_ms` | 頻拍の周期長 |
 | `p_wave_ms` | 洞調律 1 拍の両心房の総興奮時間（最初の興奮 → 最後の頂点の興奮。P 波幅の指標。AF のトリガーは止めて測る） |
@@ -83,7 +86,7 @@ RF は `powerW`・`durationS`・`heightMm`（先端の壁からの距離。接�
 
 ## 2. 症例の状態の書き出し・読み込み（ブラウザ）
 
-操作パネルの「研究用（JSON）」：パラメータ（上書きできる全項目）・カテーテルの配置・病変（頂点ごとの貫壁性と病変タグ）を JSON にする。
+操作パネルの「研究用（JSON）」：パラメータ（上書きできる全項目）・症例の選択肢（`options`：WPW の副伝導路の部位と伏せるか。古い JSON にはなく、既定の選択肢になる）・カテーテルの配置・病変（頂点ごとの貫壁性と病変タグ）を JSON にする。
 読み込むと、パラメータを反映して症例を作り直し、配置と病変を戻す。パラメータはページを再読み込みすると既定に戻る。
 形式は `src/core/research/caseState.ts` の `CaseState`（`format: "ep-mapping-sim/case"`、`version: 1`）。
 

@@ -1,7 +1,7 @@
 import { SYSTEMS } from '../systems';
 import { useSim } from '../state/store';
 import { currentSession, startProtocol, stopProtocol, useEngine } from '../state/engine';
-import { SCENARIOS } from '../core/arrhythmia';
+import { SCENARIOS, scenarioInduction } from '../core/arrhythmia';
 import { defaultProtocol, type ProtocolConfig, type ProtocolKind } from '../core/pacing/ProtocolSession';
 import { PACING_SITE_LABEL, type PacingSite } from '../core/sim/SimulationEngine';
 import { Slider } from './CatheterTray';
@@ -23,8 +23,10 @@ export function StimulationPanel() {
   useSim((s) => s.protocolTick);
   const engine = useEngine();
   const scenario = SCENARIOS[arrhythmia];
-  const rec = scenario.induction;
-  const cfg: ProtocolConfig = stored ?? defaultProtocol(rec.kind === 'burst' ? 'burst' : 'extrastimulus', rec.site);
+  const rec = scenarioInduction(scenario, engine.caseOptions);
+  const hidden = !!engine.caseOptions.apHidden;
+  // 部位を伏せたときは、既定の刺激部位から答えがわからないよう HRA にする
+  const cfg: ProtocolConfig = stored ?? defaultProtocol(rec.kind === 'burst' ? 'burst' : 'extrastimulus', hidden ? 'HRA' : rec.site);
   const set = (p: Partial<ProtocolConfig>) => setProtocol({ ...cfg, ...p });
   const session = currentSession();
   const mine = session && session.engine === engine ? session : null;
@@ -34,7 +36,9 @@ export function StimulationPanel() {
     <div className="stim">
       {rec.kind === 'spontaneous'
         ? <p className="note">この症例は PV トリガーで自然に始まります（刺激は任意）。</p>
-        : <p className="note">推奨：{rec.kind === 'burst' ? 'バースト' : '期外刺激'}（{PACING_SITE_LABEL[rec.site]}）</p>}
+        : hidden
+          ? <p className="note">推奨：期外刺激（副伝導路の部位を伏せています。左側自由壁は CS 遠位、右側自由壁・中隔は HRA から）</p>
+          : <p className="note">推奨：{rec.kind === 'burst' ? 'バースト' : '期外刺激'}（{PACING_SITE_LABEL[rec.site]}）</p>}
       <div className="row">
         <label>方法
           <select value={cfg.kind} onChange={(e) => set({ kind: e.target.value as ProtocolKind })} disabled={running}>

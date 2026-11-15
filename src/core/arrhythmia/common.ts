@@ -1,4 +1,4 @@
-import type { ArrhythmiaScenario, CureCheck, SurfaceMesh } from '../types';
+import type { ArrhythmiaScenario, CaseOptions, CureCheck, SurfaceMesh } from '../types';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { defaultProtocol, runProtocol, type ProtocolConfig, type ProtocolSession } from '../pacing/ProtocolSession';
 
@@ -7,7 +7,8 @@ import { defaultProtocol, runProtocol, type ProtocolConfig, type ProtocolSession
  */
 export function cloneWithSubstrate(engine: SimulationEngine, scenario: ArrhythmiaScenario): SimulationEngine {
   const c = new SimulationEngine(engine.model);
-  scenario.setupSubstrate(c);
+  scenario.setupSubstrate(c, engine.caseOptions);
+  c.caseOptions = { ...engine.caseOptions };
   const src = engine.ca.tissue, dst = c.ca.tissue;
   dst.viability.set(src.viability);
   dst.voltage.set(src.voltage);
@@ -16,8 +17,8 @@ export function cloneWithSubstrate(engine: SimulationEngine, scenario: Arrhythmi
 }
 
 /** シナリオの誘発プロトコル（§5.6 の既定値）。overrides でテスト用に短くできる */
-export function inductionProtocol(scenario: ArrhythmiaScenario, overrides: Partial<ProtocolConfig> = {}): ProtocolConfig | null {
-  const m = scenario.induction;
+export function inductionProtocol(scenario: ArrhythmiaScenario, overrides: Partial<ProtocolConfig> = {}, options?: CaseOptions): ProtocolConfig | null {
+  const m = scenario.inductionFor ? scenario.inductionFor(options ?? {}) : scenario.induction;
   if (m.kind === 'spontaneous') return null;
   return { ...defaultProtocol(m.kind, m.site), ...overrides };
 }
@@ -33,7 +34,7 @@ export interface InductionResult {
  */
 export function tryInduce(engine: SimulationEngine, scenario: ArrhythmiaScenario, overrides: Partial<ProtocolConfig> = {}, settleMs = 7000): InductionResult {
   const c = cloneWithSubstrate(engine, scenario);
-  const cfg = inductionProtocol(scenario, overrides);
+  const cfg = inductionProtocol(scenario, overrides, engine.caseOptions);
   if (!cfg) {
     c.tick(settleMs);
     return { induced: c.rhythm.state === 'tachycardia', session: null, engine: c };

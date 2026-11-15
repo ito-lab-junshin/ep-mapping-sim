@@ -128,14 +128,29 @@ export const AV_NODE = {
 };
 /** His の ERP（His と心室の不応期を分けるため。値は心室 ERP と同じ） */
 export const HIS_ERP_MS = VENTRICLE_ERP_MS;
-/** 副伝導路（左側自由壁） */
+/** 副伝導路の部位（§5.4） */
+export type ApSite = 'leftFreeWall' | 'rightFreeWall' | 'posteroseptal' | 'anteroseptal';
+export const AP_SITE_IDS: ApSite[] = ['leftFreeWall', 'rightFreeWall', 'posteroseptal', 'anteroseptal'];
+
+/** 副伝導路（ERP・伝導時間は全部位で共通。部位ごとの値は sites） */
 export const ACCESSORY_PATHWAY = {
   /** 心房付着部 ↔ 心室付着部の伝導時間 */
   conductionMs: 15,
   antegradeErpMs: 280,
   retrogradeErpMs: 250,
-  /** 心室の興奮開始（QRS 開始）から副伝導路の心室付着部（左室側壁の弁輪部）までの心室内伝導時間。VA ≈ 95 ms（順行性 AVRT の RP > 70 ms）になるよう置いた */
-  ventricularDelayMs: 80,
+  /**
+   * 部位ごとの値（仮定値・教育用近似）。
+   * ventricularDelayMs：心室の興奮開始（QRS 開始）から副伝導路の心室付着部までの心室内伝導時間。VA = これ + conductionMs。
+   * 左側自由壁 80 ms で VA ≈ 95 ms、右側自由壁 70 ms で 85 ms、中隔 75 ms で 90 ms（いずれも順行性 AVRT の VA > 70 ms）。
+   * 中隔は房室結節と付着部が近く、VA が短いと副伝導路から戻った興奮が付着部の周りの心房の不応期（ERP 250 ms）に当たって
+   * 頻拍が続かない（70 ms 未満では誘発されなかった）。臨床では中隔の VA が最も短いことが多いが、本モデルでは 90 ms に置いた
+   */
+  sites: {
+    leftFreeWall: { ventricularDelayMs: 80 },
+    rightFreeWall: { ventricularDelayMs: 70 },
+    posteroseptal: { ventricularDelayMs: 75 },
+    anteroseptal: { ventricularDelayMs: 75 },
+  } as Record<ApSite, { ventricularDelayMs: number }>,
 };
 /** 刺激（ペーシング）のアーチファクト mV（全チャンネルに 1 サンプル） */
 export const PACING_ARTIFACT_MV = 0.8;

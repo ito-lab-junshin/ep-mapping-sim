@@ -3,11 +3,13 @@ import { useSim } from './store';
 import { SCENARIOS } from '../core/arrhythmia';
 import { defaultProtocol, type ProtocolConfig } from '../core/pacing/ProtocolSession';
 import type { ArrhythmiaId } from '../core/types';
+import { AP_SITE_IDS, type ApSite } from '../core/params';
 import type { PacingSite } from '../core/sim/SimulationEngine';
 
 /**
  * 症例と刺激プロトコルの設定を URL パラメータに保存する（§5.6：授業で共有）。
  * 例：?case=avnrt&kind=extrastimulus&site=HRA&s1=600&n=8&s2=500&s2min=150
+ * WPW は副伝導路の部位（ap=leftFreeWall|rightFreeWall|posteroseptal|anteroseptal）と、部位を伏せるか（aphide=1）も保存する。
  */
 const NUM: [keyof ProtocolConfig, string][] = [
   ['s1Ms', 's1'], ['s1Beats', 'n'], ['s2StartMs', 's2'], ['s2MinMs', 's2min'], ['s2StepMs', 'step'],
@@ -19,6 +21,8 @@ export function readUrl() {
   const s = useSim.getState();
   const id = q.get('case') as ArrhythmiaId | null;
   if (id && SCENARIOS[id]) s.setArrhythmia(id);
+  const ap = q.get('ap') as ApSite | null;
+  if (ap && AP_SITE_IDS.includes(ap)) s.setCaseOptionsRaw('wpw', { apSite: ap, apHidden: q.get('aphide') === '1' });
   const kind = q.get('kind');
   if (kind === 'extrastimulus' || kind === 'burst') {
     const cfg = defaultProtocol(kind, (q.get('site') as PacingSite) ?? 'HRA') as unknown as Record<string, number | string | null>;
@@ -33,9 +37,14 @@ export function readUrl() {
 export function useUrlSync() {
   const arrhythmia = useSim((s) => s.arrhythmia);
   const protocol = useSim((s) => s.protocol);
+  const options = useSim((s) => s.caseOptions[s.arrhythmia]);
   useEffect(() => {
     const q = new URLSearchParams();
     q.set('case', arrhythmia);
+    if (arrhythmia === 'wpw' && options?.apSite) {
+      q.set('ap', options.apSite);
+      if (options.apHidden) q.set('aphide', '1');
+    }
     if (protocol) {
       q.set('kind', protocol.kind);
       q.set('site', protocol.site);
@@ -44,5 +53,5 @@ export function useUrlSync() {
       if (protocol.s3Ms !== null) q.set('s3', String(protocol.s3Ms));
     }
     window.history.replaceState(null, '', `${window.location.pathname}?${q.toString()}`);
-  }, [arrhythmia, protocol]);
+  }, [arrhythmia, protocol, options]);
 }
