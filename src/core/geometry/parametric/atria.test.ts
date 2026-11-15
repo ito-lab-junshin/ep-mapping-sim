@@ -180,6 +180,21 @@ describe('AFL 用の拡大した RA（aflRemodeled）', () => {
   });
 });
 
+describe('IVC の口と CTI の IVC 側の端（全寸法セット）', () => {
+  it.each(Object.keys(DIMENSION_SETS) as (keyof typeof DIMENSION_SETS)[])('%s：IVC の領域は CTI の「IVC 口」の目印から始まり、目印の 2 mm 以内に CTI の頂点が接する', (set) => {
+    const m = set === 'normal' ? normal : set === 'afRemodeled' ? af : buildBiatrialModel(set);
+    const reg = m.mesh.regionOfVertex, a = m.anatomy.anchors.ctiIvc;
+    // 目印そのものが IVC の領域（口の輪）。CTI の線を口まで引けば、伝導しない IVC と隙間なくつながる
+    expect(reg[a.vertex]).toBe(REGION_ID.ivc);
+    let near = Infinity;
+    for (let v = 0; v < reg.length; v++) {
+      if (reg[v] !== REGION_ID.cti) continue;
+      near = Math.min(near, Math.hypot(m.mesh.positions[3 * v] - a.point.x, m.mesh.positions[3 * v + 1] - a.point.y, m.mesh.positions[3 * v + 2] - a.point.z));
+    }
+    expect(near).toBeLessThan(2);
+  });
+});
+
 describe('右心耳（RAA）', () => {
   it('3 つの寸法セットすべてに右心耳があり、三尖弁輪・SVC の開口と重ならない', () => {
     for (const m of [normal, af, buildBiatrialModel('aflRemodeled')]) {

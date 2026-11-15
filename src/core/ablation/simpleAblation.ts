@@ -6,6 +6,9 @@ import type { SimulationEngine } from '../sim/SimulationEngine';
  * 半径以内は貫壁性の完全な病変（viability = 0・電位 0、伝導遮断）、その外側 BORDER_MM は部分的な傷害
  * （viability と電位が距離に比例して戻る）。Phase 5 で RF・クライオ・PFA の病変モデルに置き換える。
  * 半径 3 mm・境界 1 mm は仮定値（教育用近似）。
+ * 境界の viability は 0 近くまで下がるため、伝導が極端に遅い頂点（2 mm に 300 ms 以上）ができ、
+ * 線の端で遅れて隣を再興奮させることがある（RF・クライオ・PFA の病変モデルは t < 1 で viability ≧ 0.3 なので起きない）。
+ * UI からは外し、テストだけで使う。
  */
 export const SIMPLE_LESION_RADIUS_MM = 3;
 const BORDER_MM = 1;

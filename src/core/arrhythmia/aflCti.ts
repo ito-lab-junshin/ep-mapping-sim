@@ -152,7 +152,7 @@ function aflGoals(direction: 'ccw' | 'cw'): LearningGoal[] {
     },
     {
       id: 'cti-line', label: 'CTI に三尖弁輪から下大静脈まで連続線を引く',
-      hint: '三尖弁輪側は壁が厚い（5 mm）。40 W か接触圧を上げた長めの通電で貫壁させる',
+      hint: '三尖弁輪の縁から、ホバーで「IVC」と出る所まで隙間なく焼く。三尖弁輪側は壁が厚い（5 mm）。40 W か接触圧を上げた長めの通電で貫壁させる',
       achieved: ({ engine }) => ctiLineDone(engine),
     },
     {

@@ -199,13 +199,40 @@ describe('通常型 AFL（CTI）', () => {
     }
   }, 300_000);
 
-  it('簡易通電（半径 3 mm）の細い線では、線は完成と判定されても IVC 側で線の外側を回り込む粗動（周期長が長い）が残る', () => {
+  /**
+   * 画面と同じ RF（40 W・45 秒）で、三尖弁輪の目印から IVC 側へ CTI の弦に沿って約 4 mm ごとに焼く。
+   * stopShortMm だけ IVC の口の手前で止める（0 なら IVC の口の目印まで。IVC の中へは延ばさない）
+   */
+  const rfCtiLine = (e: SimulationEngine, stopShortMm = 0) => {
+    const a = e.model.anatomy.anchors, p = a.ctiTv.point, q = a.ctiIvc.point;
+    const len = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z), end = (len - stopShortMm) / len;
+    const cti: number[] = [];
+    e.mesh.regionOfVertex.forEach((r, v) => { if (r === REGION_ID.cti || r === REGION_ID.ivc) cti.push(v); });
+    const n = Math.ceil((len - stopShortMm) / 4);
+    for (let i = 0; i <= n; i++) {
+      const t = (i / n) * end;
+      e.setPlacement('abl', { kind: 'free', point: e.query.closestPoint({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, z: p.z + (q.z - p.z) * t }, cti).point, heightMm: 1, rotationDeg: 0 });
+      e.ablation.rf = { powerW: 40, durationS: 45 };
+      expect(e.ablation.start('rf')).toBeNull();
+      e.ablation.speed = 250;
+      while (e.ablation.active) e.ablation.step(e.sampleMs);
+    }
+  };
+
+  it('RF の線を三尖弁輪から IVC の口（ホバーで「IVC」と出る所）まで引けば、IVC の中へ延ばさなくても両方向性ブロックになり非誘発（線の IVC 側の端を回り込まない。反時計回り・時計回りとも）', () => {
+    for (const sc of [aflCtiScenario, aflCtiCwScenario]) {
+      const e = new SimulationEngine(loadParametricSync('aflRemodeled')); sc.setupSubstrate(e);
+      rfCtiLine(e);
+      const checks = verifyCure(e, sc, BURST);
+      expect(checks.every((c) => c.ok), `${sc.id} ${JSON.stringify(checks.filter((c) => !c.ok))}`).toBe(true);
+    }
+  }, 300_000);
+
+  it('RF の線が IVC の口の 8 mm 手前で止まると、線は未完成と判定され、粗動は誘発される', () => {
     const e = engine();
-    ctiLine(e);
-    expect(aflCtiScenario.structuralChecks(e).find((c) => c.id === 'cti-line')!.ok).toBe(true);
-    const r = tryInduce(e, aflCtiScenario, BURST);
-    expect(r.induced).toBe(true);
-    expect(r.engine.rhythm.currentCycleLength(r.engine.time)!).toBeGreaterThan(290);
+    rfCtiLine(e, 8);
+    expect(aflCtiScenario.structuralChecks(e).find((c) => c.id === 'cti-line')!.ok).toBe(false);
+    expect(tryInduce(e, aflCtiScenario, BURST).induced).toBe(true);
   }, 300_000);
 
   it('線の中ほどに隙間が残ると、線は未完成と判定され、粗動は誘発される', () => {

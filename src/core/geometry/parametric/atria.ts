@@ -13,6 +13,10 @@ import {
   type Opening, type RawMesh,
 } from './meshOps';
 
+
+/** IVC の口（RA との接合部の輪）：軸方向の幅 mm と、軸から IVC の半径の何倍までを口とみなすか。CTI の目印と IVC の領域ラベルで共有（仮定値） */
+const IVC_OSTIUM_MARGIN_MM = 1.5;
+const IVC_OSTIUM_RADIAL = 1.6;
 /**
  * パラメトリック解剖モデル（両心房）。docs/DESIGN.md §9.1。
  *
@@ -239,10 +243,10 @@ function buildRightAtrium(D: AnatomyDimensions) {
   const avV = nearestVertex(mesh, add(P(hisV), scale(sub(csOs.center, P(hisV)), 0.35)));
   // CTI：IVC の口（IVC と RA の接合部の輪）と三尖弁輪の最短の組。
   // rims.ivc は管の先端の縁なので使わない（CTI は IVC の口から三尖弁輪まで）
-  const ivcJunction: number[] = [];
+  const ivcJunction: number[] = [];  // IVC の口（接合部の輪）。IVC の領域ラベルもここから外側
   for (let v = 0; v < mesh.positions.length / 3; v++) {
     const p = P(v);
-    if (Math.abs(axialDistance(ivc, p) + D.vein.length) < 1.5 && radialDistance(ivc, p) < ivc.radius * 1.6) ivcJunction.push(v);
+    if (Math.abs(axialDistance(ivc, p) + D.vein.length) < IVC_OSTIUM_MARGIN_MM && radialDistance(ivc, p) < ivc.radius * IVC_OSTIUM_RADIAL) ivcJunction.push(v);
   }
   let ctiIvc = -1, ctiTv = -1, ctiLen = Infinity;
   for (const a of ivcJunction) for (const b of rims.tricuspid) {
@@ -281,7 +285,9 @@ function buildRightAtrium(D: AnatomyDimensions) {
     axialDistance(o, p) > -junctionBack && radialDistance(o, p) < o.radius * 1.5;
   const label = (p: Vec3): RegionName => {
     if (veinLabel(svc, p, svcLength - 1)) return 'svc';
-    if (veinLabel(ivc, p, D.vein.length - 1)) return 'ivc';
+    // IVC は RA との接合部（CTI の「IVC 口」の目印を選ぶ輪と同じ：軸方向 −length ± IVC_OSTIUM_MARGIN_MM、軸から半径の IVC_OSTIUM_RADIAL 倍）から外側。
+    // 管と RA 本体のなめらかな接合が漏斗状になり、口のまわりに約 5 mm の幅で CTI が残ると、口まで引いた CTI の線の端を粗動が回り込んだ（QA の追補）
+    if (axialDistance(ivc, p) > -(D.vein.length + IVC_OSTIUM_MARGIN_MM) && radialDistance(ivc, p) < ivc.radius * IVC_OSTIUM_RADIAL) return 'ivc';
     if (dist(p, P(hisV)) < 5) return 'his_region';
     if (dist(p, P(avV)) < 4) return 'av_node';
     // 遅伝導路の領域（AV_NODE.slowRegion.radiusMm。遅伝導路の入口の領域と同じ半径）
