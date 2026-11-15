@@ -64,7 +64,9 @@ test('チュートリアル：PVI（RF）', async ({ page }) => {
   await expectStep(page, '4 本の PV で entrance block を確かめる');
   for (const pv of ['LSPV', 'LIPV', 'RSPV', 'RIPV']) {
     await page.evaluate((x) => (window as any).__ep.place('circ', { pv: x }, { diameterMm: 15 }), pv);
-    await expect(page.locator('.tutorial-items li.ok', { hasText: pv })).toBeVisible({ timeout: 30_000 });
+    // その PV に ✓ が付く（最後の PV では ✓ と同時に次の手順へ進み、項目の一覧が消えることがある）
+    await expect.poll(async () => (await page.locator('.tutorial-items li.ok', { hasText: pv }).count()) > 0
+      || (await title(page).textContent()) !== '4 本の PV で entrance block を確かめる', { timeout: 30_000 }).toBe(true);
   }
   await expectStep(page, 'exit block を確かめる');
   await runStim(page, 'burst', 'CIRC');

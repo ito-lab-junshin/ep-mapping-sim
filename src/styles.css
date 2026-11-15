@@ -132,3 +132,6 @@ html, body, #root { margin: 0; height: 100%; }
 .about ul { margin: 0; padding-left: 18px; }
 .about li { margin-bottom: 4px; }
 .about code { font-size: 12px; opacity: 0.85; }
+/* 浮腫・再伝導の欄：待機 3 つとアデノシン負荷を 2 段に（狭い操作パネルで文字が縦に割れないように。QA で見つかった表示の崩れ） */
+.reconnection .row { flex-wrap: wrap; }
+.reconnection .row button { flex: 1 1 28%; white-space: nowrap; }

@@ -117,6 +117,9 @@ describe('学習ゴール：通常型 AFL', () => {
     t.record(protocol(e, 'CS_OS', 'noninducible'));
     t.update(e);
     expect(t.isAchieved('bidirectional')).toBe(false); // 側壁側からの刺激がまだ
+    t.record(protocol(e, 'HALO_DIST', 'induced'));
+    t.update(e);
+    expect(t.isAchieved('bidirectional')).toBe(false); // 側壁側からの刺激で粗動が誘発された（線を越える伝導が残る）
     t.record(protocol(e, 'HALO_DIST', 'noninducible'));
     t.update(e);
     expect(t.isAchieved('bidirectional')).toBe(true);

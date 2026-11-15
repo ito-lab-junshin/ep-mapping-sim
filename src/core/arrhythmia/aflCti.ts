@@ -158,9 +158,10 @@ function aflGoals(direction: 'ccw' | 'cw'): LearningGoal[] {
     {
       id: 'bidirectional', label: 'CS 口と低位外側 RA（またはハロー遠位）からの刺激で両方向性ブロックを確認する',
       hint: '線の完成後に、CS 口から刺激してハローが近位 → 遠位に下行すること、側壁から刺激して CS が近位から遅れて興奮することを見る',
+      // 両側からの刺激の結果が「誘発」でないこと（粗動が再び始まったら、線を越える伝導が残っている。QA で見つかった判定の抜け）
       achieved: (ctx) => ctiLineDone(ctx.engine)
-        && protocolsAfterLastLesion(ctx, ['CS_OS', 'CS_PROX']).length > 0
-        && protocolsAfterLastLesion(ctx, ['LOW_LATERAL_RA', 'HALO_DIST']).length > 0,
+        && protocolsAfterLastLesion(ctx, ['CS_OS', 'CS_PROX']).some((e) => e.status !== 'induced')
+        && protocolsAfterLastLesion(ctx, ['LOW_LATERAL_RA', 'HALO_DIST']).some((e) => e.status !== 'induced'),
     },
   ];
 }

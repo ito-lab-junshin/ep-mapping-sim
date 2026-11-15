@@ -116,3 +116,15 @@ describe.each(['rightFreeWall', 'posteroseptal', 'anteroseptal'] as const)('副�
     expect(checks.every((c) => c.ok), JSON.stringify(checks)).toBe(true);
   }, 240_000);
 });
+
+describe('WPW の根治の基準：デルタ波の消失', () => {
+  it('順行性 AVRT（頻拍）中は、拍が His 経由でも「デルタ波が消えた」にしない', () => {
+    const e = make('leftFreeWall');
+    const r = tryInduce(e, wpwScenario, PROTOCOL);
+    expect(r.induced).toBe(true);
+    const t = r.engine;
+    expect(t.rhythm.state).toBe('tachycardia');
+    expect(t.conduction.vBeats.slice(-3).every((b) => b.source === 'his')).toBe(true);
+    expect(wpwScenario.structuralChecks(t).find((c) => c.id === 'no-delta')!.ok).toBe(false);
+  }, 120_000);
+});

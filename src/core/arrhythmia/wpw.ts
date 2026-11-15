@@ -137,10 +137,12 @@ export const wpwScenario: ArrhythmiaScenario = {
   structuralChecks(engine) {
     const ap = engine.conduction.ap;
     const recent = engine.conduction.vBeats.filter((b) => b.source !== 'pace').slice(-3);
-    const noDelta = recent.length > 0 && recent.every((b) => b.source === 'his');
+    // 順行性 AVRT の拍も His 経由なので、頻拍・刺激中は「デルタ波が消えた」と判定しない（QA で見つかった判定の抜け）
+    const sinus = engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing';
+    const noDelta = sinus && recent.length > 0 && recent.every((b) => b.source === 'his');
     return [
       { id: 'ap-lesion', label: '副伝導路の部位に病変がある', ok: apAblated(engine) && !!ap },
-      { id: 'no-delta', label: 'デルタ波が消えた（直近の拍が His 経由だけ）', ok: noDelta },
+      { id: 'no-delta', label: 'デルタ波が消えた（洞調律の直近の拍が His 経由だけ）', ok: noDelta },
     ];
   },
   energies: ['rf'],
