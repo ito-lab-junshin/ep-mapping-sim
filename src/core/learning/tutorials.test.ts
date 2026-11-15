@@ -5,7 +5,8 @@ import { afScenario } from '../arrhythmia/af';
 import { verifyCure } from '../arrhythmia/common';
 import { GeometryAcquisition } from '../geometry/acquisition';
 import { GoalTracker } from './GoalTracker';
-import { PVI_TUTORIAL, TUTORIAL_LA_COVERAGE_PCT, advanceTutorial, type TutorialContext } from './tutorials';
+import { PVI_TUTORIAL, TUTORIALS, TUTORIAL_LA_COVERAGE_PCT, advanceTutorial, type TutorialContext } from './tutorials';
+import { SCENARIOS } from '../arrhythmia';
 import { protocolEvent, protocolStartState } from './events';
 import { PV_NAMES, type PvName } from '../geometry/regions';
 import type { Vec3 } from '../types';
@@ -45,6 +46,9 @@ describe('チュートリアル：PVI（RF）', () => {
 
     expect(step()).toBe('scenario');
     ui.arrhythmia = 'af';
+    // 症例が選ばれていても「この症例で始める」を押すまで進まない（QA の所見 12）
+    expect(step()).toBe('scenario');
+    (ui.confirmed as Set<string>).add('scenario');
     expect(step()).toBe('geometry-mode');
     ui.geometryMode = 'acquire';
     expect(step()).toBe('build-la');
@@ -139,6 +143,7 @@ describe('チュートリアル：通常型 AFL（反時計回り・時計回り
       const r = runner(t, e, scenario);
       expect(r.step()).toBe('scenario');
       r.ui.arrhythmia = scenario.id;
+      r.confirmed.add('scenario');
       // 誘発済みのエンジン（頻拍中）なので「誘発する」はすぐ完了
       expect(r.step()).toBe('direction');
       expect(flutterDirection(e)).toBe(dir);
@@ -173,6 +178,7 @@ describe('チュートリアル：AVNRT', () => {
     const r = runner(AVNRT_TUTORIAL, e, avnrtScenario);
     expect(r.step()).toBe('scenario');
     r.ui.arrhythmia = 'avnrt';
+    r.confirmed.add('scenario');
     expect(r.step()).toBe('ah-jump');
     const n0 = e.lesions.length, st = protocolStartState(e, 'HRA');
     const session = runProtocol(e, { ...defaultProtocol('extrastimulus', 'HRA'), s1Beats: 4, s2StartMs: 360, observeMs: 1200 });
@@ -202,6 +208,7 @@ describe('チュートリアル：WPW', () => {
     const r = runner(WPW_TUTORIAL, e, wpwScenario);
     expect(r.step()).toBe('scenario');
     r.ui.arrhythmia = 'wpw';
+    r.confirmed.add('scenario');
     expect(r.step()).toBe('delta');
     r.confirmed.add('delta');
     expect(r.step()).toBe('rv-pacing');
@@ -221,4 +228,23 @@ describe('チュートリアル：WPW', () => {
     r.ui.cureOk = verifyCure(e, wpwScenario, { s1Beats: 4, s2StartMs: 300, observeMs: 1200 }).every((c) => c.ok);
     expect(r.step()).toBe('done');
   }, 300_000);
+});
+
+describe('チュートリアルの手順 1（症例を選ぶ）', () => {
+  it.each(TUTORIALS.map((t) => [t.title, t] as const))('%s：症例が選ばれていても「この症例で始める」を押すまで進まず、押すと進む（QA の所見 12）', (_, t) => {
+    const sc = SCENARIOS[t.scenario];
+    const e = new SimulationEngine(loadParametricSync(sc.anatomy));
+    sc.setupSubstrate(e);
+    const confirmed = new Set<string>();
+    const ctx: TutorialContext = {
+      engine: e, goals: new GoalTracker(sc.goals), points: [],
+      ui: { arrhythmia: t.scenario, geometryMode: 'preset', laCoveragePct: 0, coverageTargetPct: 70, cureOk: false, confirmed },
+    };
+    const first = t.steps[0];
+    expect(first.id).toBe('scenario');
+    expect(first.ready!(ctx)).toBe(true);
+    expect(advanceTutorial(t, 0, ctx)).toBe(0);
+    confirmed.add('scenario');
+    expect(advanceTutorial(t, 0, ctx)).toBeGreaterThan(0);
+  });
 });

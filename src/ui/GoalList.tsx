@@ -34,6 +34,14 @@ export function GoalList() {
       : '違います。V1 の極性（陽性なら左側）、I・aVL の極性、下壁誘導（II・III・aVF）の極性、移行帯の位置を見直しましょう');
   };
 
+  /** 正解した設問は、達成した行に答えを残す（次のゴールへ進んでも消えない。症例を作り直すと消える） */
+  const correctAnswer = (goalId: string): string | null => {
+    const q = goalId === 'direction' ? 'afl-direction' : goalId === 'ap-site' ? 'ap-site' : null;
+    const e = q ? ctx.events.find((x) => x.kind === 'answer' && x.question === q && x.correct) : undefined;
+    if (!e || e.kind !== 'answer') return null;
+    return e.question === 'afl-direction' ? (e.value === 'ccw' ? '反時計回り' : '時計回り') : AP_SITES[e.value as ApSite].label;
+  };
+
   return (
     <div className="goals">
       <ol>
@@ -62,6 +70,7 @@ export function GoalList() {
                 </div>
               )}
               {g === next && (g.id === 'direction' || g.id === 'ap-site') && feedback && <p className="note">{feedback}</p>}
+              {done && correctAnswer(g.id) && <p className="note answer-ok">正解です（{correctAnswer(g.id)}）</p>}
             </li>
           );
         })}

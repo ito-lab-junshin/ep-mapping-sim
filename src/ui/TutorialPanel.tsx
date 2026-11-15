@@ -4,6 +4,8 @@ import { useSim } from '../state/store';
 import { getAcquisition, getGoalTracker, getPoints, useEngine } from '../state/engine';
 import { TUTORIALS, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
 import { Slider } from './CatheterTray';
+import { PV_NAMES } from '../core/geometry/regions';
+import { pvGaps } from '../core/arrhythmia/pv';
 
 /**
  * チュートリアル（PVI（RF）・通常型 AFL（反時計回り／時計回り）・AVNRT・WPW）。操作パネルの上に今の手順を出し、完了すると自動で次へ進む。
@@ -15,12 +17,16 @@ export function TutorialPanel() {
   const setStep = useSim((s) => s.setTutorialStep);
   const engine = useEngine();
   const [showHint, setShowHint] = useState(false);
+  /** 自動で完了して進んだ直前の手順（進んだことがわかるように 1 行出す） */
+  const [prevDone, setPrevDone] = useState<string | null>(null);
   const coverageTarget = useSim((s) => s.tutorialCoveragePct);
   const setCoverageTarget = useSim((s) => s.setTutorialCoveragePct);
   const [, force] = useState(0);
   const tutorialId = useSim((s) => s.tutorialId);
   const setTutorialId = useSim((s) => s.setTutorialId);
   const confirmStep = useSim((s) => s.confirmTutorialStep);
+  const gapHint = useSim((s) => s.gapHint);
+  const setGapHint = useSim((s) => s.setGapHint);
   const T = TUTORIALS.find((t) => t.id === tutorialId) ?? TUTORIALS[0];
 
   // 500 ms ごとに完了を判定して進める（一時停止中も判定する）
@@ -44,7 +50,7 @@ export function TutorialPanel() {
         },
       };
       const next = advanceTutorial(T, s.tutorialStep, ctx);
-      if (next !== s.tutorialStep) { setStep(next); setShowHint(false); }
+      if (next !== s.tutorialStep) { setPrevDone(T.steps[next - 1]?.title ?? null); setStep(next); setShowHint(false); }
       ctxRef.current = ctx;
       force((x) => x + 1);
     }, 500);
@@ -73,7 +79,7 @@ export function TutorialPanel() {
             {TUTORIALS.map((t) => <option key={t.id} value={t.id}>{t.title}</option>)}
           </select>
         </label>
-        <button style={{ borderColor: theme.colors.accent }} onClick={() => { setStep(0); setShowHint(false); }}>
+        <button style={{ borderColor: theme.colors.accent }} onClick={() => { setStep(0); setShowHint(false); setPrevDone(null); }}>
           チュートリアルを始める
         </button>
       </div>
@@ -88,6 +94,7 @@ export function TutorialPanel() {
         <b>チュートリアル：{T.title}</b>
         <span>{done ? '完了' : `${step + 1} / ${T.steps.length}`}</span>
       </div>
+      {prevDone && <p className="tutorial-prev">前の手順：{prevDone} ✓</p>}
       {cur ? (
         <>
           <p className="tutorial-title" style={{ color: theme.colors.accent }}>{cur.title}</p>
@@ -101,13 +108,27 @@ export function TutorialPanel() {
               {cur.items(ctxRef.current).map((it) => <li key={it.label} className={it.done ? 'ok' : ''}>{it.done ? '✓' : '・'} {it.label}</li>)}
             </ul>
           )}
+          {cur.gapHint && (
+            <label className="check">
+              <input type="checkbox" checked={gapHint} onChange={(e) => setGapHint(e.target.checked)} /> 隙間のヒントを表示（教育用の補助。実機にはない機能）
+            </label>
+          )}
+          {cur.gapHint && gapHint && (
+            <ul className="tutorial-items gap-status">
+              {PV_NAMES.map((pv) => {
+                const g = pvGaps(engine, pv);
+                const text = g.isolated ? '隔離' : g.touchesLesion ? '未隔離・隙間の印あり' : g.encircled > 0 ? `未隔離・一周の約 ${Math.round(g.encircled * 100)} %` : '未隔離・まだ焼いていない';
+                return <li key={pv} className={g.isolated ? 'ok' : ''}>{g.isolated ? '✓' : '・'} {pv}：{text}</li>;
+              })}
+            </ul>
+          )}
           {showHint && <p className="note">{cur.hint}</p>}
-          {cur.confirmLabel && (
+          {cur.confirmLabel && (!cur.ready || (ctxRef.current && cur.ready(ctxRef.current))) && (
             <button style={{ borderColor: theme.colors.accent }} onClick={() => confirmStep(cur.id)}>{cur.confirmLabel}</button>
           )}
           <div className="row">
             <button onClick={() => setShowHint(!showHint)}>{showHint ? 'ヒントを隠す' : 'ヒント'}</button>
-            <button onClick={() => { setStep(step + 1); setShowHint(false); }}>{cur.optional ? 'とばす（任意）' : 'この手順をとばす'}</button>
+            <button onClick={() => { setStep(step + 1); setShowHint(false); setPrevDone(null); }}>{cur.optional ? 'とばす（任意）' : 'この手順をとばす'}</button>
           </div>
         </>
       ) : (

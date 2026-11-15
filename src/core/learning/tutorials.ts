@@ -41,6 +41,10 @@ export interface TutorialStep {
   optional?: boolean;
   /** 見るだけの手順：このボタンを押したら完了（done の代わり） */
   confirmLabel?: string;
+  /** confirmLabel のボタンを出す条件（省略時は常に出す。例：症例を選んだ後だけ「この症例で始める」） */
+  ready?(ctx: TutorialContext): boolean;
+  /** この手順で「隙間のヒントを表示」（PV の隙間の候補、教育用の補助）を選べる */
+  gapHint?: boolean;
   /** 1 つずつチェックを付ける項目（例：PV ごとの entrance block） */
   items?(ctx: TutorialContext): { label: string; done: boolean }[];
   done(ctx: TutorialContext): boolean;
@@ -51,6 +55,11 @@ export interface Tutorial { id: string; title: string; scenario: ArrhythmiaId; s
 /** 収集モードで LA の形を作る目安 % の既定値と、設定で選べる範囲（仮定値） */
 export const TUTORIAL_LA_COVERAGE_PCT = 70;
 export const TUTORIAL_COVERAGE_RANGE_PCT = [30, 95] as const;
+
+/**
+ * 症例を選ぶ手順は、選んだ後に「この症例で始める」を押して完了する（すでに選ばれていても、手順 1 の説明を読まずに進まないように。QA の所見 12）
+ */
+const START_LABEL = 'この症例で始める';
 
 /** 再伝導の確認（浮腫・再伝導）：根治判定の前に、待機時間かアデノシン負荷で再伝導がないことを確かめる */
 const reconnection: TutorialStep = {
@@ -68,8 +77,10 @@ export const PVI_TUTORIAL: Tutorial = {
     {
       id: 'scenario', title: '症例を選ぶ', target: 'scenario',
       instruction: '「不整脈」で「心房細動（PVI）」を選びます。「AF の型」は「発作性（PV トリガー）」（既定）のままにします。PV（主に上肺静脈）の中のトリガーが高頻度に発火して AF が続いています。',
-      hint: '操作パネルのいちばん上の「不整脈」の選択肢です。',
-      done: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv',
+      hint: '操作パネルのいちばん上の「不整脈」の選択肢です。選ぶと「この症例で始める」が出ます。',
+      confirmLabel: START_LABEL,
+      ready: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv',
+      done: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv' && c.ui.confirmed.has('scenario'),
     },
     {
       id: 'geometry-mode', title: '収集モードにする', target: 'geometry',
@@ -80,7 +91,7 @@ export const PVI_TUTORIAL: Tutorial = {
     {
       id: 'build-la', title: 'LA の形を作る', target: 'catheters',
       instruction: 'ABL か多極カテーテルを選び、3D 上でドラッグして LA の壁をなぞります。4 本の PV の口・天蓋・後壁・前壁・LAA を含めて、目安の被覆率まで収集します。',
-      hint: '「3D 表示」の「もう一方の心房」を「表示しない」にすると、なぞっている途中で RA に移りません。ドラッグは心腔の上から始めます。視点を回すときはカテーテルの選択を解除してドラッグし、前・横・後ろから 3〜4 回なぞると目安に届きます。多極カテーテル（多極スプライン／グリッド）は一度に広くなぞれます。穴の位置が「まだ点が足りない場所」です。',
+      hint: '「3D 表示」の「もう一方の心房」を「表示しない」にすると、なぞっている途中で RA に移りません。ドラッグは心腔の上から始めます。視点を回すときはカテーテルの選択を解除してドラッグするか、3D の右下の視点のボタン（AP・PA・LAO・RAO・LL・RL・上）を使います。前・横・後ろから 3〜4 回なぞると目安に届きます。多極カテーテル（多極スプライン／グリッド）は一度に広くなぞれます。穴の位置が「まだ点が足りない場所」です。',
       done: (c) => c.ui.laCoveragePct >= c.ui.coverageTargetPct,
     },
     {
@@ -98,13 +109,15 @@ export const PVI_TUTORIAL: Tutorial = {
     {
       id: 'ablate-lspv', title: 'LSPV を隔離する', target: 'ablation',
       instruction: 'エネルギーを RF にして、ABL を LSPV の口の前庭部（口から 1 cm ほど LA 側）に当て、隙間なく一周するように通電します。PVI は洞調律でも AF 中でも行います。隔離の確認は、PV 電位の消失または解離（LA と無関係なリズム）で判定します。',
-      hint: '目安は 30 W・30 秒、点の間隔は約 5 mm 以内です。1 つの向きからは口の半周ほどしか見えないので、視点を回して後ろ側も焼きます（領域の名前「LSPV 口」を目安に）。接触圧が低いと病変が浅くなります。貫壁性の表示も見てください。',
+      hint: '目安は 30 W・30 秒、点の間隔は約 5 mm 以内です。1 つの向きからは口の半周ほどしか見えないので、視点を回して後ろ側も焼きます（3D の右下の「PA」「LL」が便利です。領域の名前「LSPV 口」を目安に）。一周しても隔離にならないときは、この欄の「隙間のヒントを表示」で、残っている通り道の位置を 3D に出せます（教育用の補助）。接触圧が低いと病変が浅くなります。貫壁性の表示も見てください。',
+      gapHint: true,
       done: (c) => isolatedPvs(c.engine).includes('LSPV'),
     },
     {
       id: 'all-pvs', title: '残りの PV も隔離する', target: 'ablation',
       instruction: 'LIPV・RSPV・RIPV も同じように一周して隔離します。右の 2 本は口が近いので、間の部分（carina）にも隙間を残さないようにします。',
-      hint: 'ゴール一覧に隔離できた本数が出ます。',
+      hint: 'ゴール一覧に隔離できた本数が出ます。「隙間のヒントを表示」で、PV ごとの状態と残っている通り道の位置を見られます（教育用の補助）。',
+      gapHint: true,
       done: (c) => c.goals.isAchieved('isolation'),
     },
     {
@@ -134,8 +147,10 @@ export const PVI_TUTORIAL: Tutorial = {
 const chooseScenario = (id: ArrhythmiaId, label: string, why: string): TutorialStep => ({
   id: 'scenario', title: '症例を選ぶ', target: 'scenario',
   instruction: `「不整脈」で「${label}」を選びます。${why}`,
-  hint: '操作パネルのいちばん上の「不整脈」の選択肢です。',
-  done: (c) => c.ui.arrhythmia === id,
+  hint: '操作パネルのいちばん上の「不整脈」の選択肢です。選ぶと「この症例で始める」が出ます。',
+  confirmLabel: START_LABEL,
+  ready: (c) => c.ui.arrhythmia === id,
+  done: (c) => c.ui.arrhythmia === id && c.ui.confirmed.has('scenario'),
 });
 
 /** 見るだけの手順（「確認した」で完了） */
@@ -246,7 +261,8 @@ export const WPW_TUTORIAL: Tutorial = {
   steps: [
     {
       ...chooseScenario('wpw', 'WPW（副伝導路）', '「副伝導路の部位」は「左側自由壁」（既定）のままにし、「部位を伏せる」は外します。僧帽弁輪の側方に副伝導路がある症例です。'),
-      done: (c) => c.ui.arrhythmia === 'wpw' && c.engine.conduction.ap?.site === 'leftFreeWall' && !c.engine.caseOptions.apHidden,
+      ready: (c) => c.ui.arrhythmia === 'wpw' && c.engine.conduction.ap?.site === 'leftFreeWall' && !c.engine.caseOptions.apHidden,
+      done: (c) => c.ui.arrhythmia === 'wpw' && c.engine.conduction.ap?.site === 'leftFreeWall' && !c.engine.caseOptions.apHidden && c.ui.confirmed.has('scenario'),
     },
     look('delta', 'デルタ波と短い PR を見る', 'goals',
       '洞調律の体表 ECG で、PR が短く、QRS の立ち上がりがなだらか（デルタ波）なことを確かめます。V1 で陽性、I で陰性または平坦なデルタ波は左側自由壁の副伝導路を示します。',

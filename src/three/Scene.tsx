@@ -1,10 +1,12 @@
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls } from '@react-three/drei';
 import { useEffect, useRef } from 'react';
 import { ChamberMesh } from './ChamberMesh';
 import { CatheterMarkers } from './CatheterMarkers';
 import { PointMarkers } from './PointMarkers';
 import { AblationDevices } from './AblationDevices';
+import { ViewControls } from './ViewControls';
+import { GapMarkers } from './GapMarkers';
+import { VIEW_PRESETS, VIEW_PRESET_NAMES } from '../state/viewPresets';
 import { MapLegend } from '../ui/MapLegend';
 import { referenceBeats } from '../core/mapping/annotation';
 import type { SystemTheme } from '../systems';
@@ -114,9 +116,15 @@ export function Scene() {
         <AblationDevices key={`a-${engine.model.dimensions.id}`} engine={engine} theme={theme} />
         <AutoAcquire engine={engine} theme={theme} />
         <GeometryCollector engine={engine} />
-        <OrbitControls enableDamping target={[2, 0, -2]} enableRotate={!active} enableZoom={!active} />
+        <GapMarkers engine={engine} theme={theme} />
+        <ViewControls enabled={!active} />
       </Canvas>
       <MapLegend />
+      <div className="view-presets" aria-label="視点">
+        {VIEW_PRESET_NAMES.map((n) => (
+          <button key={n} title={`視点：${VIEW_PRESETS[n].label}`} onClick={() => useSim.getState().requestView(n)}>{VIEW_PRESETS[n].label}</button>
+        ))}
+      </div>
       <div className="view-hint" style={{ color: theme.colors.text }}>
         {hovered && <div className="view-region">{hovered}</div>}
         <div>{active

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ViewPresetName } from './viewPresets';
 import { TUTORIAL_LA_COVERAGE_PCT } from '../core/learning/tutorials';
 import type { ArrhythmiaId, CaseOptions, CureCheck, EcgLeadCount, EnergyId, GeometryMode, MapSettings, MapType, MappingSystemId, TachycardiaState } from '../core/types';
 import type { ProtocolConfig } from '../core/pacing/ProtocolSession';
@@ -56,6 +57,10 @@ interface SimState {
   tutorialConfirmed: string[];
   /** チュートリアルで LA の形を作る目安の被覆率 % */
   tutorialCoveragePct: number;
+  /** PVI のチュートリアルで PV の隙間のヒントを表示する（教育用の補助、既定オフ。チュートリアルをやめると消える） */
+  gapHint: boolean;
+  /** 視点のプリセットの要求（押すたびに n が増える） */
+  viewPreset: { name: ViewPresetName; n: number } | null;
   /** 3D ビューの表示モード */
   mapType: MapType;
   mapSettings: MapSettings;
@@ -92,6 +97,8 @@ interface SimState {
   setActiveCatheter: (id: string | null) => void;
   setDragging: (d: boolean) => void;
   setOtherAtrium: (o: 'translucent' | 'hidden') => void;
+  setGapHint: (on: boolean) => void;
+  requestView: (name: ViewPresetName) => void;
   setMapType: (t: MapType) => void;
   setMapSettings: (p: Partial<MapSettings>) => void;
   setAutoAcquire: (a: boolean) => void;
@@ -139,6 +146,8 @@ export const useSim = create<SimState>((set) => ({
   tutorialId: 'pvi-rf',
   tutorialConfirmed: [],
   tutorialCoveragePct: TUTORIAL_LA_COVERAGE_PCT,
+  gapHint: false,
+  viewPreset: null,
   mapType: 'live',
   mapSettings: DEFAULT_MAP_SETTINGS,
   autoAcquire: false,
@@ -165,6 +174,8 @@ export const useSim = create<SimState>((set) => ({
   setActiveCatheter: (activeCatheter) => set({ activeCatheter }),
   setDragging: (dragging) => set({ dragging }),
   setOtherAtrium: (otherAtrium) => set({ otherAtrium }),
+  setGapHint: (gapHint) => set({ gapHint }),
+  requestView: (name) => set((s) => ({ viewPreset: { name, n: (s.viewPreset?.n ?? 0) + 1 } })),
   setMapType: (mapType) => set({ mapType }),
   setMapSettings: (p) => set((s) => ({ mapSettings: { ...s.mapSettings, ...p } })),
   setAutoAcquire: (autoAcquire) => set({ autoAcquire }),
@@ -176,8 +187,8 @@ export const useSim = create<SimState>((set) => ({
   setSimSpeed: (simSpeed) => set((s) => (Math.abs(s.simSpeed - simSpeed) < 0.05 ? s : { simSpeed })),
   setRhythm: (tachycardia, cycleLengthMs) => set((s) => (s.tachycardia === tachycardia && s.cycleLengthMs === cycleLengthMs ? s : { tachycardia, cycleLengthMs })),
   setShowTruth: (showTruth) => set({ showTruth }),
-  setTutorialStep: (tutorialStep) => set(tutorialStep === 0 ? { tutorialStep, tutorialConfirmed: [] } : { tutorialStep }),
-  setTutorialId: (tutorialId) => set({ tutorialId, tutorialStep: null, tutorialConfirmed: [] }),
+  setTutorialStep: (tutorialStep) => set(tutorialStep === 0 ? { tutorialStep, tutorialConfirmed: [] } : tutorialStep === null ? { tutorialStep, gapHint: false } : { tutorialStep }),
+  setTutorialId: (tutorialId) => set({ tutorialId, tutorialStep: null, tutorialConfirmed: [], gapHint: false }),
   confirmTutorialStep: (id) => set((s) => ({ tutorialConfirmed: [...s.tutorialConfirmed, id] })),
   setTutorialCoveragePct: (tutorialCoveragePct) => set({ tutorialCoveragePct }),
   bumpGoals: () => set((s) => ({ goalVersion: s.goalVersion + 1 })),
