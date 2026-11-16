@@ -1,7 +1,8 @@
-import type { Vec3 } from '../types';
+import type { GapHint, Vec3 } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID, REGIONS } from '../geometry/regions';
 import { separated } from './common';
+import { GAP_MIN_COVERAGE, gapCorridor } from './gaps';
 
 /**
  * SVC の心筋スリーブ（AF-2：非 PV トリガー）。docs/DESIGN.md §5.1。
@@ -102,4 +103,44 @@ export function svcRingPoints(engine: SimulationEngine, spacingMm = 4, aboveJunc
     out.push(engine.query.closestPoint(q, svc).point);
   }
   return out;
+}
+
+/** SVC の隙間のヒントで、まわりの病変とみなす距離（SVC の半径 + この値 mm 以内）と区画の数（教育用近似） */
+const SVC_GAP_AROUND_MM = 12;
+const SVC_GAP_SECTORS = 24;
+
+/**
+ * 隙間のヒント（教育用の補助）：SVC の一周。SVC の遠位側（svcDistalVertices）から RA 本体への生きた頂点の最短の通り道が
+ * 病変のそばを抜ける所を隙間とする（svcIsolated と同じ基準）。SVC の軸のまわりの半周以上を病変が囲んでから隙間を示す
+ */
+export function svcGapHint(engine: SimulationEngine): GapHint {
+  const o = engine.model.anatomy.ra.svc, P = engine.mesh.positions, via = engine.ca.tissue.viability;
+  const ra = engine.mesh.parts![1];
+  const allowed = new Uint8Array(via.length);
+  for (let v = ra.vertexStart; v < ra.vertexStart + ra.vertexCount; v++) allowed[v] = 1;
+  // 軸に直交する 2 方向
+  const a = o.axis, r0 = Math.abs(a.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  const k = r0.x * a.x + r0.y * a.y + r0.z * a.z;
+  let u = { x: r0.x - k * a.x, y: r0.y - k * a.y, z: r0.z - k * a.z };
+  const ul = Math.hypot(u.x, u.y, u.z); u = { x: u.x / ul, y: u.y / ul, z: u.z / ul };
+  const w = { x: a.y * u.z - a.z * u.y, y: a.z * u.x - a.x * u.z, z: a.x * u.y - a.y * u.x };
+  const dead: number[] = [];
+  const sectors = new Set<number>();
+  for (let v = ra.vertexStart; v < ra.vertexStart + ra.vertexCount; v++) {
+    if (via[v] > 0) continue;
+    const d = { x: P[3 * v] - o.center.x, y: P[3 * v + 1] - o.center.y, z: P[3 * v + 2] - o.center.z };
+    const ax = d.x * a.x + d.y * a.y + d.z * a.z;
+    const rx = d.x - ax * a.x, ry = d.y - ax * a.y, rz = d.z - ax * a.z;
+    // SVC の管と、接合部から RA 側へ SVC_GAP_AROUND_MM までの範囲
+    const len = engine.model.dimensions.vein.svcLength ?? engine.model.dimensions.vein.length;
+    if (Math.hypot(rx, ry, rz) > o.radius + SVC_GAP_AROUND_MM || ax > 0 || ax < -(len + SVC_GAP_AROUND_MM)) continue;
+    dead.push(v);
+    const ang = Math.atan2(rx * w.x + ry * w.y + rz * w.z, rx * u.x + ry * u.y + rz * u.z);
+    sectors.add(Math.min(SVC_GAP_SECTORS - 1, Math.floor(((ang + Math.PI) / (2 * Math.PI)) * SVC_GAP_SECTORS)));
+  }
+  const coverage = sectors.size / SVC_GAP_SECTORS;
+  const base = { name: 'SVC', completeLabel: '隔離', incompleteLabel: '未隔離', coverageLabel: '一周' };
+  if (svcIsolated(engine)) return { ...base, complete: true, coverage: 1, showGaps: false, clusters: [] };
+  const g = gapCorridor(engine, svcDistalVertices(engine), raBody(engine), allowed, coverage >= GAP_MIN_COVERAGE ? dead : []);
+  return { ...base, complete: false, coverage, showGaps: g.vertices.length > 0, clusters: g.clusters };
 }

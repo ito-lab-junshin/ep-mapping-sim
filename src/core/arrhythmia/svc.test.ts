@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { afScenario, afTypeOf, circularSvcContacts } from './af';
-import { phrenicNerveLine, segmentDistanceMm, svcDistalVertices, svcIsolated, svcRingPoints, svcTip, svcVertices } from './svc';
+import { phrenicNerveLine, segmentDistanceMm, svcDistalVertices, svcGapHint, svcIsolated, svcRingPoints, svcTip, svcVertices } from './svc';
 import { PV_NAMES, PV_OSTIUM, REGION_ID } from '../geometry/regions';
 import { ablateAt } from '../ablation/simpleAblation';
 import { isolatedPvs } from './pv';
@@ -119,4 +119,32 @@ describe('AF-2：SVC の心筋スリーブとトリガー', () => {
     expect(g.isAchieved('svc-potential')).toBe(true);
     expect(g.isAchieved('svc-isolation')).toBe(false);
   }, 120_000);
+});
+
+describe('隙間のヒント：SVC の一周（pvSvc の型だけ）', () => {
+  it('焼く前は未隔離・まだ焼いていない。一周すると隔離。隣り合う 2 点を抜くと、その近くに隙間の印', () => {
+    expect(afScenario.gapHints!(make('pv')).map((g) => g.name)).not.toContain('SVC');
+    const e0 = make('pvSvc');
+    const g0 = afScenario.gapHints!(e0).find((g) => g.name === 'SVC')!;
+    expect(g0.complete).toBe(false);
+    expect(g0.coverage).toBe(0);
+    expect(g0.showGaps).toBe(false);
+
+    const full = make('pvSvc');
+    const ring = svcRingPoints(full);
+    for (const p of ring) rf(full, p);
+    expect(svcIsolated(full)).toBe(true);
+    expect(svcGapHint(full).complete).toBe(true);
+
+    const gap = make('pvSvc');
+    const skip = [3, 4];
+    ring.forEach((p, i) => { if (!skip.includes(i)) rf(gap, p); });
+    const g = svcGapHint(gap);
+    expect(svcIsolated(gap)).toBe(false);
+    expect(g.complete).toBe(false);
+    expect(g.coverage).toBeGreaterThanOrEqual(0.5);
+    expect(g.showGaps).toBe(true);
+    const mid = { x: (ring[3].x + ring[4].x) / 2, y: (ring[3].y + ring[4].y) / 2, z: (ring[3].z + ring[4].z) / 2 };
+    expect(Math.min(...g.clusters.map((c) => Math.hypot(c.center.x - mid.x, c.center.y - mid.y, c.center.z - mid.z)))).toBeLessThan(8);
+  }, 180_000);
 });

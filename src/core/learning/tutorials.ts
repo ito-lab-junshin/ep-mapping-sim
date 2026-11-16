@@ -281,6 +281,16 @@ const pviAll: TutorialStep = {
 };
 
 /**
+ * 持続性 AF の PVI（RF）。このシミュレータでは、クライオバルーン・PFA の前庭部の広い病変が天蓋の旋回の出口まで囲み、
+ * PVI だけで心房が洞調律に戻ることがあるため（QA の所見 27）、このチュートリアルでは RF で行う
+ */
+const pviRfForPersistent: TutorialStep = {
+  ...pviAll,
+  instruction: 'エネルギーを RF にして、4 本の PV の口の前庭部をそれぞれ一周して隔離します。',
+  hint: '目安は 30 W・30 秒、点の間隔は約 5 mm 以内です。視点のボタン（PA・LL など）で後ろ側も焼きます。このシミュレータでは、クライオバルーン・PFA の前庭部の広い病変が天蓋の低電位領域の出口まで囲んでしまうことがあるため、この症例の PVI は RF で行います。「隙間のヒントを表示」で PV ごとの状態を見られます（教育用の補助）。',
+};
+
+/**
  * AF（SVC トリガー）：PVI の後も AF が続く → SVC 電位を記録 → SVC を隔離 → AF の停止（Phase 7 の追補 AF-2 の症例）
  */
 export const SVC_TUTORIAL: Tutorial = {
@@ -301,9 +311,9 @@ export const SVC_TUTORIAL: Tutorial = {
       done: (c) => c.goals.isAchieved('svc-potential'),
     },
     {
-      id: 'svc-isolation', title: 'SVC を隔離する', target: 'ablation',
+      id: 'svc-isolation', title: 'SVC を隔離する', target: 'ablation', gapHint: true,
       instruction: 'エネルギーを RF にして、SVC–RA 接合部より少し上（SVC 側）を一周するように通電します。',
-      hint: 'SVC は管なので、1 つの向きからは前か後ろの半分しか焼けません。3D の右下の視点のボタンで AP・PA に加えて RL・LL からも見て、一周に隙間を残さないようにします（AP と PA だけでは横に隙間が残りました）。前外側の洞結節の近くと、後外側の右横隔神経の走行の近くでは注意が出ます。注意が出たら、その場所を避けるか、出力・時間を控えます（合併症は再現しません）。貫壁にならない浅い通電は、待機の後に再伝導します。通電の欄の貫壁性の表示も見てください。',
+      hint: 'SVC は管なので、1 つの向きからは前か後ろの半分しか焼けません。3D の右下の視点のボタンで AP・PA に加えて RL・LL からも見て、一周に隙間を残さないようにします（AP と PA だけでは横に隙間が残りました）。「隙間のヒントを表示」で、SVC の残っている通り道の位置を見られます（教育用の補助）。前外側の洞結節の近くと、後外側の右横隔神経の走行の近くでは注意が出ます。注意が出たら、その場所を避けるか、出力・時間を控えます（合併症は再現しません）。貫壁にならない浅い通電は、待機の後に再伝導します。通電の欄の貫壁性の表示も見てください。',
       done: (c) => c.goals.isAchieved('svc-isolation'),
     },
     {
@@ -327,7 +337,7 @@ export const PERSISTENT_TUTORIAL: Tutorial = {
   caseOptions: { afType: 'persistent' },
   steps: [
     afTypeScenario('persistent', AF_TYPE_LABEL.persistent, 'LA 天蓋の低電位領域（中心の瘢痕と、その周りの遅い伝導の輪）を回る旋回が AF を駆動している症例です。形の収集は行わず、既定の形のまま進めます。'),
-    pviAll,
+    pviRfForPersistent,
     look('af-persists', 'PVI の後も AF が続くことを見る', 'goals',
       '4 本の PV を隔離しても AF が止まりません。持続性 AF では、PV 以外の心房筋の基質が AF を保っていることがあります。',
       'EGM の CS は不規則な興奮（細動様の伝導）のままです。'),

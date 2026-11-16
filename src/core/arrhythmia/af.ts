@@ -3,7 +3,7 @@ import type { SimulationEngine } from '../sim/SimulationEngine';
 import { PV_NAMES, type PvName } from '../geometry/regions';
 import { seededRandom } from '../pacing/Stimulator';
 import { AF_SUBSTRATE, AF_TYPE_IDS, type AfType } from '../params';
-import { raBody, svcIsolated, svcTip, svcVertices } from './svc';
+import { raBody, svcGapHint, svcIsolated, svcTip, svcVertices } from './svc';
 import { applyPersistentSubstrate, distanceFromRoofCenter, roofAreaIsolated, roofDriverActive, seedRoofRotor } from './persistent';
 import { cloneWithSubstrate, reconnectionGoal, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
@@ -120,7 +120,8 @@ export const afScenario: ArrhythmiaScenario = {
     return checks;
   },
   energies: ['rf', 'cryo', 'pfa'],
-  gapHints: pvGapHints,
+  // AF の型 pvSvc では SVC の一周も
+  gapHints: (engine) => (hasSvcTrigger(engine) ? [...pvGapHints(engine), svcGapHint(engine)] : pvGapHints(engine)),
   goals: [
     {
       id: 'pv-potential', label: '環状カテーテルで PV 電位を記録する',
