@@ -1,4 +1,4 @@
-import type { ArrhythmiaId, GeometryMode, MapPoint } from '../types';
+import type { ArrhythmiaId, EnergyId, GeometryMode, MapPoint } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { GoalTracker } from './GoalTracker';
 import { isolatedPvs } from '../arrhythmia/pv';
@@ -17,8 +17,10 @@ export interface TutorialContext {
   ui: {
     arrhythmia: ArrhythmiaId;
     geometryMode: GeometryMode;
-    /** 収集モードの LA の被覆率 % */
-    laCoveragePct: number;
+    /** 選んでいるエネルギー */
+    energy: EnergyId;
+    /** 収集モードの心房ごとの被覆率 %（LA・RA） */
+    coveragePct: Record<'LA' | 'RA', number>;
     /** LA の形を作る目安 %（設定で変えられる。既定 TUTORIAL_LA_COVERAGE_PCT） */
     coverageTargetPct: number;
     /** 根治判定の結果がすべて ✓ */
@@ -43,6 +45,8 @@ export interface TutorialStep {
   confirmLabel?: string;
   /** confirmLabel のボタンを出す条件（省略時は常に出す。例：症例を選んだ後だけ「この症例で始める」） */
   ready?(ctx: TutorialContext): boolean;
+  /** 収集モードで形を作る手順：その心房の被覆率の目安（設定）を表示する */
+  coverage?: 'LA' | 'RA';
   /** この手順で「隙間のヒントを表示」（PV の隙間の候補、教育用の補助）を選べる */
   gapHint?: boolean;
   /** 1 つずつチェックを付ける項目（例：PV ごとの entrance block） */
@@ -69,19 +73,50 @@ const reconnection: TutorialStep = {
   done: (c) => c.goals.isAchieved('reconnection'),
 };
 
+const pvPotential: TutorialStep = {
+  id: 'pv-potential', title: '環状カテーテルで PV 電位を見る', target: 'catheters',
+  instruction: '環状カテーテルを LSPV の中（口から少し奥）に置き、3 極以上を壁に接触させます。EGM の CIRC の列に、鋭い PV 電位が出ます。',
+  hint: 'カテーテルを選んでいないときに 3D 上の管にマウスを乗せると、視野の隅に領域の名前（LSPV・LSPV 口など）が出ます。ループ径を PV の太さ（15〜18 mm 程度）に合わせ、押し込み（ホイール）で接触させます。',
+  done: (c) => c.goals.isAchieved('pv-potential'),
+};
+
+const pvEntrance: TutorialStep = {
+  id: 'entrance', title: '4 本の PV で entrance block を確かめる', target: 'catheters',
+  instruction: '環状カテーテルを 4 本の PV に 1 本ずつ入れ、PV 電位が消えたか、LA と無関係なリズムで出ている（解離）ことを確かめます。確かめた PV にチェックが付きます。',
+  hint: 'トリガーのある LSPV・RSPV は、隔離後も PV の中だけで発火が続きます（解離した PV 電位）。実臨床でも見られる所見です。',
+  done: (c) => c.goals.isAchieved('entrance'),
+  items: (c) => c.goals.itemStatus('entrance', c.goals.context(c.engine, c.points)).map((x) => ({ label: x.label, done: x.done })),
+};
+
+const pvExitBlock: TutorialStep = {
+  id: 'exit-block', title: 'exit block を確かめる', target: 'stimulation',
+  instruction: '隔離した PV に環状カテーテルを置き、刺激部位を「環状（1-2）」にして刺激します。PV の中は捕捉されますが（局所の捕捉）、LA・CS には伝わりません。',
+  hint: '刺激の方法はバーストでもかまいません。環状カテーテルが壁に接触していないと捕捉しません。',
+  done: (c) => c.goals.isAchieved('exit-block'),
+};
+
+const pvScenario: TutorialStep = {
+  id: 'scenario', title: '症例を選ぶ', target: 'scenario',
+  instruction: '「不整脈」で「心房細動（PVI）」を選びます。「AF の型」は「発作性（PV トリガー）」（既定）のままにします。PV（主に上肺静脈）の中のトリガーが高頻度に発火して AF が続いています。',
+  hint: '操作パネルのいちばん上の「不整脈」の選択肢です。選ぶと「この症例で始める」が出ます。',
+  confirmLabel: START_LABEL,
+  ready: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv',
+  done: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv' && c.ui.confirmed.has('scenario'),
+};
+
+const pvCure: TutorialStep = {
+  id: 'cure', title: '根治を判定する', target: 'cure',
+  instruction: '「根治を判定」を押し、4 本の entrance block・exit block と、AF が止まったことを確かめます。',
+  hint: '判定に ✗ が残ったら、その PV の線の隙間を探して焼き足します。',
+  done: (c) => c.ui.cureOk,
+};
+
 export const PVI_TUTORIAL: Tutorial = {
   id: 'pvi-rf',
   title: 'PVI（RF）',
   scenario: 'af',
   steps: [
-    {
-      id: 'scenario', title: '症例を選ぶ', target: 'scenario',
-      instruction: '「不整脈」で「心房細動（PVI）」を選びます。「AF の型」は「発作性（PV トリガー）」（既定）のままにします。PV（主に上肺静脈）の中のトリガーが高頻度に発火して AF が続いています。',
-      hint: '操作パネルのいちばん上の「不整脈」の選択肢です。選ぶと「この症例で始める」が出ます。',
-      confirmLabel: START_LABEL,
-      ready: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv',
-      done: (c) => c.ui.arrhythmia === 'af' && (c.engine.caseOptions.afType ?? 'pv') === 'pv' && c.ui.confirmed.has('scenario'),
-    },
+    pvScenario,
     {
       id: 'geometry-mode', title: '収集モードにする', target: 'geometry',
       instruction: '「ジオメトリー」を収集モードにします。カテーテルでなぞった部分だけが形として現れ、なぞっていない場所は穴のままです。',
@@ -92,14 +127,10 @@ export const PVI_TUTORIAL: Tutorial = {
       id: 'build-la', title: 'LA の形を作る', target: 'catheters',
       instruction: 'ABL か多極カテーテルを選び、3D 上でドラッグして LA の壁をなぞります。4 本の PV の口・天蓋・後壁・前壁・LAA を含めて、目安の被覆率まで収集します。',
       hint: '「3D 表示」の「もう一方の心房」を「表示しない」にすると、なぞっている途中で RA に移りません。ドラッグは心腔の上から始めます。視点を回すときはカテーテルの選択を解除してドラッグするか、3D の右下の視点のボタン（AP・PA・LAO・RAO・LL・RL・上）を使います。前・横・後ろから 3〜4 回なぞると目安に届きます。多極カテーテル（多極スプライン／グリッド）は一度に広くなぞれます。穴の位置が「まだ点が足りない場所」です。',
-      done: (c) => c.ui.laCoveragePct >= c.ui.coverageTargetPct,
+      coverage: 'LA',
+      done: (c) => c.ui.coveragePct.LA >= c.ui.coverageTargetPct,
     },
-    {
-      id: 'pv-potential', title: '環状カテーテルで PV 電位を見る', target: 'catheters',
-      instruction: '環状カテーテルを LSPV の中（口から少し奥）に置き、3 極以上を壁に接触させます。EGM の CIRC の列に、鋭い PV 電位が出ます。',
-      hint: 'カテーテルを選んでいないときに 3D 上の管にマウスを乗せると、視野の隅に領域の名前（LSPV・LSPV 口など）が出ます。ループ径を PV の太さ（15〜18 mm 程度）に合わせ、押し込み（ホイール）で接触させます。',
-      done: (c) => c.goals.isAchieved('pv-potential'),
-    },
+    pvPotential,
     {
       id: 'voltage-map', title: '（任意）ボルテージマップを作る', target: 'map', optional: true,
       instruction: 'マップの表示を「ボルテージ」にして、取得点を 20 点以上集めます。PV 口のまわりの電位を見ておくと、通電の線を決めやすくなります。',
@@ -120,26 +151,78 @@ export const PVI_TUTORIAL: Tutorial = {
       gapHint: true,
       done: (c) => c.goals.isAchieved('isolation'),
     },
-    {
-      id: 'entrance', title: '4 本の PV で entrance block を確かめる', target: 'catheters',
-      instruction: '環状カテーテルを 4 本の PV に 1 本ずつ入れ、PV 電位が消えたか、LA と無関係なリズムで出ている（解離）ことを確かめます。確かめた PV にチェックが付きます。',
-      hint: 'トリガーのある LSPV・RSPV は、隔離後も PV の中だけで発火が続きます（解離した PV 電位）。実臨床でも見られる所見です。',
-      done: (c) => c.goals.isAchieved('entrance'),
-      items: (c) => c.goals.itemStatus('entrance', c.goals.context(c.engine, c.points)).map((x) => ({ label: x.label, done: x.done })),
-    },
-    {
-      id: 'exit-block', title: 'exit block を確かめる', target: 'stimulation',
-      instruction: '隔離した PV に環状カテーテルを置き、刺激部位を「環状（1-2）」にして刺激します。PV の中は捕捉されますが（局所の捕捉）、LA・CS には伝わりません。',
-      hint: '刺激の方法はバーストでもかまいません。環状カテーテルが壁に接触していないと捕捉しません。',
-      done: (c) => c.goals.isAchieved('exit-block'),
-    },
+    pvEntrance,
+    pvExitBlock,
     reconnection,
+    pvCure,
+  ],
+};
+
+/** エネルギーを選ぶ手順（クライオバルーン・PFA の PVI） */
+const chooseEnergy = (energy: EnergyId, label: string, why: string): TutorialStep => ({
+  id: 'energy', title: `エネルギーを「${label}」にする`, target: 'ablation',
+  instruction: `通電の欄の「エネルギー」で「${label}」を選びます。${why}`,
+  hint: 'クライオバルーンと PFA は、この症例（AF）の PV 隔離だけで使えます。',
+  done: (c) => c.ui.energy === energy,
+});
+
+/** 単発（single-shot）のデバイスで PV を 1 本ずつ隔離する手順 */
+const singleShotPv = (id: string, title: string, instruction: string, hint: string, done: TutorialStep['done']): TutorialStep => ({
+  id, title, target: 'ablation', instruction, hint, gapHint: true, done,
+});
+
+/**
+ * クライオバルーンの PVI（Phase 6 の拡張）。形の収集は行わず既定の形で始める（クライオ・PFA は 3D マッピングを使わずに行うことも多い。先生と決定）
+ */
+export const CRYO_TUTORIAL: Tutorial = {
+  id: 'pvi-cryo',
+  title: 'PVI（クライオバルーン）',
+  scenario: 'af',
+  steps: [
+    pvScenario,
+    chooseEnergy('cryo', 'クライオバルーン', 'バルーン（28 mm）で PV の口をふさぎ、前庭部を一周まとめて冷凍します。形の収集は行わず、既定の形のまま進めます。'),
+    pvPotential,
+    singleShotPv('cryo-lspv', 'LSPV を冷凍する',
+      '「標的の PV」を LSPV にし、「押し付け」を強く、「PV の軸とのずれ」を小さくして、閉塞度を 0.8 以上にします。閉塞がよいほど温度が下がり、口を一周する病変になります。「通電開始」で冷凍し、Time to isolation（隔離までの時間）と最低温度を見ます。',
+      '閉塞度が 0.8 未満だと、漏れのある側に隙間が残り、隔離になりません。そのときは押し付けと軸を直して冷凍し直すか、エネルギーを RF に切り替えて隙間を焼き足します（タッチアップ）。「隙間のヒントを表示」で、残っている通り道の位置を見られます（教育用の補助）。',
+      (c) => isolatedPvs(c.engine).includes('LSPV')),
+    singleShotPv('cryo-all', '残りの PV も冷凍する',
+      'LIPV・RSPV・RIPV も、閉塞度を 0.8 以上にして 1 本ずつ冷凍します。',
+      'ゴール一覧に隔離できた本数が出ます。隔離にならない PV は、閉塞を直して冷凍し直すか、RF で焼き足します。',
+      (c) => c.goals.isAchieved('isolation')),
+    pvEntrance,
+    pvExitBlock,
+    reconnection,
+    pvCure,
+  ],
+};
+
+/**
+ * PFA の PVI（Phase 6 の拡張）。形の収集は行わず既定の形で始める。PFA は浮腫を残さない（§7）
+ */
+export const PFA_TUTORIAL: Tutorial = {
+  id: 'pvi-pfa',
+  title: 'PVI（PFA）',
+  scenario: 'af',
+  steps: [
+    pvScenario,
+    chooseEnergy('pfa', 'パルスフィールド（PFA）', '電場で心筋だけを傷害する方法で、1 回の通電はごく短時間です。形の収集は行わず、既定の形のまま進めます。'),
+    pvPotential,
+    singleShotPv('pfa-lspv', 'LSPV に通電する',
+      '「標的の PV」を LSPV にし、「カテーテルの形」を選んで「PFA 通電（1 回）」を押します。バスケット型は PV 口の縁の輪、フラワー型は前庭部まで覆う広い円盤の病変になります。このシミュレータでは、同じ PV に 2 回通電すると貫壁になります（教育用近似）。',
+      '1 回だけでは貫壁にならず、隔離になりません。もう 1 回通電します。形を変えて、病変の広がりの違いも見てください。',
+      (c) => isolatedPvs(c.engine).includes('LSPV')),
+    singleShotPv('pfa-all', '残りの PV にも通電する',
+      'LIPV・RSPV・RIPV にも、それぞれ 2 回ずつ通電します。',
+      'ゴール一覧に隔離できた本数が出ます。',
+      (c) => c.goals.isAchieved('isolation')),
+    pvEntrance,
+    pvExitBlock,
     {
-      id: 'cure', title: '根治を判定する', target: 'cure',
-      instruction: '「根治を判定」を押し、4 本の entrance block・exit block と、AF が止まったことを確かめます。',
-      hint: '判定に ✗ が残ったら、その PV の線の隙間を探して焼き足します。',
-      done: (c) => c.ui.cureOk,
+      ...reconnection,
+      hint: 'PFA は浮腫を残さないので、待機しても病変は変わりません（RF・クライオとの違い）。アデノシン負荷か待機のどちらかで確かめれば先へ進みます。',
     },
+    pvCure,
   ],
 };
 
@@ -189,6 +272,12 @@ function aflTutorial(direction: 'ccw' | 'cw'): Tutorial {
           : 'EGM でハローと CS の順序を読みます。時計回りでは CS 9-10 → CS 1-2 と同じころに CTI → H 1-2 → H 19-20（側壁を上行）の順です。ゴール一覧の設問で旋回方向を選びます。',
         hint: 'CS はどちらの向きでも近位 → 遠位です。見分けるのはハローの向きと、ハローの遠位（H 1-2）と CS 口（CS 9-10）のどちらが先かです。反対向きの症例と見比べると分かりやすくなります。ハローの遠位（H 1-2）は EGM パネルの下のほうにあるので、パネルをスクロールして見ます。体表 ECG の粗動波は、通電欄の「アデノシン負荷」で房室結節を数秒止めると、QRS に重ならず見やすくなります（粗動は止まりません）。',
         done: (c) => c.goals.isAchieved('direction'),
+      },
+      {
+        id: 'build-ra', title: '（任意）収集モードで RA の形を作る', target: 'geometry', optional: true, coverage: 'RA',
+        instruction: '「ジオメトリー」を収集モードにし、ABL か多極カテーテルで RA の壁をなぞります。三尖弁輪・CTI・IVC の口・CS 口を含めて、目安の被覆率まで集めます。粗動中のまま行ってかまいません。',
+        hint: '「3D 表示」の「もう一方の心房」を「表示しない」にすると、なぞっている途中で LA に移りません。視点はカテーテルの選択を解除して回すか、3D の右下の視点のボタン（RAO・LAO・上など）を使います。三尖弁輪の下側と CTI は、RAO と LAO の両方からなぞると集めやすくなります。とばしてもかまいません（既定の形のままでも先へ進めます）。',
+        done: (c) => c.ui.geometryMode === 'acquire' && c.ui.coveragePct.RA >= c.ui.coverageTargetPct,
       },
       {
         id: 'lat-map', title: '（任意）RA の LAT マップを作る', target: 'map', optional: true,
@@ -296,7 +385,7 @@ export const WPW_TUTORIAL: Tutorial = {
   ],
 };
 
-export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL];
+export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, CRYO_TUTORIAL, PFA_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL];
 
 /**
  * 現在の手順 index から、完了している手順をとばして次の未完了の手順へ進める（順番に、とばさずに判定する）。

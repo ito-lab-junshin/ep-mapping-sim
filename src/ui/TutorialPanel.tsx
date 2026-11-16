@@ -4,8 +4,7 @@ import { useSim } from '../state/store';
 import { getAcquisition, getGoalTracker, getPoints, useEngine } from '../state/engine';
 import { TUTORIALS, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
 import { Slider } from './CatheterTray';
-import { PV_NAMES } from '../core/geometry/regions';
-import { pvGaps } from '../core/arrhythmia/pv';
+import { PvGapPanel } from './PvGapPanel';
 
 /**
  * チュートリアル（PVI（RF）・通常型 AFL（反時計回り／時計回り）・AVNRT・WPW）。操作パネルの上に今の手順を出し、完了すると自動で次へ進む。
@@ -25,8 +24,6 @@ export function TutorialPanel() {
   const tutorialId = useSim((s) => s.tutorialId);
   const setTutorialId = useSim((s) => s.setTutorialId);
   const confirmStep = useSim((s) => s.confirmTutorialStep);
-  const gapHint = useSim((s) => s.gapHint);
-  const setGapHint = useSim((s) => s.setGapHint);
   const T = TUTORIALS.find((t) => t.id === tutorialId) ?? TUTORIALS[0];
 
   // 500 ms ごとに完了を判定して進める（一時停止中も判定する）
@@ -38,12 +35,13 @@ export function TutorialPanel() {
       const tracker = getGoalTracker(engine, s.arrhythmia);
       const points = getPoints(engine).points;
       tracker.update(engine, points);
-      const la = engine.mesh.parts![0];
+      const acq = getAcquisition(engine);
+      const cov = (i: number) => { const p = engine.mesh.parts![i]; return acq.coveragePct(p.vertexStart, p.vertexCount); };
       const ctx: TutorialContext = {
         engine, goals: tracker, points,
         ui: {
-          arrhythmia: s.arrhythmia, geometryMode: s.geometryMode,
-          laCoveragePct: getAcquisition(engine).coveragePct(la.vertexStart, la.vertexCount),
+          arrhythmia: s.arrhythmia, geometryMode: s.geometryMode, energy: s.energy,
+          coveragePct: { LA: cov(0), RA: cov(1) },
           coverageTargetPct: s.tutorialCoveragePct,
           cureOk: !!s.cureChecks && s.cureChecks.every((c) => c.ok),
           confirmed: new Set(s.tutorialConfirmed),
@@ -99,8 +97,8 @@ export function TutorialPanel() {
         <>
           <p className="tutorial-title" style={{ color: theme.colors.accent }}>{cur.title}</p>
           <p>{cur.instruction}</p>
-          {cur.id === 'build-la' && (
-            <Slider label="被覆率の目安（設定）" value={coverageTarget} min={TUTORIAL_COVERAGE_RANGE_PCT[0]} max={TUTORIAL_COVERAGE_RANGE_PCT[1]}
+          {cur.coverage && (
+            <Slider label={`${cur.coverage} の被覆率の目安（設定）`} value={coverageTarget} min={TUTORIAL_COVERAGE_RANGE_PCT[0]} max={TUTORIAL_COVERAGE_RANGE_PCT[1]}
               step={5} unit="%" onChange={setCoverageTarget} />
           )}
           {cur.items && ctxRef.current && (
@@ -108,20 +106,7 @@ export function TutorialPanel() {
               {cur.items(ctxRef.current).map((it) => <li key={it.label} className={it.done ? 'ok' : ''}>{it.done ? '✓' : '・'} {it.label}</li>)}
             </ul>
           )}
-          {cur.gapHint && (
-            <label className="check">
-              <input type="checkbox" checked={gapHint} onChange={(e) => setGapHint(e.target.checked)} /> 隙間のヒントを表示（教育用の補助。実機にはない機能）
-            </label>
-          )}
-          {cur.gapHint && gapHint && (
-            <ul className="tutorial-items gap-status">
-              {PV_NAMES.map((pv) => {
-                const g = pvGaps(engine, pv);
-                const text = g.isolated ? '隔離' : g.touchesLesion ? '未隔離・隙間の印あり' : g.encircled > 0 ? `未隔離・一周の約 ${Math.round(g.encircled * 100)} %` : '未隔離・まだ焼いていない';
-                return <li key={pv} className={g.isolated ? 'ok' : ''}>{g.isolated ? '✓' : '・'} {pv}：{text}</li>;
-              })}
-            </ul>
-          )}
+          {cur.gapHint && <PvGapPanel />}
           {showHint && <p className="note">{cur.hint}</p>}
           {cur.confirmLabel && (!cur.ready || (ctxRef.current && cur.ready(ctxRef.current))) && (
             <button style={{ borderColor: theme.colors.accent }} onClick={() => confirmStep(cur.id)}>{cur.confirmLabel}</button>

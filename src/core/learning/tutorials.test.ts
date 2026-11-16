@@ -19,8 +19,8 @@ describe('チュートリアル：PVI（RF）', () => {
     const goals = new GoalTracker(afScenario.goals);
     const acq = new GeometryAcquisition(e.mesh);
     const la = e.mesh.parts![0];
-    const ui: TutorialContext['ui'] = { arrhythmia: 'avnrt', geometryMode: 'preset', laCoveragePct: 0, coverageTargetPct: 95, cureOk: false, confirmed: new Set() };
-    const ctx = (): TutorialContext => ({ engine: e, goals, points: [], ui: { ...ui, laCoveragePct: acq.coveragePct(la.vertexStart, la.vertexCount) } });
+    const ui: TutorialContext['ui'] = { arrhythmia: 'avnrt', geometryMode: 'preset', energy: 'rf', coveragePct: { LA: 0, RA: 0 }, coverageTargetPct: 95, cureOk: false, confirmed: new Set() };
+    const ctx = (): TutorialContext => ({ engine: e, goals, points: [], ui: { ...ui, coveragePct: { LA: acq.coveragePct(la.vertexStart, la.vertexCount), RA: 0 } } });
     let i = 0;
     const step = () => { goals.update(e); i = advanceTutorial(PVI_TUTORIAL, i, ctx()); return PVI_TUTORIAL.steps[i]?.id ?? 'done'; };
     const rf = (point: Vec3) => {
@@ -107,7 +107,7 @@ import type { PacingSite } from '../sim/SimulationEngine';
 function runner(t: Tutorial, e: SimulationEngine, scenario: ArrhythmiaScenario) {
   const goals = new GoalTracker(scenario.goals);
   const confirmed = new Set<string>();
-  const ui: TutorialContext['ui'] = { arrhythmia: 'af', geometryMode: 'preset', laCoveragePct: 0, coverageTargetPct: 70, cureOk: false, confirmed };
+  const ui: TutorialContext['ui'] = { arrhythmia: 'af', geometryMode: 'preset', energy: 'rf', coveragePct: { LA: 0, RA: 0 }, coverageTargetPct: 70, cureOk: false, confirmed };
   let points: MapPoint[] = [];
   let i = 0;
   const ctx = (): TutorialContext => ({ engine: e, goals, points, ui });
@@ -148,7 +148,23 @@ describe('チュートリアル：通常型 AFL（反時計回り・時計回り
       expect(r.step()).toBe('direction');
       expect(flutterDirection(e)).toBe(dir);
       r.goals.record({ kind: 'answer', time: e.time, question: 'afl-direction', value: dir, correct: flutterDirection(e) === dir });
-      expect(r.step()).toBe('lat-map');
+      expect(r.step()).toBe('build-ra');
+      if (dir === 'ccw') {
+        // （任意）収集モードで RA の形を作る：RA の壁をなぞって目安の被覆率に届くと進む
+        r.ui.geometryMode = 'acquire';
+        expect(r.step()).toBe('build-ra');
+        const acq = new GeometryAcquisition(e.mesh), ra = e.mesh.parts![1];
+        for (let v = ra.vertexStart; v < ra.vertexStart + ra.vertexCount; v += 25) {
+          e.setPlacement('abl', { kind: 'free', point: e.query.position(v), heightMm: 1, rotationDeg: 0 });
+          acq.collect([e.catheter('abl')!]);
+        }
+        r.ui.coveragePct = { LA: acq.coveragePct(e.mesh.parts![0].vertexStart, e.mesh.parts![0].vertexCount), RA: acq.coveragePct(ra.vertexStart, ra.vertexCount) };
+        expect(r.ui.coveragePct.LA).toBeLessThan(5);
+        expect(r.step()).toBe('lat-map');
+      } else {
+        r.skip();
+        expect(r.step()).toBe('lat-map');
+      }
       r.skip();
       expect(r.step()).toBe('cti-line');
       const a = e.model.anatomy.anchors, p = a.ctiTv.point, q = a.ctiIvc.point;
@@ -238,7 +254,7 @@ describe('チュートリアルの手順 1（症例を選ぶ）', () => {
     const confirmed = new Set<string>();
     const ctx: TutorialContext = {
       engine: e, goals: new GoalTracker(sc.goals), points: [],
-      ui: { arrhythmia: t.scenario, geometryMode: 'preset', laCoveragePct: 0, coverageTargetPct: 70, cureOk: false, confirmed },
+      ui: { arrhythmia: t.scenario, geometryMode: 'preset', energy: 'rf', coveragePct: { LA: 0, RA: 0 }, coverageTargetPct: 70, cureOk: false, confirmed },
     };
     const first = t.steps[0];
     expect(first.id).toBe('scenario');
@@ -247,4 +263,61 @@ describe('チュートリアルの手順 1（症例を選ぶ）', () => {
     confirmed.add('scenario');
     expect(advanceTutorial(t, 0, ctx)).toBeGreaterThan(0);
   });
+});
+
+// ───────────── Phase 6 の拡張：クライオバルーン・PFA の PVI ─────────────
+import { CRYO_TUTORIAL, PFA_TUTORIAL } from './tutorials';
+
+describe.each([['cryo', CRYO_TUTORIAL], ['pfa', PFA_TUTORIAL]] as const)('チュートリアル：PVI（%s）', (energy, t) => {
+  it('症例 → エネルギー → PV 電位 → 4 本の隔離（単発のデバイス）→ entrance・exit block → 再伝導の確認 → 根治', () => {
+    const e = new SimulationEngine(loadParametricSync('afRemodeled'));
+    afScenario.setupSubstrate(e);
+    const r = runner(t, e, afScenario);
+    const circIn = (name: PvName) => {
+      const q = e.model.anatomy.la.pvs.find((p) => p.name === name)!, g = q.frame;
+      e.setPlacement('circ', { kind: 'free', point: { x: q.ostium.x + g.axis.x * 6, y: q.ostium.y + g.axis.y * 6, z: q.ostium.z + g.axis.z * 6 }, heightMm: 1, rotationDeg: 0, diameterMm: 15 });
+    };
+    /** 1 本の PV を隔離する（クライオは閉塞度 1 で 180 秒、PFA は 2 回） */
+    const isolate = (pv: PvName, occlusion = 1) => {
+      if (energy === 'cryo') {
+        e.ablation.cryo = { ...e.ablation.cryo, pv, push01: occlusion, misalignDeg: 0 };
+        expect(e.ablation.start('cryo')).toBeNull();
+        e.ablation.speed = 250;
+        while (e.ablation.active) e.ablation.step(e.sampleMs);
+      } else {
+        e.ablation.pfa = { pv, shape: 'basket' };
+        e.ablation.applyPfa();
+        expect(r.step()).toBe(pv === 'LSPV' ? 'pfa-lspv' : 'pfa-all'); // 1 回では隔離にならない
+        e.ablation.applyPfa();
+      }
+    };
+    expect(r.step()).toBe('scenario');
+    r.confirmed.add('scenario');
+    expect(r.step()).toBe('energy');
+    r.ui.energy = 'rf';
+    expect(r.step()).toBe('energy');
+    r.ui.energy = energy;
+    // 形の収集の手順はない（既定の形で始める）
+    expect(r.step()).toBe('pv-potential');
+    circIn('LSPV');
+    e.tick(1500);
+    expect(r.step()).toBe(`${energy}-lspv`);
+    if (energy === 'cryo') {
+      // 閉塞が不十分（0.7）だと隔離にならず、手順は進まない
+      isolate('LSPV', 0.7);
+      expect(r.step()).toBe('cryo-lspv');
+    }
+    isolate('LSPV');
+    expect(r.step()).toBe(`${energy}-all`);
+    for (const pv of PV_NAMES.filter((x) => x !== 'LSPV')) isolate(pv);
+    expect(r.step()).toBe('entrance');
+    for (const name of PV_NAMES.filter((x) => x !== 'LSPV')) { circIn(name); r.step(); }
+    expect(r.step()).toBe('exit-block');
+    r.goals.record({ kind: 'protocol', time: e.time, site: 'CIRC', status: 'noninducible', results: [], lesionCount: e.lesions.length, ...protocolStartState(e, 'CIRC') });
+    expect(r.step()).toBe('reconnection');
+    r.waitReconnection();
+    expect(r.step()).toBe('cure');
+    r.ui.cureOk = verifyCure(e, afScenario).every((c) => c.ok);
+    expect(r.step()).toBe('done');
+  }, 300_000);
 });

@@ -68,7 +68,7 @@ test('チュートリアル：PVI（RF）', async ({ page }) => {
   await expectStep(page, 'LSPV を隔離する');
   // 視点のプリセット（PA）と隙間のヒント（教育用の補助、QA の所見 6〜8）
   await page.locator('.view-presets').getByRole('button', { name: 'PA', exact: true }).click();
-  const gaps = page.locator('.gap-status');
+  const gaps = page.locator('.tutorial .gap-status');
   await expect(gaps).toHaveCount(0);
   await page.locator('.tutorial').getByLabel(/隙間のヒントを表示/).check();
   await expect(gaps).toContainText('LSPV：未隔離・まだ焼いていない');
@@ -94,6 +94,54 @@ test('チュートリアル：PVI（RF）', async ({ page }) => {
   expectNoErrors(o);
 });
 
+/** 4 本の PV に環状カテーテルを 1 本ずつ入れて entrance block を確かめる → 環状からの刺激で exit block */
+async function entranceAndExit(page: Page) {
+  await expectStep(page, '4 本の PV で entrance block を確かめる');
+  for (const pv of ['LSPV', 'LIPV', 'RSPV', 'RIPV']) {
+    await page.evaluate((x) => (window as any).__ep.place('circ', { pv: x }, { diameterMm: 15 }), pv);
+    await expect.poll(async () => (await page.locator('.tutorial .tutorial-items li.ok', { hasText: pv }).count()) > 0
+      || (await title(page).textContent()) !== '4 本の PV で entrance block を確かめる', { timeout: 30_000 }).toBe(true);
+  }
+  await expectStep(page, 'exit block を確かめる');
+  await runStim(page, 'burst', 'CIRC');
+  await advance(page, 6000);
+}
+
+/** 画面の操作で、クライオバルーン（既定の押し付け 100 %・ずれ 0°、180 秒）か PFA（2 回）を PV に行う */
+async function singleShot(page: Page, energy: 'cryo' | 'pfa', pv: string) {
+  await select(page, '標的の PV').selectOption(pv);
+  if (energy === 'cryo') {
+    await page.getByRole('button', { name: '通電開始' }).click();
+    for (let t = 0; t < 60_000 && await page.getByRole('button', { name: '通電停止' }).count(); t += 5000) await advance(page, 5000);
+  } else {
+    const b = page.getByRole('button', { name: 'PFA 通電（1 回）' });
+    await b.click(); await b.click();
+  }
+}
+
+for (const [name, energy, label] of [['PVI（クライオバルーン）', 'cryo', 'LSPV を冷凍する'], ['PVI（PFA）', 'pfa', 'LSPV に通電する']] as const) {
+  test(`チュートリアル：${name}`, async ({ page }) => {
+    const o = await open(page);
+    await startTutorial(page, name);
+    await chooseCase(page, 'af');
+    await beginCase(page);
+    await expectStep(page, /^エネルギーを/);
+    await select(page, 'エネルギー').selectOption(energy);
+    if (energy === 'cryo') await select(page, '通電の時計').selectOption('10');
+    // 形の収集の手順はなく、既定の形のまま PV 電位へ
+    await expectStep(page, '環状カテーテルで PV 電位を見る');
+    await page.evaluate(() => (window as any).__ep.place('circ', { pv: 'LSPV' }, { diameterMm: 15 }));
+    await advance(page, 1500);
+    await expectStep(page, label);
+    await singleShot(page, energy, 'LSPV');
+    await expectStep(page, /^残りの PV (も|にも)/);
+    for (const pv of ['LIPV', 'RSPV', 'RIPV']) await singleShot(page, energy, pv);
+    await entranceAndExit(page);
+    await reconnectionAndCure(page);
+    expectNoErrors(o);
+  });
+}
+
 for (const [name, dir, answer] of [['通常型 AFL（反時計回り）', 'afl_cti', '反時計回り'], ['通常型 AFL（時計回り）', 'afl_cti_cw', '時計回り']] as const) {
   test(`チュートリアル：${name}`, async ({ page }) => {
     const o = await open(page);
@@ -108,10 +156,21 @@ for (const [name, dir, answer] of [['通常型 AFL（反時計回り）', 'afl_c
     await page.locator('.goals').getByRole('button', { name: answer, exact: true }).click();
     // 正解するとゴールに ✓ が付き、次のゴールへ進む
     await expect(page.locator('.goals li.ok').first()).toContainText('旋回方向を答える');
-    await expectStep(page, '（任意）RA の LAT マップを作る');
+    await expectStep(page, '（任意）収集モードで RA の形を作る');
     // 答えは達成した行に残り、チュートリアルには前の手順が出る（QA の所見 11）
     await expect(page.locator('.goals li.ok .answer-ok')).toContainText(`正解です（${answer}）`);
     await expect(page.locator('.tutorial-prev')).toContainText('旋回方向を答える ✓');
+    if (dir === 'afl_cti') {
+      // 反時計回りでは RA を収集する（時計回りではとばす）。被覆率の目安は RA の値で判定する
+      await expect(page.locator('.tutorial')).toContainText('RA の被覆率の目安（設定）');
+      await select(page, 'ジオメトリー').selectOption('acquire');
+      await page.evaluate(() => (window as any).__ep.sweepRa(25));
+      expect((await state(page)).raCoveragePct).toBeGreaterThan(70);
+      expect((await state(page)).laCoveragePct).toBeLessThan(5);
+    } else {
+      await page.getByRole('button', { name: 'とばす（任意）' }).click();
+    }
+    await expectStep(page, '（任意）RA の LAT マップを作る');
     await page.getByRole('button', { name: 'とばす（任意）' }).click();
     await expectStep(page, 'CTI に線を引く');
     await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf(ep.points.ctiLine(4), 40, 45); });

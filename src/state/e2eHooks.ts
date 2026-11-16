@@ -116,9 +116,13 @@ const api = {
   },
 
   /** 収集モード：ABL で LA の壁を間隔 every 頂点ごとになぞる（形の収集） */
-  sweepLa(every = 25) {
+  sweepLa(every = 25) { api.sweepPart(0, every); },
+  /** 収集モード：ABL で RA の壁をなぞる */
+  sweepRa(every = 25) { api.sweepPart(1, every); },
+  /** 収集モード：心房 part（0 = LA、1 = RA）の壁を間隔 every 頂点ごとになぞる */
+  sweepPart(part: number, every = 25) {
     const e = engine();
-    const la = e.mesh.parts![0];
+    const la = e.mesh.parts![part];
     const acq = getAcquisition(e);
     for (let v = la.vertexStart; v < la.vertexStart + la.vertexCount; v += every) {
       e.setPlacement('abl', { kind: 'free', point: e.query.position(v), heightMm: 1, rotationDeg: 0 });
@@ -155,6 +159,7 @@ const api = {
       edemaVertices: e.ablation.field.edemaVertexCount, tutorialStep: s.tutorialStep,
       achievedGoals: [...tracker.achievedAt.keys()],
       laCoveragePct: getAcquisition(e).coveragePct(e.mesh.parts![0].vertexStart, e.mesh.parts![0].vertexCount),
+      raCoveragePct: getAcquisition(e).coveragePct(e.mesh.parts![1].vertexStart, e.mesh.parts![1].vertexCount),
       apSite: e.conduction.ap?.site ?? null, afType: e.caseOptions.afType ?? null,
     };
   },

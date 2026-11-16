@@ -7,11 +7,11 @@ import { pvGaps } from '../core/arrhythmia/pv';
 import type { Vec3 } from '../core/types';
 
 /**
- * PV の隙間のヒントの印（PVI のチュートリアル中に「隙間のヒント」をオンにしたときだけ。教育用の補助で実機の機能ではない）。
+ * PV の隙間のヒントの印（AF の症例で「隙間のヒント」をオンにしたときだけ。通電の欄・PVI のチュートリアルから切り替える。教育用の補助で実機の機能ではない）。
  * 隔離されていない PV の、最も短い通り道が病変のそばを抜ける所に球の印を出す（壁の裏側は隠れる。視点を回して探す）。1 秒ごとに計算し直す
  */
 export function GapMarkers({ engine, theme }: { engine: SimulationEngine; theme: SystemTheme }) {
-  const on = useSim((s) => s.gapHint && s.tutorialStep !== null && s.arrhythmia === 'af');
+  const on = useSim((s) => s.gapHint && s.arrhythmia === 'af');
   const [centers, setCenters] = useState<Vec3[]>([]);
   useEffect(() => {
     if (!on) { setCenters([]); return; }

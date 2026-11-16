@@ -104,6 +104,14 @@ test('クライオ・PFA：AF でクライオバルーンを 1 回、PFA を 2 �
   await pfa.click(); await pfa.click();
   await expect(page.locator('.ablation-metrics')).toContainText('LSPV に 2 回目');
   await expect(page.locator('.ablation')).toContainText('病変タグ 3 個');
+  // 隙間のヒント（チュートリアルの外でも、通電の欄から。教育用の補助）：クライオの RSPV と PFA を 2 回の LSPV は隔離、
+  // 通電していない LIPV・RIPV は未隔離（隣の PV の病変の一部が、まわりを囲む割合に数えられる）
+  await page.locator('.ablation').getByLabel(/隙間のヒントを表示/).check();
+  const gaps = page.locator('.ablation .gap-status');
+  await expect(gaps).toContainText('✓ LSPV：隔離');
+  await expect(gaps).toContainText('✓ RSPV：隔離');
+  await expect(gaps).toContainText('LIPV：未隔離');
+  await expect(gaps).toContainText('RIPV：未隔離');
   expectNoErrors(o);
 });
 

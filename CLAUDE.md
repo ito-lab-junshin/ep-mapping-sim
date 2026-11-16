@@ -14,7 +14,7 @@ npm install
 npm run dev      # http://localhost:5173
 npm run test     # vitest（src/core の単体テスト）
 npm run lint     # tsc --noEmit（src と e2e）
-npm run e2e      # ビルドして Playwright の E2E（e2e/、約 2.5 分。URL に ?e2e=1 で window.__ep）
+npm run e2e      # ビルドして Playwright の E2E（e2e/、約 4 分。URL に ?e2e=1 で window.__ep）
 npm run build    # tsc -b && vite build
 npm run batch -- 条件.json 結果.csv   # 研究用の一括実行（docs/RESEARCH.md）
 npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリックモデルを glTF に書き出す
@@ -58,7 +58,8 @@ npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリ�
 - Phase 7 の追補：心室刺激での房室結節の逆行伝導（VA 約 130 ms・逆行性 Wenckebach）。副伝導路の部位 4 か所（`src/core/arrhythmia/wpw.ts`：左側自由壁・右側自由壁・後中隔・前中隔、`CaseOptions.apSite`、部位ごとの心室内伝導・デルタ波の向き `DELTA_VECTORS`・誘発部位、部位を伏せる設問 `apHidden`、URL の `ap`・`aphide`、一括実行の `optionSweep`）。
 - AF の課題：AF-1 計算の高速化（EGM の膜電位を波面の近くだけで計算、結果は不変）。AF-2 SVC トリガー（`CaseOptions.afType`＝`pv`／`pvSvc`、`src/core/arrhythmia/svc.ts`、SVC 隔離・洞結節／右横隔神経の注意、URL の `aftype`）。AF-3 持続性 AF（`persistent`、`src/core/arrhythmia/persistent.ts`：天蓋の低電位領域に固定した旋回と細動様伝導）。
 - 浮腫・再伝導：`LesionField` に浮腫（可逆的な傷害）と処置の時計、待機（10・20・30 分）とアデノシン負荷、根治判定・学習ゴール・全チュートリアルに再伝導の確認、一括実行に待機後の結果。
-- 品質固め：Playwright の E2E（`e2e/`、18 本、`npm run e2e`、CI は `e2e.yml`）とチュートリアルの通し操作。見つかった不具合（症例の作り直し後に古いエンジンが進む、ABL で点が取れない、AFL の両方向性ブロックと WPW のデルタ波消失の判定の抜け、表示の崩れ）を直し、`docs/QA_LOG.md` に記録。QA の回答を反映（遅伝導路の領域：60 % で離断・20 % で修飾、副伝導路は付着部の 1 点で途絶、頻拍中の通電は禁止せず症例ごとに案内）。アデノシン負荷で房室結節を 6 秒止め、AVNRT・AVRT を停止できる。QA の使い勝手（所見 6〜8・11・12）：設問の正解を達成した行に残す、チュートリアルの「前の手順 ✓」、手順 1 は「この症例で始める」で完了、3D の視点のプリセット（AP・PA・LAO・RAO・LL・RL・上、`src/state/viewPresets.ts`）、PVI のチュートリアル中だけ選べる「隙間のヒント」（`pvGaps`、既定オフ、教育用の補助）。
+- 品質固め：Playwright の E2E（`e2e/`、20 本、`npm run e2e`、CI は `e2e.yml`）とチュートリアルの通し操作。見つかった不具合（症例の作り直し後に古いエンジンが進む、ABL で点が取れない、AFL の両方向性ブロックと WPW のデルタ波消失の判定の抜け、表示の崩れ）を直し、`docs/QA_LOG.md` に記録。QA の回答を反映（遅伝導路の領域：60 % で離断・20 % で修飾、副伝導路は付着部の 1 点で途絶、頻拍中の通電は禁止せず症例ごとに案内）。アデノシン負荷で房室結節を 6 秒止め、AVNRT・AVRT を停止できる。QA の使い勝手（所見 6〜8・11・12）：設問の正解を達成した行に残す、チュートリアルの「前の手順 ✓」、手順 1 は「この症例で始める」で完了、3D の視点のプリセット（AP・PA・LAO・RAO・LL・RL・上、`src/state/viewPresets.ts`）、「隙間のヒント」（`pvGaps`、既定オフ、教育用の補助。PVI のチュートリアルと AF の通電の欄から）。
+- Phase 6 の拡張：PVI（クライオバルーン・PFA）のチュートリアル（形の収集なし、既定の形で始める）、AFL のチュートリアルに任意の「収集モードで RA の形を作る」（`TutorialContext.ui.coveragePct` は LA・RA）。
 - 次は **Phase 7-5（専門家レビューの反映。指摘を受けてから `docs/REVIEW_LOG.md` に記録して対応）**。
 
 ## 決定済み事項（再確認不要）
