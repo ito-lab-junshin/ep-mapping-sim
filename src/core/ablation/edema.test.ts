@@ -126,3 +126,34 @@ describe('再伝導：症例', () => {
     expect(beats().some((b) => b.source === 'ap'), '待機後にデルタ波が再出現').toBe(true);
   }, 60_000);
 });
+
+describe('クライオの浮腫と Time to isolation（浮腫は深さと同じ育ち方）', () => {
+  const freeze = (pv: 'LSPV' | 'RSPV', push01: number, durationS = 180) => {
+    const e = new SimulationEngine(loadParametricSync('afRemodeled'));
+    afScenario.setupSubstrate(e);
+    e.ablation.cryo = { ...e.ablation.cryo, pv, push01, misalignDeg: 0, durationS };
+    expect(e.ablation.start('cryo')).toBeNull();
+    e.ablation.speed = 250;
+    let tti: number | null | undefined = null;
+    while (e.ablation.active) { e.ablation.step(e.sampleMs); tti = e.ablation.metrics()?.timeToIsolationS ?? tti; }
+    return { e, tti };
+  };
+  const maxEdema = (e: SimulationEngine) => e.ablation.field.edema.reduce((m, x) => Math.max(m, x), 0);
+
+  it('閉塞度 1・0.8 の Time to isolation は数十秒（開始直後ではない）。0.7 では隔離されない', () => {
+    for (const push of [1, 0.8]) {
+      const { tti } = freeze('LSPV', push);
+      expect(tti, `閉塞度 ${push}`).not.toBeNull();
+      expect(tti!).toBeGreaterThan(15);
+      expect(tti!).toBeLessThan(45);
+    }
+    expect(freeze('LSPV', 0.7).tti).toBeNull();
+  }, 120_000);
+
+  it('60 秒（設定の最短）の冷凍の浮腫は約 0.63（1 − e⁻¹）、180 秒では 0.9 以上', () => {
+    const short = maxEdema(freeze('RSPV', 1, 60).e);
+    expect(short).toBeGreaterThan(0.55);
+    expect(short).toBeLessThan(0.7);
+    expect(maxEdema(freeze('RSPV', 1, 180).e)).toBeGreaterThan(0.9);
+  }, 120_000);
+});

@@ -5,7 +5,7 @@ import { ABLATION, AV_NODE } from '../params';
 import { LesionField } from './LesionModel';
 import { contactForceG, depositRf, lesionIndexPct, localImpedanceOhm, rfDepthFromDose, rfDoseRate, rfRadiusFromDepth } from './rf';
 import { ablationSites, type AblationSites, type RfTarget } from './sites';
-import { cryoDepthMm, cryoMinTempC, cryoOcclusion, depositCryo } from './cryo';
+import { cryoDepthMm, cryoEdemaFraction, cryoMinTempC, cryoOcclusion, depositCryo } from './cryo';
 import { depositPfa, type PfaShape } from './pfa';
 import { seededRandom } from '../pacing/Stimulator';
 import { separated } from '../arrhythmia/common';
@@ -237,7 +237,7 @@ export class AblationController {
     const occ = cryoOcclusion(this.cryo.push01, this.cryo.misalignDeg);
     const temp = cryoMinTempC(occ) * Math.min(1, a.elapsedS / 30); // 30 秒で最低温度に達する
     const depth = cryoDepthMm(a.elapsedS, cryoMinTempC(occ));
-    depositCryo(this.field, e.mesh, pv, occ, this.cryo.leakAngleDeg, depth);
+    depositCryo(this.field, e.mesh, pv, occ, this.cryo.leakAngleDeg, depth, cryoEdemaFraction(a.elapsedS));
     if (a.isolatedAtS === null && a.elapsedS >= a.nextIsolationCheckS) {
       a.nextIsolationCheckS = a.elapsedS + 1;
       if (separated(e.mesh, e.ca.tissue.viability, laBody(e), new Set(sleeveVertices(e, a.pv!)))) a.isolatedAtS = a.elapsedS;

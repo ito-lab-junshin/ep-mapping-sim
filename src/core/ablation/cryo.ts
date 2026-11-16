@@ -21,6 +21,14 @@ export function cryoDepthMm(timeS: number, minTempC: number): number {
   return C.maxDepthMm * (Math.abs(minTempC) / 60) * (1 - Math.exp(-timeS / C.tauS));
 }
 
+/**
+ * 冷凍時間 t 秒までに置かれる浮腫の割合 0〜1（深さと同じ育ち方：1 − exp(−t / tauS)）。
+ * 浮腫を最初から 1 で置くと、冷凍の開始直後に伝導が止まり Time to isolation が約 1 秒になったため（教育用近似、先生と決定）
+ */
+export function cryoEdemaFraction(timeS: number): number {
+  return 1 - Math.exp(-Math.max(0, timeS) / C.tauS);
+}
+
 /** 一周の帯のうち病変ができる角度の割合（閉塞度 0.8 以上で 1） */
 export function cryoCoverage(occlusion: number): number {
   return Math.min(1, occlusion / C.fullRingOcclusion);
@@ -30,7 +38,7 @@ export function cryoCoverage(occlusion: number): number {
  * クライオの病変：PV 口の前庭部を一周する帯。閉塞が不十分なら、押し付けの向き leakAngleDeg の反対側
  * （血流が漏れて冷えない側）に隙間が残る。
  */
-export function depositCryo(field: LesionField, mesh: SurfaceMesh, pv: PvInfo, occlusion: number, leakAngleDeg: number, depthMm: number) {
+export function depositCryo(field: LesionField, mesh: SurfaceMesh, pv: PvInfo, occlusion: number, leakAngleDeg: number, depthMm: number, edemaFraction = 1) {
   const covered = cryoCoverage(occlusion);
   const gapHalf = (1 - covered) * 180;
   const band: number[] = [];
@@ -39,12 +47,12 @@ export function depositCryo(field: LesionField, mesh: SurfaceMesh, pv: PvInfo, o
     field.raiseDepth(v, depthMm);
     band.push(v);
   }
-  depositEdemaAround(field, mesh, band);
+  depositEdemaAround(field, mesh, band, edemaFraction);
 }
 
-/** 病変の帯の頂点は浮腫 1、そこから marginMm 外側へ直線的に 0（帯ごとに近い頂点の表を覚えておく） */
+/** 病変の帯の頂点は浮腫 scale（冷凍時間による割合）、そこから marginMm 外側へ直線的に 0（帯ごとに近い頂点の表を覚えておく） */
 const marginCache = new WeakMap<SurfaceMesh, Map<string, [number, number][]>>();
-function depositEdemaAround(field: LesionField, mesh: SurfaceMesh, band: number[]) {
+function depositEdemaAround(field: LesionField, mesh: SurfaceMesh, band: number[], scale: number) {
   if (!band.length) return;
   const key = `${band.length}:${band[0]}:${band[band.length - 1]}`;
   let m = marginCache.get(mesh);
@@ -66,5 +74,5 @@ function depositEdemaAround(field: LesionField, mesh: SurfaceMesh, band: number[
     }
     m.set(key, near);
   }
-  for (const [v, r] of near) field.raiseEdema(v, r);
+  for (const [v, r] of near) field.raiseEdema(v, r * scale);
 }
