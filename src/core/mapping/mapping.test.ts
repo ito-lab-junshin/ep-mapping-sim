@@ -196,6 +196,40 @@ describe('カテーテルからの点の取得', () => {
     expect(acquirePoints(eng, 'abl', SETTINGS, { omnipolar: false, rhythm: 'sinus' }).points).toHaveLength(0);
   });
 
+  it('カテーテルを動かした後の拍だけを使う：動かした直後は「待っています」、1 拍待つと新しい位置の点。2 mm 未満の移動では待たない（QA の所見 19）', () => {
+    const a = laBodyPointTowards(model, { x: 1, y: 0, z: 0 }), b = laBodyPointTowards(model, { x: 0, y: 1, z: 0 });
+    const eng = new SimulationEngine(model);
+    const acq = () => acquirePoints(eng, 'abl', SETTINGS, { omnipolar: false, rhythm: 'sinus' });
+    eng.setPlacement('abl', { kind: 'free', point: a, heightMm: 1, rotationDeg: 0 });
+    eng.tick(1500);
+    const first = acq();
+    expect(first.points).toHaveLength(1);
+    // 遠くへ動かした直後：前の位置で記録した拍は使わない
+    const movedAt = eng.time;
+    eng.setPlacement('abl', { kind: 'free', point: b, heightMm: 1, rotationDeg: 0 });
+    expect(eng.settledSince('abl')).toBe(movedAt);
+    const r0 = acq();
+    expect(r0.points).toHaveLength(0);
+    expect(r0.reason).toBe('settling');
+    // 1 拍（洞調律の周期 + WOI）待つと、新しい位置の点が取れる
+    eng.tick(1300);
+    const r1 = acq();
+    expect(r1.points).toHaveLength(1);
+    expect(r1.referenceTime! + r1.woi!.beforeMs).toBeGreaterThanOrEqual(movedAt);
+    expect(Math.hypot(r1.points[0].position.x - b.x, r1.points[0].position.y - b.y, r1.points[0].position.z - b.z)).toBeLessThan(3);
+    // 側壁に戻して 1 拍待ち、そこから 0.5 mm だけ動かしても「動かした」にしない（どの電極も 2 mm 未満の移動）
+    eng.setPlacement('abl', { kind: 'free', point: a, heightMm: 1, rotationDeg: 0 });
+    eng.tick(1300);
+    const since = eng.settledSince('abl');
+    const before = eng.catheter('abl')!.electrodes.map((e) => ({ ...e.position }));
+    const n = eng.query.closestPoint(a).point;
+    eng.setPlacement('abl', { kind: 'free', point: { x: n.x, y: n.y + 0.5, z: n.z }, heightMm: 1, rotationDeg: 0 });
+    const after = eng.catheter('abl')!.electrodes.map((e) => e.position);
+    expect(Math.max(...after.map((p, i) => Math.hypot(p.x - before[i].x, p.y - before[i].y, p.z - before[i].z)))).toBeLessThan(MAP_DEFAULTS.moveResetMm);
+    expect(eng.settledSince('abl')).toBe(since);
+    expect(acq().points).toHaveLength(1);
+  });
+
   it('接触していなければ点は取れない', () => {
     const eng = new SimulationEngine(model);
     eng.setPlacement('ms', { kind: 'free', point: laBodyPointTowards(model, { x: 1, y: 0, z: 0 }), heightMm: 6, rotationDeg: 0 });

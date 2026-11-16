@@ -91,6 +91,11 @@ export const CONDUCTION = {
 export const ACQUISITION = { wallReachMm: 3, revealRadiusMm: 5, pointSpacingMm: 1.5 } as const;
 
 export const MAP_DEFAULTS = {
+  /**
+   * 点の取得：カテーテルを動かした後の拍だけを使う。前の位置から電極がこの距離 mm 以上動いたら「動かした」とみなす
+   * （ドラッグで少しずつ動くたびに待たないための目安。電気生理の値ではない。QA の所見 19）
+   */
+  moveResetMm: 2,
   /** 補間の到達距離（fill threshold 相当）mm と範囲 */
   fillThresholdMm: 10,
   fillThresholdRangeMm: [5, 30] as const,

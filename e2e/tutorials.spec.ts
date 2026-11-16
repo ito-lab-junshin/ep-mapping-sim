@@ -189,15 +189,27 @@ test('チュートリアル：持続性 AF', async ({ page }) => {
   await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
   await expectStep(page, 'ボルテージマップで低電位領域を見つける');
   // ABL を channel の頂点に 1 点ずつ当てて点を取る（画面の「点を取得」と同じ）
-  // （接触の条件や拍の取り直しで取れない点もあるので、低電位の点が 6 点そろうまで続ける）
-  const vs: number[] = await page.evaluate(() => (window as any).__ep.points.roofChannel(30));
+  // 動かした後の拍を待ってから取る（QA の所見 19：前の位置で記録した拍は使わない）。10 か所で、別々の値の低電位の点が 6 点以上
+  const vs: number[] = await page.evaluate(() => (window as any).__ep.points.roofChannel(10));
   for (const v of vs) {
     await page.evaluate((x) => (window as any).__ep.place('abl', { vertex: x }), v);
-    await advance(page, 800);
-    await page.evaluate(() => (window as any).__ep.acquire());
-    const low = (await page.evaluate(() => (window as any).__ep.mapPoints())).filter((p: { voltageMv: number }) => p.voltageMv < 0.5).length;
-    if (low >= 6) break;
+    for (let k = 0; k < 8; k++) {
+      await advance(page, 400);
+      if (await page.evaluate(() => (window as any).__ep.acquire()) > 0) break;
+    }
   }
+  const pts: { voltageMv: number; vertex: number }[] = await page.evaluate(() => (window as any).__ep.mapPoints());
+  expect(pts.length).toBeGreaterThanOrEqual(8);
+  // 同じ値の点（同じ拍を使った点）は 2 mm 未満しか離れていない（前の位置の電位を、離れた位置の点にしない）
+  const sameFar = await page.evaluate((ps) => {
+    const e = (window as any).__ep.engine();
+    return ps.some((p, i) => ps.some((q, j) => j > i && p.voltageMv === q.voltageMv && (() => {
+      const a = e.query.position(p.vertex), b = e.query.position(q.vertex);
+      return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) >= 2;
+    })()));
+  }, pts);
+  expect(sameFar).toBe(false);
+  expect(pts.filter((p) => p.voltageMv < 0.5).length).toBeGreaterThanOrEqual(6);
   await advance(page, 600);
   await expectStep(page, '天蓋の旋回を止める');
   await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf(ep.points.channelCut()); });

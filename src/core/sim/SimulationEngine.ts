@@ -1,4 +1,4 @@
-import type { CaseOptions, Catheter, EcgLead, EgmChannel, Lesion, SurfaceMesh } from '../types';
+import type { CaseOptions, Catheter, EcgLead, EgmChannel, Lesion, SurfaceMesh, Vec3 } from '../types';
 import { CellularAutomaton } from '../propagation/CellularAutomaton';
 import { applyPreferentialPathways } from '../propagation/preferentialPathways';
 import { EgmGenerator } from '../egm/EgmGenerator';
@@ -87,6 +87,8 @@ export class SimulationEngine {
   private uni = new Map<string, Float32Array>();
   /** マッピングに使うカテーテル（環状・多極・ABL）の、電極ごとの単極電位の履歴 */
   private uniHistory = new Map<string, RingBuffer[]>();
+  /** カテーテルごとの「最後に動かした」ときの電極の位置と時刻（点の取得は、この時刻より後の拍だけを使う） */
+  private settled = new Map<string, { positions: Vec3[]; time: number }>();
 
   constructor(readonly model: BiatrialModel, opts: EngineOptions = {}) {
     this.mesh = model.mesh;
@@ -145,7 +147,23 @@ export class SimulationEngine {
     if (placement && (placement.kind === 'path') !== (spec.mode === 'path')) throw new Error(`placement kind mismatch for ${catheterId}`);
     spec.placement = placement;
     this.applyPlacement(spec);
+    this.markMoved(spec.catheter);
     this.placementVersion++;
+  }
+
+  /** 電極が前の「動かした」位置から MAP_DEFAULTS.moveResetMm 以上動いたら、動かした時刻を今にする */
+  private markMoved(c: Catheter) {
+    if (!c.placed) { this.settled.delete(c.id); return; }
+    const now = c.electrodes.map((e) => ({ ...e.position }));
+    const prev = this.settled.get(c.id);
+    const moved = !prev || prev.positions.length !== now.length
+      || now.some((p, i) => Math.hypot(p.x - prev.positions[i].x, p.y - prev.positions[i].y, p.z - prev.positions[i].z) >= MAP_DEFAULTS.moveResetMm);
+    if (moved) this.settled.set(c.id, { positions: now, time: this.time });
+  }
+
+  /** カテーテルを最後に動かした時刻 ms（点の取得はこれより後に記録された拍だけを使う）。置いていなければ +∞ */
+  settledSince(catheterId: string): number {
+    return this.settled.get(catheterId)?.time ?? Infinity;
   }
 
   /** 経路カテーテルを、3D 上の点に最も近い経路位置へ動かす（ドラッグ操作用） */
@@ -385,5 +403,7 @@ export class SimulationEngine {
     this.lastSinus = -Infinity;
     for (const ch of this.channels) ch.buffer.clear();
     for (const h of this.uniHistory.values()) for (const b of h) b.clear();
+    // 時計が 0 に戻るので、動かした時刻も 0 にする（記録は消えている）
+    for (const s of this.settled.values()) s.time = this.time;
   }
 }

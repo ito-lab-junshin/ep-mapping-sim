@@ -8,7 +8,8 @@ import { omnipolar } from './omnipolar';
 export interface AcquireResult {
   points: Omit<MapPoint, 'id'>[];
   /** 取得できなかった理由（points が空のとき） */
-  reason?: 'no-reference' | 'no-contact' | 'not-placed';
+  /** settling：カテーテルを動かした後の拍の記録がまだ終わっていない */
+  reason?: 'no-reference' | 'no-contact' | 'not-placed' | 'settling';
   woi?: { beforeMs: number; afterMs: number; auto: boolean };
   cycleLengthMs?: number | null;
   referenceTime?: number;
@@ -18,6 +19,7 @@ export interface AcquireResult {
  * マッピングカテーテルの、接触している双極ごとに点を取得する（docs/DESIGN.md §6）。
  *  1. 基準チャンネルの興奮のうち、WOI の後端まで記録し終えた最新の拍を選ぶ
  *  2. 双極（隣り合う 2 電極）ごとに LAT と電位を注釈する。両電極が接触しているものだけ
+ *  基準の拍は、カテーテルを最後に動かした時刻（engine.settledSince）より後に WOI が始まるものに限る
  *  3. omnipolar = true のグリッドは、隣り合う 3 電極で方向非依存 EGM を使う
  * 注釈には電極の単極電位の差を使う（心室の遠隔電位の合成成分は含まない）。
  */
@@ -35,9 +37,14 @@ export function acquirePoints(
   const woi = effectiveWoi(settings, opts.rhythm, cycleLengthMs);
   const hist0 = engine.unipolarHistory(catheterId, 0);
   if (!hist0) return { points: [], reason: 'not-placed' };
-  const earliest = now - (hist0.length - 1) * dt;
+  // カテーテルを動かす前に記録された拍は使わない（前の位置の電位を新しい位置の点にしないため。QA の所見 19）
+  const since = engine.settledSince(catheterId);
+  const earliest = Math.max(now - (hist0.length - 1) * dt, since);
   const tRef = beats.find((t) => t + woi.afterMs <= now && t + woi.beforeMs >= earliest);
-  if (tRef === undefined) return { points: [], reason: 'no-reference', woi, cycleLengthMs };
+  if (tRef === undefined) {
+    const stale = beats.some((t) => t + woi.afterMs <= now && t + woi.beforeMs < since);
+    return { points: [], reason: stale || since + woi.afterMs - woi.beforeMs > now ? 'settling' : 'no-reference', woi, cycleLengthMs };
+  }
 
   const cath = spec.catheter;
   const sampler = (buf: SampleBuffer) => (t: number) => {
