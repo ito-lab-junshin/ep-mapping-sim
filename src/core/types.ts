@@ -207,6 +207,26 @@ export interface CaseOptions {
 }
 
 /** シナリオ（不整脈ごとの基質定義と判定ロジック、docs/DESIGN.md §5） */
+/**
+ * 隙間のヒント（教育用の補助。実機の機能ではない）の 1 項目：PV 1 本、CTI の線など。
+ * 完成していなければ、覆っている割合 coverage（PV は一周の区画、CTI は線の長さの区画）と、
+ * 半分以上を覆ったときは最短の通り道が病変のそばを抜ける所（clusters）を示す
+ */
+export interface GapHint {
+  name: string;
+  complete: boolean;
+  /** 例：隔離／完成 */
+  completeLabel: string;
+  /** 例：未隔離／未完成 */
+  incompleteLabel: string;
+  /** coverage の説明（例：一周／線の長さ） */
+  coverageLabel: string;
+  coverage: number;
+  /** 隙間の印を出す */
+  showGaps: boolean;
+  clusters: { center: Vec3; size: number }[];
+}
+
 export interface ArrhythmiaScenario {
   id: ArrhythmiaId;
   label: string;
@@ -229,6 +249,8 @@ export interface ArrhythmiaScenario {
   goals: LearningGoal[];
   /** 使えるエネルギー（クライオバルーン・PFA は PV 隔離の AF だけ） */
   energies: EnergyId[];
+  /** 隙間のヒント（教育用の補助）の一覧。ない症例では通電の欄に出さない（AF：PV 4 本、AFL：CTI の線） */
+  gapHints?(engine: SimulationEngine): GapHint[];
 }
 
 /** 3D ビューの表示モード */

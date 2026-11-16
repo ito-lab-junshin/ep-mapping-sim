@@ -142,6 +142,70 @@ for (const [name, energy, label] of [['PVI（クライオバルーン）', 'cryo
   });
 }
 
+/** PVI をテスト用の口で（RF の一周を 4 本） */
+async function pviByHook(page: Page) {
+  await page.evaluate(() => { const ep = (window as any).__ep; for (const pv of ['LSPV', 'LIPV', 'RSPV', 'RIPV']) ep.ablateRf(ep.points.pvRing(pv)); });
+}
+
+/** AF が止まるまで早送りして「AF が止まったことを確かめる」を終える */
+async function untilAfStops(page: Page) {
+  // 通電の直後にすでに止まっていれば、この手順はすぐ終わって「再伝導」へ進む
+  await expectStep(page, /^(AF が止まったことを確かめる|再伝導を確かめる)/);
+  for (let t = 0; t < 60_000 && (await state(page)).rhythm === 'tachycardia'; t += 5000) await advance(page, 5000);
+  await advance(page, 2000);
+}
+
+test('チュートリアル：AF（SVC トリガー）', async ({ page }) => {
+  const o = await open(page);
+  await startTutorial(page, 'AF（SVC トリガー）');
+  await chooseCase(page, 'af');
+  await select(page, 'AF の型').selectOption('pvSvc');
+  await beginCase(page);
+  await expectStep(page, 'PVI で 4 本の PV を隔離する');
+  await pviByHook(page);
+  await expectStep(page, 'PVI の後も AF が続くことを見る');
+  await advance(page, 6000);
+  expect((await state(page)).rhythm).toBe('tachycardia');
+  await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
+  await expectStep(page, 'SVC 電位を記録する');
+  await page.evaluate(() => { const ep = (window as any).__ep; ep.place('circ', ep.points.svcInside(), { diameterMm: 20 }); });
+  await advance(page, 3000);
+  await expectStep(page, 'SVC を隔離する');
+  await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf(ep.points.svcRing()); });
+  await untilAfStops(page);
+  await reconnectionAndCure(page);
+  expectNoErrors(o);
+});
+
+test('チュートリアル：持続性 AF', async ({ page }) => {
+  const o = await open(page);
+  await startTutorial(page, '持続性 AF（天蓋の低電位領域）');
+  await chooseCase(page, 'af');
+  await select(page, 'AF の型').selectOption('persistent');
+  await beginCase(page);
+  await expectStep(page, 'PVI で 4 本の PV を隔離する');
+  await pviByHook(page);
+  await expectStep(page, 'PVI の後も AF が続くことを見る');
+  await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
+  await expectStep(page, 'ボルテージマップで低電位領域を見つける');
+  // ABL を channel の頂点に 1 点ずつ当てて点を取る（画面の「点を取得」と同じ）
+  // （接触の条件や拍の取り直しで取れない点もあるので、低電位の点が 6 点そろうまで続ける）
+  const vs: number[] = await page.evaluate(() => (window as any).__ep.points.roofChannel(30));
+  for (const v of vs) {
+    await page.evaluate((x) => (window as any).__ep.place('abl', { vertex: x }), v);
+    await advance(page, 800);
+    await page.evaluate(() => (window as any).__ep.acquire());
+    const low = (await page.evaluate(() => (window as any).__ep.mapPoints())).filter((p: { voltageMv: number }) => p.voltageMv < 0.5).length;
+    if (low >= 6) break;
+  }
+  await advance(page, 600);
+  await expectStep(page, '天蓋の旋回を止める');
+  await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf(ep.points.channelCut()); });
+  await untilAfStops(page);
+  await reconnectionAndCure(page);
+  expectNoErrors(o);
+});
+
 for (const [name, dir, answer] of [['通常型 AFL（反時計回り）', 'afl_cti', '反時計回り'], ['通常型 AFL（時計回り）', 'afl_cti_cw', '時計回り']] as const) {
   test(`チュートリアル：${name}`, async ({ page }) => {
     const o = await open(page);
@@ -173,8 +237,15 @@ for (const [name, dir, answer] of [['通常型 AFL（反時計回り）', 'afl_c
     await expectStep(page, '（任意）RA の LAT マップを作る');
     await page.getByRole('button', { name: 'とばす（任意）' }).click();
     await expectStep(page, 'CTI に線を引く');
-    await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf(ep.points.ctiLine(4), 40, 45); });
+    // 隙間のヒント（教育用の補助）：線の隣り合う 2 点（約 8 mm）を残すと隙間の印、残りを焼くと完成
+    await page.locator('.tutorial').getByLabel(/隙間のヒントを表示/).check();
+    const gaps = page.locator('.tutorial .gap-status');
+    await expect(gaps).toContainText('CTI の線：未完成・まだ焼いていない');
+    await page.evaluate(() => { const ep = (window as any).__ep; const pts = ep.points.ctiLine(4); ep.ablateRf(pts.filter((_: unknown, i: number) => i !== 3 && i !== 4), 40, 45); });
+    await expect(gaps).toContainText('CTI の線：未完成・隙間の印あり', { timeout: 5000 });
+    await page.evaluate(() => { const ep = (window as any).__ep; const pts = ep.points.ctiLine(4); ep.ablateRf([pts[3], pts[4]], 40, 45); });
     await expectStep(page, '両方向性ブロックを確かめる');
+    await expect(page.locator('.ablation .gap-status')).toContainText('✓ CTI の線：完成');
     await advance(page, 8000);
     await runStim(page, 'burst', 'CS_OS');
     await runStim(page, 'burst', 'LOW_LATERAL_RA');
@@ -188,7 +259,9 @@ test('チュートリアル：AVNRT', async ({ page }) => {
   await startTutorial(page, 'AVNRT（遅伝導路）');
   await chooseCase(page, 'avnrt');
   await beginCase(page);
-  // His カテーテルは最初から His 部位にあるので、His の手順はすぐ終わる
+  // His カテーテルは最初から His 部位にあるので、His の手順はすぐ終わる。（任意）RA の収集はとばす
+  await expectStep(page, '（任意）収集モードで RA の形を作る');
+  await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, 'AH ジャンプを確かめる');
   await runStim(page, 'extrastimulus', 'HRA');
   await expectStep(page, '遅伝導路で通電する');
@@ -214,6 +287,8 @@ test('チュートリアル：WPW（左側自由壁）', async ({ page }) => {
   await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
   await expectStep(page, 'RV 刺激で偏心性の心房興奮を見る');
   await runStim(page, 'extrastimulus', 'RV');
+  await expectStep(page, '（任意）収集モードで LA の形を作る');
+  await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, '心房の最早期部位を見つける');
   // RV 刺激中に、ABL で僧帽弁輪の側方を 8 点取る（画面の「点を取得」ボタン）
   await page.locator('.stim label', { hasText: '方法' }).locator('select').selectOption('burst');

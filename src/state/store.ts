@@ -57,7 +57,7 @@ interface SimState {
   tutorialConfirmed: string[];
   /** チュートリアルで LA の形を作る目安の被覆率 % */
   tutorialCoveragePct: number;
-  /** PV の隙間のヒントを表示する（教育用の補助、既定オフ。AF の症例の通電の欄と PVI のチュートリアルで共有） */
+  /** 隙間のヒントを表示する（教育用の補助、既定オフ。AF の PV・AFL の CTI の線。通電の欄とチュートリアルで共有） */
   gapHint: boolean;
   /** 視点のプリセットの要求（押すたびに n が増える） */
   viewPreset: { name: ViewPresetName; n: number } | null;

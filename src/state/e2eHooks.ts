@@ -6,8 +6,8 @@ import { SYSTEMS } from '../systems';
 import { useSim } from './store';
 import { acquireNow, getAcquisition, getEngine, getGoalTracker, getPoints, placeCatheter, updateGoals, updateProtocol } from './engine';
 import { ctiLinePoints, pvRingPoints } from '../core/research/strategies';
-import { svcRingPoints } from '../core/arrhythmia/svc';
-import { channelCutPoints } from '../core/arrhythmia/persistent';
+import { svcRingPoints, svcVertices } from '../core/arrhythmia/svc';
+import { channelCutPoints, roofSubstrate } from '../core/arrhythmia/persistent';
 
 /**
  * E2E テスト用の口（docs/DESIGN.md §13）。URL に ?e2e=1 を付けたときだけ window.__ep に出す。
@@ -91,6 +91,14 @@ const api = {
     allPvRings: (spacingMm = 5) => PV_NAMES.flatMap((pv) => pvRingPoints(engine(), pv, spacingMm)),
     ctiLine: (spacingMm = 4) => ctiLinePoints(engine(), spacingMm),
     svcRing: () => svcRingPoints(engine()),
+    /** SVC の中（接合部から長さの 4 割の奥）の壁の点：環状カテーテルを置く */
+    svcInside: () => {
+      const e = engine(), o = e.model.anatomy.ra.svc, len = e.model.dimensions.vein.svcLength ?? e.model.dimensions.vein.length;
+      const p = { x: o.center.x - o.axis.x * len * 0.4, y: o.center.y - o.axis.y * len * 0.4, z: o.center.z - o.axis.z * len * 0.4 };
+      return e.query.closestPoint(p, svcVertices(e)).point;
+    },
+    /** 天蓋の低電位領域の channel の頂点（n 点、持続性 AF のボルテージマップ用） */
+    roofChannel: (n = 8) => { const ch = roofSubstrate(engine()).channel; return Array.from({ length: n }, (_, i) => ch[Math.floor(((i + 0.5) * ch.length) / n)]); },
     channelCut: () => channelCutPoints(engine()),
     anchor: (name: string) => pointOf(engine(), { anchor: name }),
     apMid: () => {

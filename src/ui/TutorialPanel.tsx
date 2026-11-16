@@ -4,7 +4,7 @@ import { useSim } from '../state/store';
 import { getAcquisition, getGoalTracker, getPoints, useEngine } from '../state/engine';
 import { TUTORIALS, TUTORIAL_COVERAGE_RANGE_PCT, advanceTutorial, type TutorialContext } from '../core/learning/tutorials';
 import { Slider } from './CatheterTray';
-import { PvGapPanel } from './PvGapPanel';
+import { GapHintPanel } from './GapHintPanel';
 
 /**
  * チュートリアル（PVI（RF）・通常型 AFL（反時計回り／時計回り）・AVNRT・WPW）。操作パネルの上に今の手順を出し、完了すると自動で次へ進む。
@@ -106,7 +106,7 @@ export function TutorialPanel() {
               {cur.items(ctxRef.current).map((it) => <li key={it.label} className={it.done ? 'ok' : ''}>{it.done ? '✓' : '・'} {it.label}</li>)}
             </ul>
           )}
-          {cur.gapHint && <PvGapPanel />}
+          {cur.gapHint && <GapHintPanel />}
           {showHint && <p className="note">{cur.hint}</p>}
           {cur.confirmLabel && (!cur.ready || (ctxRef.current && cur.ready(ctxRef.current))) && (
             <button style={{ borderColor: theme.colors.accent }} onClick={() => confirmStep(cur.id)}>{cur.confirmLabel}</button>

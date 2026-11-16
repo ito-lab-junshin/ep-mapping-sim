@@ -9,7 +9,7 @@ import { cloneWithSubstrate, reconnectionGoal, separated } from './common';
 import { circularPv, recentlyActivated } from '../learning/conditions';
 
 export { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
-import { sleeveVertices, sleeveTip, laBody, isolatedPvs } from './pv';
+import { sleeveVertices, sleeveTip, laBody, isolatedPvs, pvGapHints } from './pv';
 
 export function afTypeOf(options?: CaseOptions): AfType {
   const t = options?.afType;
@@ -120,6 +120,7 @@ export const afScenario: ArrhythmiaScenario = {
     return checks;
   },
   energies: ['rf', 'cryo', 'pfa'],
+  gapHints: pvGapHints,
   goals: [
     {
       id: 'pv-potential', label: '環状カテーテルで PV 電位を記録する',

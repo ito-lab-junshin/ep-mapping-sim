@@ -11,7 +11,7 @@ import type { PfaShape } from '../core/ablation/pfa';
 import type { AblationMetrics } from '../core/ablation/AblationController';
 import type { EnergyId } from '../core/types';
 import { Slider } from './CatheterTray';
-import { PvGapPanel } from './PvGapPanel';
+import { GapHintPanel } from './GapHintPanel';
 
 const fmt = (x: number | undefined, d = 0) => (x === undefined ? '—' : x.toFixed(d));
 
@@ -162,8 +162,8 @@ export function AblationConsole() {
         </dl>
       )}
       <ReconnectionPanel />
-      {/* PV の隔離を扱う症例（AF）だけ。PVI のチュートリアルの手順と同じ設定 */}
-      {arrhythmia === 'af' && <PvGapPanel />}
+      {/* 隙間のヒントのある症例（AF の PV・AFL の CTI）だけ。チュートリアルの手順と同じ設定 */}
+      <GapHintPanel />
       {f.ablationIndex && energy === 'rf' && (
         <p className="note">病変指標は本アプリ独自の尺度（その部位の目標量 = 100 %。30 W・20 g で後壁は約 30 秒、前壁は約 40 秒）で、実機の指標・目標値とは異なります。</p>
       )}

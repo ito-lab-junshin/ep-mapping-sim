@@ -1,9 +1,10 @@
-import type { ArrhythmiaScenario, InterAtrialBridge, LearningGoal } from '../types';
+import type { ArrhythmiaScenario, GapHint, InterAtrialBridge, LearningGoal } from '../types';
 import { LAYOUT } from '../geometry/parametric/dimensions';
 import { SimulationEngine } from '../sim/SimulationEngine';
 import { REGION_ID } from '../geometry/regions';
 import { AFL_SUBSTRATE, CONDUCTION } from '../params';
 import { reconnectionGoal, separated } from './common';
+import { GAP_MIN_COVERAGE, gapCorridor } from './gaps';
 import { protocolsAfterLastLesion } from '../learning/conditions';
 
 export interface AflParams {
@@ -130,6 +131,7 @@ export const aflCtiScenario: ArrhythmiaScenario = {
     ];
   },
   energies: ['rf'],
+  gapHints: (engine) => [ctiGapHint(engine)],
   goals: [...aflGoals('ccw'), reconnectionGoal(() => aflCtiScenario)],
 };
 
@@ -173,11 +175,10 @@ export function ctiLineDone(engine: SimulationEngine): boolean {
   return ctiLineComplete(engine, cti, engine.ca.tissue.viability);
 }
 
-/** CTI の中隔側の端と側壁側の端が、生きている頂点で CTI の帯の中でつながっていなければ線が完成 */
-function ctiLineComplete(engine: SimulationEngine, cti: Set<number>, viab: Float32Array): boolean {
+/** CTI の帯を、IVC 縁と三尖弁輪を結ぶ軸に直交する向き（中隔 ↔ 側壁）で端の頂点に分ける */
+function ctiEnds(engine: SimulationEngine, cti: Set<number>): { septal: number[]; lateral: number[] } {
   const a = engine.model.anatomy;
   const P = engine.mesh.positions;
-  // CTI の帯を、IVC 縁と三尖弁輪を結ぶ軸に直交する向き（中隔 ↔ 側壁）で端の頂点に分ける
   const ivc = a.anchors.ctiIvc.point, tv = a.anchors.ctiTv.point;
   const ax = { x: tv.x - ivc.x, y: tv.y - ivc.y, z: tv.z - ivc.z };
   const lat = { x: -1, y: 0, z: 0 }; // 側壁は −x
@@ -186,11 +187,45 @@ function ctiLineComplete(engine: SimulationEngine, cti: Set<number>, viab: Float
   const s = (v: number) => (P[3 * v] - ivc.x) * side.x + (P[3 * v + 1] - ivc.y) * side.y + (P[3 * v + 2] - ivc.z) * side.z;
   const vals = [...cti].map(s).sort((x, y) => x - y);
   const lo = vals[Math.floor(vals.length * 0.15)], hi = vals[Math.floor(vals.length * 0.85)];
-  const septal = [...cti].filter((v) => s(v) <= lo), lateral = new Set([...cti].filter((v) => s(v) >= hi));
+  return { septal: [...cti].filter((v) => s(v) <= lo), lateral: [...cti].filter((v) => s(v) >= hi) };
+}
+
+/** CTI の中隔側の端と側壁側の端が、生きている頂点で CTI の帯の中でつながっていなければ線が完成 */
+function ctiLineComplete(engine: SimulationEngine, cti: Set<number>, viab: Float32Array): boolean {
+  const { septal, lateral } = ctiEnds(engine, cti);
   // CTI の帯の中だけをたどる
   const masked = new Float32Array(viab.length);
   for (const v of cti) masked[v] = viab[v];
-  return separated(engine.mesh, masked, septal, lateral);
+  return separated(engine.mesh, masked, septal, new Set(lateral));
+}
+
+/** 線が覆っている割合を数える区画の数（三尖弁輪 → IVC の口の長さを分ける。教育用近似） */
+const CTI_GAP_SEGMENTS = 12;
+
+/**
+ * 隙間のヒント（教育用の補助）：CTI の線。CTI の帯の中で、中隔側の端から側壁側の端への生きた頂点の最短の通り道が、
+ * 病変のそばを抜ける所を隙間とする（ctiLineDone と同じ基準）。線が CTI の長さの半分以上を覆ってから隙間を示す
+ */
+export function ctiGapHint(engine: SimulationEngine): GapHint {
+  const cti = new Set<number>();
+  engine.mesh.regionOfVertex.forEach((r, v) => { if (r === REGION_ID.cti) cti.add(v); });
+  const via = engine.ca.tissue.viability, P = engine.mesh.positions;
+  const a = engine.model.anatomy.anchors, ivc = a.ctiIvc.point, tv = a.ctiTv.point;
+  const ax = { x: tv.x - ivc.x, y: tv.y - ivc.y, z: tv.z - ivc.z }, l2 = ax.x ** 2 + ax.y ** 2 + ax.z ** 2;
+  const dead = [...cti].filter((v) => via[v] <= 0);
+  const segments = new Set<number>();
+  for (const v of dead) {
+    const t = ((P[3 * v] - ivc.x) * ax.x + (P[3 * v + 1] - ivc.y) * ax.y + (P[3 * v + 2] - ivc.z) * ax.z) / l2;
+    segments.add(Math.min(CTI_GAP_SEGMENTS - 1, Math.max(0, Math.floor(t * CTI_GAP_SEGMENTS))));
+  }
+  const coverage = segments.size / CTI_GAP_SEGMENTS;
+  const allowed = new Uint8Array(via.length);
+  for (const v of cti) allowed[v] = 1;
+  const { septal, lateral } = ctiEnds(engine, cti);
+  const g = gapCorridor(engine, septal, lateral, allowed, coverage >= GAP_MIN_COVERAGE ? dead : []);
+  const base = { name: 'CTI の線', completeLabel: '完成', incompleteLabel: '未完成', coverageLabel: '線の長さ' };
+  if (!g.connected) return { ...base, complete: true, coverage: 1, showGaps: false, clusters: [] };
+  return { ...base, complete: false, coverage, showGaps: g.vertices.length > 0, clusters: g.clusters };
 }
 
 /**

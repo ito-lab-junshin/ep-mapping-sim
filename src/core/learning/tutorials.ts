@@ -1,8 +1,9 @@
-import type { ArrhythmiaId, EnergyId, GeometryMode, MapPoint } from '../types';
+import type { ArrhythmiaId, CaseOptions, EnergyId, GeometryMode, MapPoint } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import type { GoalTracker } from './GoalTracker';
 import { isolatedPvs } from '../arrhythmia/pv';
 import { protocolEvents } from './conditions';
+import { AF_TYPE_LABEL } from '../arrhythmia/af';
 
 /**
  * チュートリアル（docs/DESIGN.md §11・Phase 6）：手順を順に示し、完了条件を満たしたら次へ進む。
@@ -54,7 +55,11 @@ export interface TutorialStep {
   done(ctx: TutorialContext): boolean;
 }
 
-export interface Tutorial { id: string; title: string; scenario: ArrhythmiaId; steps: TutorialStep[] }
+export interface Tutorial {
+  id: string; title: string; scenario: ArrhythmiaId; steps: TutorialStep[];
+  /** 症例の選択肢（例：AF の型）。手順 1 で選ぶもの */
+  caseOptions?: CaseOptions;
+}
 
 /** 収集モードで LA の形を作る目安 % の既定値と、設定で選べる範囲（仮定値） */
 export const TUTORIAL_LA_COVERAGE_PCT = 70;
@@ -226,6 +231,14 @@ export const PFA_TUTORIAL: Tutorial = {
   ],
 };
 
+/** （任意）収集モードで心房の形を作る手順（AVNRT は RA、WPW の左側自由壁は LA。被覆率の目安は設定の値） */
+const buildOptional = (chamber: 'LA' | 'RA', what: string): TutorialStep => ({
+  id: chamber === 'LA' ? 'build-la' : 'build-ra', title: `（任意）収集モードで ${chamber} の形を作る`, target: 'geometry', optional: true, coverage: chamber,
+  instruction: `「ジオメトリー」を収集モードにし、ABL か多極カテーテルで ${chamber} の壁をなぞります。${what}を含めて、目安の被覆率まで集めます。`,
+  hint: `「3D 表示」の「もう一方の心房」を「表示しない」にすると、なぞっている途中で反対側の心房に移りません。視点はカテーテルの選択を解除して回すか、3D の右下の視点のボタンを使います。とばしてもかまいません（既定の形のままでも先へ進めます）。`,
+  done: (c) => c.ui.geometryMode === 'acquire' && c.ui.coveragePct[chamber] >= c.ui.coverageTargetPct,
+});
+
 /** 症例を選ぶ手順 */
 const chooseScenario = (id: ArrhythmiaId, label: string, why: string): TutorialStep => ({
   id: 'scenario', title: '症例を選ぶ', target: 'scenario',
@@ -247,6 +260,100 @@ const cure: TutorialStep = {
   hint: '✗ が残ったら、その基準の説明を読んで足りない操作を行います。',
   done: (c) => c.ui.cureOk,
 };
+
+/** AF の型を選ぶ手順（SVC トリガー・持続性 AF のチュートリアル） */
+const afTypeScenario = (type: 'pvSvc' | 'persistent', label: string, why: string): TutorialStep => ({
+  id: 'scenario', title: '症例を選ぶ', target: 'scenario',
+  instruction: `「不整脈」で「心房細動（PVI）」を選び、「AF の型」を「${label}」にします。${why}`,
+  hint: '操作パネルのいちばん上の「不整脈」と、その下の「AF の型」の選択肢です。選ぶと「この症例で始める」が出ます。',
+  confirmLabel: START_LABEL,
+  ready: (c) => c.ui.arrhythmia === 'af' && c.engine.caseOptions.afType === type,
+  done: (c) => c.ui.arrhythmia === 'af' && c.engine.caseOptions.afType === type && c.ui.confirmed.has('scenario'),
+});
+
+/** PVI を 1 つの手順で（SVC トリガー・持続性 AF のチュートリアル。エネルギーは自由） */
+const pviAll: TutorialStep = {
+  id: 'pvi', title: 'PVI で 4 本の PV を隔離する', target: 'ablation',
+  instruction: '4 本の PV を隔離します。エネルギーは RF・クライオバルーン・PFA のどれでもかまいません。',
+  hint: 'クライオバルーン（閉塞度 0.8 以上で 1 本 1 回）や PFA（1 本 2 回）を使うと早く済みます。RF なら前庭部を一周します。「隙間のヒントを表示」で PV ごとの状態を見られます（教育用の補助）。',
+  gapHint: true,
+  done: (c) => c.goals.isAchieved('isolation'),
+};
+
+/**
+ * AF（SVC トリガー）：PVI の後も AF が続く → SVC 電位を記録 → SVC を隔離 → AF の停止（Phase 7 の追補 AF-2 の症例）
+ */
+export const SVC_TUTORIAL: Tutorial = {
+  id: 'af-svc',
+  title: 'AF（SVC トリガー）',
+  scenario: 'af',
+  caseOptions: { afType: 'pvSvc' },
+  steps: [
+    afTypeScenario('pvSvc', AF_TYPE_LABEL.pvSvc, 'PV に加えて SVC の心筋スリーブにもトリガーがある症例です。形の収集は行わず、既定の形のまま進めます。'),
+    pviAll,
+    look('af-persists', 'PVI の後も AF が続くことを見る', 'goals',
+      '4 本の PV を隔離しても AF が止まりません。PV 以外のトリガー（非 PV トリガー）を疑います。代表的な部位は SVC です。',
+      '隔離した PV の中では、トリガーが LA と無関係に発火し続けます（解離）。'),
+    {
+      id: 'svc-potential', title: 'SVC 電位を記録する', target: 'catheters',
+      instruction: '環状カテーテルを SVC の中（SVC–RA 接合部より上）に置き、3 極以上を壁に接触させます。速く不規則な SVC 電位が出ます。',
+      hint: 'カテーテルを選んでいないときに 3D 上の管にマウスを乗せると、領域の名前（SVC）が出ます。ループ径を SVC の太さに合わせ、押し込み（ホイール）で接触させます。',
+      done: (c) => c.goals.isAchieved('svc-potential'),
+    },
+    {
+      id: 'svc-isolation', title: 'SVC を隔離する', target: 'ablation',
+      instruction: 'エネルギーを RF にして、SVC–RA 接合部より少し上（SVC 側）を一周するように通電します。',
+      hint: '前外側の洞結節の近くと、後外側の右横隔神経の走行の近くでは注意が出ます。注意が出たら、その場所を避けるか、出力・時間を控えます（合併症は再現しません）。',
+      done: (c) => c.goals.isAchieved('svc-isolation'),
+    },
+    {
+      id: 'af-stopped', title: 'AF が止まったことを確かめる', target: 'goals',
+      instruction: 'PV と SVC の隔離が終わると、トリガーは隔離された静脈の中だけで発火し、心房は洞調律に戻ります。調律の表示と EGM で確かめます。',
+      hint: '頻拍の判定が解けるまで 5 秒ほどかかります。',
+      done: (c) => c.goals.isAchieved('af-stopped'),
+    },
+    reconnection,
+    cure,
+  ],
+};
+
+/**
+ * 持続性 AF：PVI の後も AF が続く → ボルテージマップで天蓋の低電位領域を見つける → channel を横切る RF → AF の停止（AF-3 の症例）
+ */
+export const PERSISTENT_TUTORIAL: Tutorial = {
+  id: 'af-persistent',
+  title: '持続性 AF（天蓋の低電位領域）',
+  scenario: 'af',
+  caseOptions: { afType: 'persistent' },
+  steps: [
+    afTypeScenario('persistent', AF_TYPE_LABEL.persistent, 'LA 天蓋の低電位領域（中心の瘢痕と、その周りの遅い伝導の輪）を回る旋回が AF を駆動している症例です。形の収集は行わず、既定の形のまま進めます。'),
+    pviAll,
+    look('af-persists', 'PVI の後も AF が続くことを見る', 'goals',
+      '4 本の PV を隔離しても AF が止まりません。持続性 AF では、PV 以外の心房筋の基質が AF を保っていることがあります。',
+      'EGM の CS は不規則な興奮（細動様の伝導）のままです。'),
+    {
+      id: 'lva-map', title: 'ボルテージマップで低電位領域を見つける', target: 'map',
+      instruction: 'マップの表示を「ボルテージ」にし、多極カテーテルか ABL で LA の点を集めます。天蓋に 0.5 mV 未満の点が 5 点以上取れると完了です。中心は 0.1 mV 未満の瘢痕です。',
+      hint: '多極カテーテルの自動取得を使うと早く集まります。天蓋は 3D の右下の「上」や「AP」から見やすくなります。',
+      done: (c) => c.goals.isAchieved('lva-map'),
+    },
+    {
+      id: 'roof-driver', title: '天蓋の旋回を止める', target: 'ablation',
+      instruction: 'エネルギーを RF にして、中心の瘢痕の縁から外側の線維化の輪まで、遅い伝導の輪（channel）を横切るように点を並べて通電します。低電位領域を囲んで隔離してもかまいません。',
+      hint: 'channel は瘢痕の外側の、0.1〜0.5 mV 程度の帯です。瘢痕と正常な心房のあいだを、隙間なく 1 本の線でつなぎます。',
+      done: (c) => c.goals.isAchieved('roof-driver'),
+    },
+    {
+      id: 'af-stopped', title: 'AF が止まったことを確かめる', target: 'goals',
+      instruction: 'PVI と天蓋の旋回の通電が終わると、心房は洞調律に戻ります。調律の表示と EGM で確かめます。',
+      hint: '頻拍の判定が解けるまで 5 秒ほどかかります。',
+      done: (c) => c.goals.isAchieved('persistent-af-stopped'),
+    },
+    reconnection,
+    cure,
+  ],
+};
+
 
 /** 通常型 AFL（反時計回り・時計回り）。向き以外は同じ手順 */
 function aflTutorial(direction: 'ccw' | 'cw'): Tutorial {
@@ -288,7 +395,8 @@ function aflTutorial(direction: 'ccw' | 'cw'): Tutorial {
       {
         id: 'cti-line', title: 'CTI に線を引く', target: 'ablation',
         instruction: 'ABL を三尖弁輪側の CTI に置き、IVC まで点状の通電を並べて連続した線にします。粗動中に CTI へ通電するのが標準です。通電中に粗動が止まるのが良い所見で、その後に両方向性ブロックを確かめます。',
-        hint: '三尖弁輪の縁から、ホバーで「IVC」と出る所まで隙間なく焼きます（IVC 側の端を残すと、そこを粗動が抜けます）。三尖弁輪側は壁が厚い（5 mm）ので、30 W では貫壁しにくくなります。40 W か、接触圧を上げた長めの通電にします。貫壁性の表示を見ながら進めます。',
+        hint: '三尖弁輪の縁から、ホバーで「IVC」と出る所まで隙間なく焼きます（IVC 側の端を残すと、そこを粗動が抜けます）。三尖弁輪側は壁が厚い（5 mm）ので、30 W では貫壁しにくくなります。40 W か、接触圧を上げた長めの通電にします。貫壁性の表示を見ながら進めます。線が完成しないときは「隙間のヒントを表示」で、残っている通り道の位置を見られます（教育用の補助）。',
+        gapHint: true,
         done: (c) => c.goals.isAchieved('cti-line'),
       },
       {
@@ -316,6 +424,7 @@ export const AVNRT_TUTORIAL: Tutorial = {
       hint: 'カテーテル欄で His を選び、経路上の位置を調整します。',
       done: (c) => c.goals.isAchieved('his'),
     },
+    buildOptional('RA', 'Koch 三角（His 部位・CS 口・三尖弁輪の中隔側）'),
     {
       id: 'ah-jump', title: 'AH ジャンプを確かめる', target: 'stimulation',
       instruction: '刺激の方法を「期外刺激」、部位を「HRA」にして刺激を始めます。S2 を短くしていくと、速伝導路の不応期で AH が 50 ms 以上延びます（遅伝導路への乗り換え）。',
@@ -362,6 +471,7 @@ export const WPW_TUTORIAL: Tutorial = {
       hint: '期外刺激でもバーストでもかまいません。',
       done: (c) => protocolEvents(c.goals.context(c.engine, c.points), ['RV']).length > 0,
     },
+    buildOptional('LA', '僧帽弁輪（とくに側方）と、そのまわりの LA の壁'),
     {
       id: 'earliest', title: '心房の最早期部位を見つける', target: 'map',
       instruction: 'RV 刺激中（または頻拍中）に、ABL か多極カテーテルで僧帽弁輪の側方を中心に 5 点以上取得し、LAT マップで最早期の部位を見つけます。',
@@ -385,7 +495,7 @@ export const WPW_TUTORIAL: Tutorial = {
   ],
 };
 
-export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, CRYO_TUTORIAL, PFA_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL];
+export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, CRYO_TUTORIAL, PFA_TUTORIAL, SVC_TUTORIAL, PERSISTENT_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL];
 
 /**
  * 現在の手順 index から、完了している手順をとばして次の未完了の手順へ進める（順番に、とばさずに判定する）。

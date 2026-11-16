@@ -195,6 +195,17 @@ describe('チュートリアル：AVNRT', () => {
     expect(r.step()).toBe('scenario');
     r.ui.arrhythmia = 'avnrt';
     r.confirmed.add('scenario');
+    expect(r.step()).toBe('build-ra');
+    {
+      // （任意）収集モードで RA の形を作る：RA をなぞって目安に届くと進む
+      r.ui.geometryMode = 'acquire';
+      const acq = new GeometryAcquisition(e.mesh), ra = e.mesh.parts![1];
+      for (let v = ra.vertexStart; v < ra.vertexStart + ra.vertexCount; v += 25) {
+        e.setPlacement('abl', { kind: 'free', point: e.query.position(v), heightMm: 1, rotationDeg: 0 });
+        acq.collect([e.catheter('abl')!]);
+      }
+      r.ui.coveragePct = { LA: 0, RA: acq.coveragePct(ra.vertexStart, ra.vertexCount) };
+    }
     expect(r.step()).toBe('ah-jump');
     const n0 = e.lesions.length, st = protocolStartState(e, 'HRA');
     const session = runProtocol(e, { ...defaultProtocol('extrastimulus', 'HRA'), s1Beats: 4, s2StartMs: 360, observeMs: 1200 });
@@ -229,6 +240,8 @@ describe('チュートリアル：WPW', () => {
     r.confirmed.add('delta');
     expect(r.step()).toBe('rv-pacing');
     r.protocol('RV', 'noninducible');
+    expect(r.step()).toBe('build-la');
+    r.skip(); // （任意）LA の収集はとばす
     expect(r.step()).toBe('earliest');
     const ap = e.conduction.ap!.vertices;
     const pt = (v: number, lat: number, id: number): MapPoint => ({ id, position: e.query.position(v), vertex: v, latMs: lat, voltageMv: 1, catheterId: 'abl', signal: 'bipolar', referenceTime: 0 });
@@ -250,7 +263,7 @@ describe('チュートリアルの手順 1（症例を選ぶ）', () => {
   it.each(TUTORIALS.map((t) => [t.title, t] as const))('%s：症例が選ばれていても「この症例で始める」を押すまで進まず、押すと進む（QA の所見 12）', (_, t) => {
     const sc = SCENARIOS[t.scenario];
     const e = new SimulationEngine(loadParametricSync(sc.anatomy));
-    sc.setupSubstrate(e);
+    sc.setupSubstrate(e, t.caseOptions);
     const confirmed = new Set<string>();
     const ctx: TutorialContext = {
       engine: e, goals: new GoalTracker(sc.goals), points: [],
@@ -320,4 +333,58 @@ describe.each([['cryo', CRYO_TUTORIAL], ['pfa', PFA_TUTORIAL]] as const)('チュ
     r.ui.cureOk = verifyCure(e, afScenario).every((c) => c.ok);
     expect(r.step()).toBe('done');
   }, 300_000);
+});
+
+// ───────────── AF の型ごと：SVC トリガー・持続性 AF ─────────────
+import { SVC_TUTORIAL, PERSISTENT_TUTORIAL } from './tutorials';
+import { svcRingPoints, svcVertices } from '../arrhythmia/svc';
+import { channelCutPoints, roofSubstrate } from '../arrhythmia/persistent';
+import type { AfType } from '../params';
+
+describe.each([['pvSvc', SVC_TUTORIAL], ['persistent', PERSISTENT_TUTORIAL]] as const)('チュートリアル：AF（%s）', (type, t) => {
+  it('症例（AF の型）→ PVI → AF が続く → 非 PV の基質（SVC／天蓋）→ 通電 → AF の停止 → 再伝導 → 根治', () => {
+    const e = new SimulationEngine(loadParametricSync('afRemodeled'));
+    afScenario.setupSubstrate(e, { afType: type as AfType });
+    const r = runner(t, e, afScenario);
+    expect(r.step()).toBe('scenario');
+    r.confirmed.add('scenario');
+    expect(r.step()).toBe('pvi');
+    // PVI はクライオバルーン（閉塞度 1）で 4 本
+    for (const pv of PV_NAMES) {
+      e.ablation.cryo = { ...e.ablation.cryo, pv, push01: 1, misalignDeg: 0 };
+      expect(e.ablation.start('cryo')).toBeNull();
+      e.ablation.speed = 250;
+      while (e.ablation.active) e.ablation.step(e.sampleMs);
+    }
+    expect(r.step()).toBe('af-persists');
+    e.tick(8000);
+    expect(e.rhythm.state, 'PVI だけでは止まらない').toBe('tachycardia');
+    r.confirmed.add('af-persists');
+    if (type === 'pvSvc') {
+      expect(r.step()).toBe('svc-potential');
+      const o = e.model.anatomy.ra.svc, len = e.model.dimensions.vein.svcLength!;
+      const inSvc = { x: o.center.x - o.axis.x * len * 0.4, y: o.center.y - o.axis.y * len * 0.4, z: o.center.z - o.axis.z * len * 0.4 };
+      e.setPlacement('circ', { kind: 'free', point: e.query.closestPoint(inSvc, svcVertices(e)).point, heightMm: 1, rotationDeg: 0, diameterMm: 20 });
+      e.tick(3000);
+      expect(r.step()).toBe('svc-isolation');
+      for (const p of svcRingPoints(e)) rfAt(e, p, 30, 30);
+    } else {
+      expect(r.step()).toBe('lva-map');
+      // 天蓋の低電位の点（channel の頂点、0.3 mV）を 5 点
+      const ch = roofSubstrate(e).channel.filter((_, i) => i % 10 === 0).slice(0, 5);
+      r.setPoints(ch.map((v, i) => ({ id: i, position: e.query.position(v), vertex: v, latMs: 0, voltageMv: 0.3, catheterId: 'abl', signal: 'bipolar', referenceTime: 0 } as MapPoint)));
+      const cut = channelCutPoints(e);
+      expect(r.step()).toBe('roof-driver');
+      for (const p of cut) rfAt(e, p, 30, 30);
+    }
+    // 通電の直後は「AF が止まった」の手順（頻拍の判定が解けるのを待つ）。止まれば再伝導の確認へ進む
+    expect(r.step()).toBe('af-stopped');
+    e.tick(15000);
+    expect(e.rhythm.state).not.toBe('tachycardia');
+    expect(r.step()).toBe('reconnection');
+    r.waitReconnection();
+    expect(r.step()).toBe('cure');
+    r.ui.cureOk = verifyCure(e, afScenario).every((c) => c.ok);
+    expect(r.step()).toBe('done');
+  }, 600_000);
 });
