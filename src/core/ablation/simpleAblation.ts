@@ -1,4 +1,5 @@
 import type { Lesion, Vec3 } from '../types';
+import { ABLATION } from '../params';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 
 /**
@@ -6,8 +7,7 @@ import type { SimulationEngine } from '../sim/SimulationEngine';
  * 半径以内は貫壁性の完全な病変（viability = 0・電位 0、伝導遮断）、その外側 BORDER_MM は部分的な傷害
  * （viability と電位が距離に比例して戻る）。Phase 5 で RF・クライオ・PFA の病変モデルに置き換える。
  * 半径 3 mm・境界 1 mm は仮定値（教育用近似）。
- * 境界の viability は 0 近くまで下がるため、伝導が極端に遅い頂点（2 mm に 300 ms 以上）ができ、
- * 線の端で遅れて隣を再興奮させることがある（RF・クライオ・PFA の病変モデルは t < 1 で viability ≧ 0.3 なので起きない）。
+ * 境界の viability の下限は病変モデルと同じ 0.3（以前は 0 近くまで下がり、伝導が極端に遅い頂点ができていた）。
  * UI からは外し、テストだけで使う。
  */
 export const SIMPLE_LESION_RADIUS_MM = 3;
@@ -24,7 +24,9 @@ export function ablateAt(engine: SimulationEngine, point: Vec3, radiusMm = SIMPL
   for (let v = 0; v < t.viability.length; v++) {
     const d = Math.hypot(p[3 * v] - cx, p[3 * v + 1] - cy, p[3 * v + 2] - cz);
     if (d > radiusMm + BORDER_MM) continue;
-    const keep = d <= radiusMm ? 0 : (d - radiusMm) / BORDER_MM;
+    // 縁は距離に比例して戻るが、下限は病変モデル（RF・クライオ・PFA）の t < 1 と同じ 1 − ABLATION.partialSlowing（= 0.3）。
+    // 0 近くまで下げると、伝導が極端に遅い頂点（2 mm に 300 ms 以上）ができ、線の端で遅れて隣を再興奮させていた
+    const keep = d <= radiusMm ? 0 : Math.max(1 - ABLATION.partialSlowing, (d - radiusMm) / BORDER_MM);
     t.viability[v] = Math.min(t.viability[v], keep);
     t.voltage[v] = Math.min(t.voltage[v], t.voltage[v] * keep);
   }

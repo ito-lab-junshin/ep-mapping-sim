@@ -9,8 +9,9 @@ export default defineConfig({
   testDir: 'e2e',
   timeout: 180_000,
   expect: { timeout: 15_000 },
-  fullyParallel: false,
-  workers: 2,
+  // テスト同士は独立しているので、ファイルの中でも並行して流す。手元（4 コア）は 4、CI は 3（2026-11-17 の計測：2 で約 4〜5 分、3 で 3.4 分、4 で 2.9 分）
+  fullyParallel: true,
+  workers: process.env.CI ? 3 : 4,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
