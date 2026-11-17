@@ -339,7 +339,6 @@ describe.each([['cryo', CRYO_TUTORIAL], ['pfa', PFA_TUTORIAL]] as const)('チュ
 import { SVC_TUTORIAL, PERSISTENT_TUTORIAL } from './tutorials';
 import { svcRingPoints, svcVertices } from '../arrhythmia/svc';
 import { channelCutPoints, roofSubstrate } from '../arrhythmia/persistent';
-import { pvRingPoints } from '../research/strategies';
 import type { AfType } from '../params';
 
 describe.each([['pvSvc', SVC_TUTORIAL], ['persistent', PERSISTENT_TUTORIAL]] as const)('チュートリアル：AF（%s）', (type, t) => {
@@ -350,9 +349,8 @@ describe.each([['pvSvc', SVC_TUTORIAL], ['persistent', PERSISTENT_TUTORIAL]] as 
     expect(r.step()).toBe('scenario');
     r.confirmed.add('scenario');
     expect(r.step()).toBe('pvi');
-    // PVI：SVC トリガーはクライオバルーン（閉塞度 1）、持続性 AF は RF の一周（チュートリアルの案内どおり。QA の所見 27）
+    // PVI：クライオバルーン（閉塞度 1）で 4 本。持続性 AF でもクライオの PVI の後に AF が続く（QA の所見 27 の回帰）
     for (const pv of PV_NAMES) {
-      if (type === 'persistent') { for (const p of pvRingPoints(e, pv, 5)) rfAt(e, p, 30, 30); continue; }
       e.ablation.cryo = { ...e.ablation.cryo, pv, push01: 1, misalignDeg: 0 };
       expect(e.ablation.start('cryo')).toBeNull();
       e.ablation.speed = 250;

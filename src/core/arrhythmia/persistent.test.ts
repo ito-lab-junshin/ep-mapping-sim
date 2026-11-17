@@ -135,3 +135,23 @@ describe('AF-3：持続性 AF（天蓋の低電位領域）', () => {
     expect(g.activeGoals().some((x) => x.id === 'lva-map')).toBe(false);
   }, 60_000);
 });
+
+describe('持続性 AF：旋回は長く続く（QA の所見 27）', () => {
+  it('持続性の型には PV のトリガーを置かない。旋回は 60 秒たっても規則的（約 194 ms）で、心房は不規則。60 秒後に PVI しても AF は続き、channel を横切る通電で止まる', () => {
+    const e = make();
+    expect(e.foci).toHaveLength(0);
+    e.tick(60000);
+    const cl = channelCl(e, 3000);
+    expect(cl).toBeGreaterThan(180); expect(cl).toBeLessThan(220);
+    expect(e.rhythm.state).toBe('tachycardia');
+    expect(irregularity(e).cv).toBeGreaterThan(0.15);
+    pvi(e);
+    e.tick(10000);
+    expect(e.rhythm.state, '60 秒後の PVI だけでは止まらない').toBe('tachycardia');
+    const cl2 = channelCl(e, 3000);
+    expect(cl2).toBeGreaterThan(180); expect(cl2).toBeLessThan(220);
+    for (const p of channelCutPoints(e)) rf(e, p);
+    e.tick(10000);
+    expect(e.rhythm.state).not.toBe('tachycardia');
+  }, 600_000);
+});

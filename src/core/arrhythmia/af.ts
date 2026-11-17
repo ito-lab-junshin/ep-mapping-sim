@@ -81,9 +81,10 @@ export const afScenario: ArrhythmiaScenario = {
         t.erp[v] = AF_SUBSTRATE.pvSleeveErpMs;
       }
     }
-    // トリガー
+    // トリガー。持続性の型には置かない：トリガーの速く不規則な興奮が天蓋の旋回の出口から入り込み、
+    // 約 10 秒で旋回を消してしまい、時間をかけた PVI だけで AF が止まっていた（QA の所見 27、先生と決定）
     engine.foci = [];
-    AF_TRIGGER_PVS.forEach((pv, i) => engine.addFocus(sleeveTip(engine, pv), AF_SUBSTRATE.triggerClMs[0], AF_SUBSTRATE.triggerClMs[1], 101 + i));
+    if (!persistent) AF_TRIGGER_PVS.forEach((pv, i) => engine.addFocus(sleeveTip(engine, pv), AF_SUBSTRATE.triggerClMs[0], AF_SUBSTRATE.triggerClMs[1], 101 + i));
     // 非 PV トリガー（AF-2）：SVC の心筋スリーブの先端
     if (type === 'pvSvc') {
       for (const v of svcVertices(engine)) {
@@ -170,7 +171,7 @@ export const afScenario: ArrhythmiaScenario = {
     },
     {
       id: 'persistent-af-stopped', label: 'AF が止まり、洞調律に戻ったことを確認する',
-      hint: 'PVI と天蓋の旋回の通電が終わると、PV のトリガーは隔離された PV の中だけで発火する',
+      hint: '天蓋の旋回が止まると、心房は洞調律に戻る（持続性の型では PV のトリガーを置いていない）',
       applies: persistentGoal,
       achieved: ({ engine }) => isolatedPvs(engine).length === PV_NAMES.length && engine.rhythm.state !== 'tachycardia' && engine.rhythm.state !== 'pacing'
         && roofDriverStopped(engine),
