@@ -1,4 +1,4 @@
-import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, VENTRICLE_ERP_MS, type ApSite } from '../params';
+import { ACCESSORY_PATHWAY, AV_NODE, HIS_ERP_MS, HV_MS, PARA_HISIAN, VENTRICLE_ERP_MS, type ApSite } from '../params';
 import { antegradeTime, fastPathway, pathwayStatus, type PathwayState } from './AvNode';
 
 /** 心室の興奮（QRS 開始）の記録 */
@@ -30,7 +30,7 @@ export interface AccessoryPathwayState {
 
 type Event =
   | { time: number; kind: 'common'; pathway: number }
-  | { time: number; kind: 'ventricle'; source: VentricularBeat['source'] }
+  | { time: number; kind: 'ventricle'; source: VentricularBeat['source']; paraHis?: 'high' | 'low' }
   | { time: number; kind: 'apRetro' }
   | { time: number; kind: 'hisRetro' };
 
@@ -122,12 +122,19 @@ export class ConductionSystem {
     this.schedule({ time: t, kind: 'ventricle', source: 'pace' });
   }
 
+  /**
+   * para-Hisian 刺激（PARA_HISIAN）：高出力は His と心室を同時に捕捉（QRS は His 経由の形）、低出力は心室だけ（刺激の形）
+   */
+  paceParaHis(t: number, output: 'high' | 'low') {
+    this.schedule({ time: t, kind: 'ventricle', source: output === 'high' ? 'his' : 'pace', paraHis: output });
+  }
+
   /** 時刻 until までのイベントを処理する */
   advance(until: number) {
     while (this.queue.length && this.queue[0].time <= until) {
       const e = this.queue.shift()!;
       if (e.kind === 'common') this.onCommon(e.time, e.pathway);
-      else if (e.kind === 'ventricle') this.onVentricle(e.time, e.source);
+      else if (e.kind === 'ventricle') this.onVentricle(e.time, e.source, e.paraHis);
       else if (e.kind === 'hisRetro') this.onHisRetro(e.time);
       else this.onApRetro(e.time);
     }
@@ -158,7 +165,7 @@ export class ConductionSystem {
     });
   }
 
-  private onVentricle(t: number, source: VentricularBeat['source']) {
+  private onVentricle(t: number, source: VentricularBeat['source'], paraHis?: 'high' | 'low') {
     if (t - this.lastV < this.ventricleErpMs) {
       // 副伝導路で先に興奮した拍に、His 経由の興奮が後から届いた（融合）
       const last = this.vBeats[this.vBeats.length - 1];
@@ -168,12 +175,14 @@ export class ConductionSystem {
     this.lastV = t;
     this.vBeats.push(source === 'ap' && this.ap ? { time: t, source, apSite: this.ap.site } : { time: t, source });
     if (this.vBeats.length > KEEP) this.vBeats.shift();
-    // 刺激による心室の興奮は His を逆行する（房室結節の逆行伝導、VA 伝導）
-    if (source === 'pace') this.schedule({ time: t + AV_NODE.retrograde.vhMs, kind: 'hisRetro' });
+    // 刺激による心室の興奮は His を逆行する（房室結節の逆行伝導、VA 伝導）。
+    // para-Hisian の高出力は His を直接捕捉する（刺激と同時に逆行を始める）、低出力は心室を回って lowOutputVhMs 後
+    if (paraHis) this.schedule({ time: t + (paraHis === 'high' ? 0 : PARA_HISIAN.lowOutputVhMs), kind: 'hisRetro' });
+    else if (source === 'pace') this.schedule({ time: t + AV_NODE.retrograde.vhMs, kind: 'hisRetro' });
     // 副伝導路を逆行して心房へ（副伝導路自身が起こした興奮は不応期で戻らない）
     const ap = this.ap;
     if (ap) {
-      const reach = t + (source === 'ap' ? 0 : ap.ventricularDelayMs);
+      const reach = t + (paraHis ? PARA_HISIAN.apDelayMs[ap.site] : source === 'ap' ? 0 : ap.ventricularDelayMs);
       this.schedule({ time: reach, kind: 'apRetro' });
     }
   }

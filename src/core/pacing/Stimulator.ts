@@ -1,6 +1,7 @@
 /** 刺激の対象：心房メッシュの頂点、または心室（1 コンパートメント） */
 /** none：電極が接触していない（刺激アーチファクトは出るが、捕捉しない） */
-export type StimTarget = { kind: 'atrium'; vertex: number } | { kind: 'ventricle' } | { kind: 'none' };
+/** 刺激の対象：心房の頂点・心室（RV）・His 近傍（para-Hisian、高出力は His も捕捉）・捕捉しない */
+export type StimTarget = { kind: 'atrium'; vertex: number } | { kind: 'ventricle' } | { kind: 'paraHis'; output: 'high' | 'low' } | { kind: 'none' };
 
 export interface Stimulus { time: number; target: StimTarget; label?: string }
 

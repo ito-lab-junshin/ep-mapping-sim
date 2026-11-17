@@ -190,3 +190,20 @@ test('アデノシン負荷：誘発した AVNRT が、画面のボタンで房�
   await expect(page.locator('.rhythm')).not.toContainText('頻拍（tachycardia）');
   expectNoErrors(o);
 });
+
+test('para-Hisian 刺激：後中隔の副伝導路で、高出力と低出力の S-A が変わらず、経路を答えるとゴールに ✓', async ({ page }) => {
+  const o = await open(page, 'case=wpw&ap=posteroseptal');
+  const panel = page.locator('.para-hisian');
+  await panel.getByRole('button', { name: 'para-Hisian 刺激を行う' }).click();
+  const table = panel.locator('table');
+  await expect(table).toContainText('HRA');
+  await expect(table).toContainText('His 部位');
+  // 副伝導路を逆行するので、HRA の差は ±5 ms 以内
+  const diffText = await table.locator('tr', { hasText: 'HRA' }).locator('td').nth(3).textContent();
+  expect(Math.abs(parseInt(diffText!.replace(/[^\d-]/g, ''), 10))).toBeLessThanOrEqual(5);
+  await expect(table.locator('tr', { hasText: 'QRS' })).toContainText('狭い');
+  await panel.getByRole('button', { name: '副伝導路' }).click();
+  await expect(panel).toContainText('正解です');
+  await expect(page.locator('.goals li.ok', { hasText: 'para-Hisian' })).toHaveCount(1);
+  expectNoErrors(o);
+});

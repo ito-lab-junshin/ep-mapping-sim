@@ -1,3 +1,4 @@
+import { paraHisianGoal } from '../pacing/paraHisianGoal';
 import type { ArrhythmiaScenario } from '../types';
 import { slowPathway } from '../conduction/AvNode';
 import { distance, protocolEvents, protocolsAfterLastLesion } from '../learning/conditions';
@@ -60,6 +61,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
     }];
   },
   energies: ['rf'],
+  maneuvers: ['paraHisian'],
   goals: [
     {
       id: 'his', label: 'His 束電位を記録し Koch 三角の範囲を把握する',
@@ -86,6 +88,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
       achieved: (ctx) => protocolsAfterLastLesion(ctx).some((e) => e.status === 'noninducible')
         && slowPathwayAblatedFraction(ctx.engine) >= AV_NODE.slowRegion.modifyFraction,
     },
+    paraHisianGoal,
     reconnectionGoal(() => avnrtScenario),
   ],
 };

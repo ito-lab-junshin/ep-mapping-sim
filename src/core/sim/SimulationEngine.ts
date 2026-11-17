@@ -25,11 +25,12 @@ export interface EngineOptions {
 const ECG_LEADS: EcgLead[] = ['I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6'];
 
 /** 刺激部位（docs/DESIGN.md §5.6） */
-export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'HALO_DIST' | 'ABL' | 'CIRC' | 'RV';
+export type PacingSite = 'HRA' | 'CS_PROX' | 'CS_DIST' | 'CS_OS' | 'LOW_LATERAL_RA' | 'HALO_DIST' | 'ABL' | 'CIRC' | 'RV' | 'PARA_HIS_HIGH' | 'PARA_HIS_LOW';
 
 export const PACING_SITE_LABEL: Record<PacingSite, string> = {
   HRA: 'HRA', CS_PROX: 'CS 近位（9-10）', CS_DIST: 'CS 遠位（1-2）', CS_OS: 'CS 口',
   LOW_LATERAL_RA: '低位外側 RA', HALO_DIST: 'ハロー遠位（1-2）', ABL: 'ABL 先端', CIRC: '環状（1-2）', RV: 'RV（心室）',
+  PARA_HIS_HIGH: 'His 近傍・高出力（His＋心室を捕捉）', PARA_HIS_LOW: 'His 近傍・低出力（心室だけを捕捉）',
 };
 
 /** 異所性興奮の焦点（AF の PV トリガーなど）：周期 minCl〜maxCl ms でランダムに発火 */
@@ -222,6 +223,7 @@ export class SimulationEngine {
     for (const st of this.stimulator.take(until)) {
       if (st.target.kind === 'atrium') ca.excite(st.target.vertex, st.time);
       else if (st.target.kind === 'ventricle') this.conduction.paceVentricle(st.time);
+      else if (st.target.kind === 'paraHis') this.conduction.paceParaHis(st.time, st.target.output);
       this.lastArtifact = st.time;
     }
     // 通電（通電の時計で病変を育てる。接合部調律を出すこともある）
@@ -306,6 +308,9 @@ export class SimulationEngine {
 
   siteTarget(site: PacingSite): StimTarget {
     if (site === 'RV') return { kind: 'ventricle' };
+    // His 近傍（para-Hisian）：His カテーテルの位置から。高出力は His と心室、低出力は心室だけを捕捉する（PARA_HISIAN）
+    if (site === 'PARA_HIS_HIGH') return { kind: 'paraHis', output: 'high' };
+    if (site === 'PARA_HIS_LOW') return { kind: 'paraHis', output: 'low' };
     const a = this.model.anatomy;
     const nearest = (cathId: string, electrode: number, fallback: number) => {
       const c = this.catheter(cathId);

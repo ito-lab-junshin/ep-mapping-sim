@@ -70,11 +70,11 @@
 | `InterAtrialBridge.crossingMs` / `CellularAutomaton.setBridges` | 心房間の連結を渡る時間 ms（距離によらない）と、エンジンごとの連結の差し替え（AFL の基質で使う。Phase 7 の追補） |
 | `LesionField`（`src/core/ablation/LesionModel.ts`） | 頂点ごとの貫壁性 0〜1（病変の深さ / その頂点の壁厚）。1 で伝導遮断（viability 0・電位 0）、1 未満は viability = 1 − 0.7 × 貫壁性（伝導は遅くなるが残る）、電位 × (1 − 貫壁性) |（浮腫・再伝導の追補：頂点ごとの浮腫 `edema` 0〜1 を加え、t + r ≧ 1 で伝導遮断。処置の時計 `procedureMin`（分）で浮腫が引く。`wait(分)`・`setAdenosine`・`withoutEdema(fn)`。傷害を置く前の組織の値を頂点ごとに保存し、浮腫が引くと戻す）
 | `AblationController` / `AblationMetrics` | 通電の状態機械（`engine.ablation`）。RF・クライオは通電の時計（倍速）で病変を育て、PFA は 1 回ずつ瞬時。指標（`AblationMetrics`）を UI に渡し、通電を止めると病変タグ（`Lesion`）を残す |
-| `ArrhythmiaScenario` | 不整脈ごとの `setupSubstrate(engine, options?)`（基質。`options` は症例の選択肢 `CaseOptions`）、推奨の誘発法 `induction`（`extrastimulus`／`burst`／`spontaneous` と刺激部位。選択肢で変わる症例は `inductionFor(options)`、取り出しは `scenarioInduction`）、構造的な根治の基準 `structuralChecks(engine)`、学習ゴール `goals: LearningGoal[]`（Phase 6 で文字列から判定つきに変更）。主に表示する心腔 `chambers` と、使う解剖寸法セット `anatomy`（`'normal'`／`'afRemodeled'`／`'aflRemodeled'`、§9.1）。使えるエネルギー `energies`（クライオバルーン・PFA は AF だけ）。隙間のヒントの一覧 `gapHints(engine)`（任意。AF は PV 4 本と pvSvc の型では SVC、AFL は CTI の線）。誘発と「同じプロトコルで非誘発」の確認は `src/core/arrhythmia/common.ts`（複製したエンジンで刺激プロトコルを走らせる） |
+| `ArrhythmiaScenario` | 不整脈ごとの `setupSubstrate(engine, options?)`（基質。`options` は症例の選択肢 `CaseOptions`）、推奨の誘発法 `induction`（`extrastimulus`／`burst`／`spontaneous` と刺激部位。選択肢で変わる症例は `inductionFor(options)`、取り出しは `scenarioInduction`）、構造的な根治の基準 `structuralChecks(engine)`、学習ゴール `goals: LearningGoal[]`（Phase 6 で文字列から判定つきに変更）。主に表示する心腔 `chambers` と、使う解剖寸法セット `anatomy`（`'normal'`／`'afRemodeled'`／`'aflRemodeled'`、§9.1）。使えるエネルギー `energies`（クライオバルーン・PFA は AF だけ）。使える手技 `maneuvers`（`'paraHisian'`：AVNRT・WPW）。隙間のヒントの一覧 `gapHints(engine)`（任意。AF は PV 4 本と pvSvc の型では SVC、AFL は CTI の線）。誘発と「同じプロトコルで非誘発」の確認は `src/core/arrhythmia/common.ts`（複製したエンジンで刺激プロトコルを走らせる） |
 | `CureCheck` | 根治判定の基準 1 つ分（id・説明・成否） |
 | `CaseOptions` / `ApSite` / `AfType` | 症例の選択肢（Phase 7 の追補）：WPW の副伝導路の部位 `apSite`（`leftFreeWall`／`rightFreeWall`／`posteroseptal`／`anteroseptal`、§5.4）と部位を伏せるか `apHidden`、AF の型 `afType`（`pv`＝PV トリガーだけ（既定）／`pvSvc`＝PV と SVC のトリガー／`persistent`＝持続性：天蓋の低電位領域の旋回、§5.1）。エンジンは `engine.caseOptions` に保ち、複製（`cloneWithSubstrate`）・`CaseState`・一括実行（`options`・`optionSweep`）・URL（`ap`・`aphide`・`aftype`）に引き継ぐ |
 | `ConductionSystem` / `VentricularBeat` | 刺激伝導系（`src/core/conduction`）：房室結節の経路（入口頂点・伝導時間・ERP・減衰伝導・逆行。遅伝導路は入口の領域 `region` と焼けた割合 `ablatedFraction`、状態 `pathwayStatus`＝離断／修飾／正常）、His、心室の 1 コンパートメント、副伝導路。心室の拍は興奮の由来（`his`／`ap`／`pace`）と、早期興奮のときの His 経由の到達時刻・副伝導路の部位 `apSite`（デルタ波の向き）をもつ。副伝導路の状態 `AccessoryPathwayState` は部位 `site` と途絶 `interrupted`（付着部のどれかが焼けた）をもつ |
-| `Stimulus` / `ProtocolConfig` / `TrainResult` | 刺激（時刻と対象 `StimTarget`：心房の頂点・心室・`none`（電極が接触していない＝刺激アーチファクトだけで捕捉しない、Phase 6））、刺激プロトコルの設定（§5.6）、列ごとの結果（捕捉・AH・エコー・誘発）（`src/core/pacing`） |
+| `Stimulus` / `ProtocolConfig` / `TrainResult` | 刺激（時刻と対象 `StimTarget`：心房の頂点・心室・His 近傍 `paraHis`（出力 high／low、4-A）・`none`（電極が接触していない＝刺激アーチファクトだけで捕捉しない、Phase 6））、刺激プロトコルの設定（§5.6）、列ごとの結果（捕捉・AH・エコー・誘発）（`src/core/pacing`） |
 
 | `MapType` | 3D ビューの表示モード（`live`：実時間の伝播／`lat`／`voltage`／`propagation`：LAT マップの再生／`regions`） |
 | `LatMethod` | LAT の取り方（`bipolarPeak`：双極の最大振幅／`unipolarDvdt`：単極の −dV/dt 最大） |
@@ -162,6 +162,7 @@
 | 心室刺激での逆行伝導（VA 伝導、Phase 7 の追補） | 心室 → His 40 ms → 結節の逆行（速伝導路の入口から心房へ）：基本 88 ms ＋ 70 ms × exp(−(c − 245 ms) / 70 ms)。c は His への到着から前回の逆行伝導の終わりまでの回復時間で、245 ms 未満はブロック。全症例 | 刺激周期 600 ms で VA 約 130 ms（求心性：房室結節の付近が最早、CS は近位から遠位）、400 ms で VA が延びてから途絶える（逆行性 Wenckebach）、380 ms で 3:2。His の不応期中（順行の興奮が直前に通った）は逆行しない。WPW では副伝導路の逆行（VA 約 95 ms）が先に届き偏心性のまま |
 | His の ERP | 250 ms（心室 ERP と同じ値） | His と心室の不応期を分ける（WPW で心室が先に興奮しても H 電位が出る） |
 | 副伝導路の心室付着部までの心室内伝導（部位ごと、Phase 7 の追補で部位別に） | 左側自由壁 80・右側自由壁 70・後中隔 75・前中隔 75 ms（`ACCESSORY_PATHWAY.sites`） | 順行性 AVRT の VA（＝これ ＋ 15 ms）は 95・85・90・90 ms（すべて > 70 ms）。中隔は房室結節と付着部が近く、VA が 70 ms 未満では副伝導路から戻った興奮が付着部の周りの心房の不応期に当たり頻拍が続かなかった（試算）。臨床では中隔の VA が最も短いことが多いが、本モデルではこの制約で 90 ms に置いた |
+| para-Hisian 刺激（4-A、`PARA_HISIAN`） | 高出力は His と心室を同時に捕捉（His は刺激と同時に房室結節を逆行、QRS は狭い）、低出力は心室だけ（His には lowOutputVhMs = 50 ms 後に逆行、QRS は広い）。副伝導路の心室付着部には、出力によらず刺激から 前中隔 10・後中隔 25・右側自由壁 50・左側自由壁 70 ms | 仮定値（教育用近似。中隔は短く側壁は長い関係だけを保つ、先生と決定）。試算：AVNRT（房室結節だけ）は低出力で S-A が HRA・His 部位・CS 遠位とも +50 ms。中隔の副伝導路は変わらない（前中隔 HRA 77 ms・後中隔 95 ms）。右側自由壁は HRA で変わらない。左側自由壁は His 部位で +50 ms（房室結節が先に届く）、CS 遠位は変わらない（112 ms）。続けて刺激すると AVNRT の症例ではエコーで AVNRT が始まるので、洞調律を止めて 1 発で測る |
 | WPW の房室結節の ERP | 250 ms | 副伝導路の順行性 ERP（280 ms）より短くして誘発の窓をつくる |
 | AF：心房筋の ERP | 160〜200 ms（斑状のばらつき） | §5.1 の範囲 |
 | AF：PV スリーブ・トリガー | 0.5 mm/ms・ERP 180 ms、LSPV・RSPV の先端で周期 150〜250 ms | §4.2・§5.1 の値 |
@@ -303,6 +304,8 @@
 値は操作パネル（刺激パネル）で変更でき、変更内容と症例は URL パラメータに保存して授業で共有できる（例：`?case=avnrt&kind=extrastimulus&site=HRA&s1=600&n=8&s2=500&s2min=150`）。WPW は副伝導路の部位（`ap=posteroseptal` など）と部位を伏せるか（`aphide=1`）も保存する。
 
 刺激プロトコルは `ProtocolSession`（`src/core/pacing`）で、エンジンの時刻で進む状態機械として UI とテストの両方で使う。列ごとに 1,500 ms 観察し、周期 400 ms 未満の興奮が刺激をやめてから 5 秒以上続けば誘発と判定する。S2 の下限、または捕捉されなくなる（有効不応期）まで誘発されなければ非誘発。列ごとに捕捉・AH（His カテーテル部位の心房興奮 → His）・エコーを記録し、AH の jump（≧ 50 ms）を表で見られる。
+
+**para-Hisian 刺激（4-A）**：刺激部位「His 近傍・高出力（His＋心室を捕捉）」「His 近傍・低出力（心室だけを捕捉）」。刺激パネルの「para-Hisian 刺激」（AVNRT・WPW）は、同じ症例・病変の複製で洞調律を止めて高出力・低出力を 1 発ずつ刺激し、刺激から HRA・His 部位・CS 遠位の心房興奮までの時間（S-A）と QRS（狭い・広い）を表に並べる（`paraHisianResponse`、`src/core/pacing/paraHisian.ts`）。判定は学習者に任せ、逆行性伝導の経路（房室結節か副伝導路か）を答える設問を学習ゴールにする（`paraHisianGoal`）
 
 ---
 
@@ -537,7 +540,7 @@
 ## 13. 検証
 
 - `src/core` は vitest で単体テスト（伝播が全頂点に届く、病変が遮断する、各シナリオで誘発→根治が成立する、など）
-- 画面の操作の流れは Playwright の E2E（`e2e/`、`npm run e2e`：本番と同じビルドを `vite preview` で開き Chromium で操作する。WebGL はソフトウェア描画）。起動・症例と選択肢・テーマ・体表 ECG の誘導数・マップ・刺激・通電と注意・クライオ／PFA・浮腫と再伝導・アデノシンによる頻拍の停止・根治判定・URL・研究用 JSON・収集モード・チュートリアル 9 本を確かめる（22 本。ファイルの中でも並行に流し、手元 4・CI 3 の並列で約 3 分）。CI は `.github/workflows/e2e.yml`（main への push と手動。Pages の公開とは別で、失敗しても公開は止めない）
+- 画面の操作の流れは Playwright の E2E（`e2e/`、`npm run e2e`：本番と同じビルドを `vite preview` で開き Chromium で操作する。WebGL はソフトウェア描画）。起動・症例と選択肢・テーマ・体表 ECG の誘導数・マップ・刺激・通電と注意・クライオ／PFA・浮腫と再伝導・アデノシンによる頻拍の停止・根治判定・URL・研究用 JSON・収集モード・チュートリアル 9 本・para-Hisian 刺激を確かめる（23 本。ファイルの中でも並行に流し、手元 4・CI 3 の並列で約 3 分）。CI は `.github/workflows/e2e.yml`（main への push と手動。Pages の公開とは別で、失敗しても公開は止めない）
 - E2E 用の口：URL に `?e2e=1` を付けたときだけ `window.__ep`（`src/state/e2eHooks.ts`）を出す。3D 上のカテーテル操作（解剖の目印・頂点・PV の中に置く）、時間の早送り（刺激プロトコル・ゴール・調律の表示も進める）、多数点の RF 通電、状態の読み取りだけを提供し、画面のボタン・選択・表示は本物の操作で確かめる。画面の URL の同期では `e2e` は残らない
 - チュートリアルを人が通して操作した確認と、E2E で見つかった不具合は `docs/QA_LOG.md` に記録する
 - 電気生理の妥当性は不整脈専門医・経験豊富なメディカルスタッフのレビューで確認し、`docs/REVIEW_LOG.md` に記録する

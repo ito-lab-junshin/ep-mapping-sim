@@ -171,6 +171,18 @@ export const ACCESSORY_PATHWAY = {
     anteroseptal: { ventricularDelayMs: 75 },
   } as Record<ApSite, { ventricularDelayMs: number }>,
 };
+/**
+ * para-Hisian 刺激（His 束近傍の刺激。4-A、先生と決定）。値はすべて仮定値（教育用近似）。
+ *  - 高出力：His と周りの心室を同時に捕捉する。His は刺激と同時に興奮して房室結節を逆行し、QRS は狭い（His 経由の形）
+ *  - 低出力：心室だけを捕捉する。His には心室を回って lowOutputVhMs 後に逆行して届き、QRS は広い（刺激の形）
+ *  - 副伝導路の心室付着部には、出力によらず刺激から apDelayMs で届く（His 近傍からの距離：中隔は短く、側壁は長い）
+ * 房室結節を逆行するなら低出力で S-A が lowOutputVhMs ほど延び、副伝導路を逆行するなら S-A は変わらない
+ */
+export const PARA_HISIAN = {
+  lowOutputVhMs: 50,
+  apDelayMs: { anteroseptal: 10, posteroseptal: 25, rightFreeWall: 50, leftFreeWall: 70 } as Record<ApSite, number>,
+};
+
 /** 刺激（ペーシング）のアーチファクト mV（全チャンネルに 1 サンプル） */
 export const PACING_ARTIFACT_MV = 0.8;
 

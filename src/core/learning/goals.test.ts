@@ -1,3 +1,4 @@
+import { retrogradeRoute } from '../pacing/paraHisianGoal';
 import { describe, it, expect } from 'vitest';
 import { loadParametricSync } from '../geometry/ChamberLoader';
 import { SimulationEngine } from '../sim/SimulationEngine';
@@ -74,6 +75,8 @@ describe('学習ゴール：AF（PVI）', () => {
     expect(protocolStartState(e, 'CIRC')).toEqual({ contact: true, circPv: 'LSPV', circPvIsolated: true });
     t.record(protocol(e, 'CIRC', 'noninducible', protocolStartState(e, 'CIRC')));
     t.update(e);
+    // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
+    if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);
@@ -151,6 +154,8 @@ describe('学習ゴール：AVNRT', () => {
     expect(t.isAchieved('noninducible')).toBe(false);
     t.record(protocol(e, 'HRA', 'noninducible'));
     t.update(e);
+    // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
+    if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);
@@ -178,6 +183,8 @@ describe('学習ゴール：WPW', () => {
     expect(t.isAchieved('ap-ablation')).toBe(true);
     t.record(protocol(e, 'CS_DIST', 'noninducible'));
     t.update(e);
+    // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
+    if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);

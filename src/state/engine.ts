@@ -1,3 +1,4 @@
+import { PARA_HISIAN_QUESTION, retrogradeRoute } from '../core/pacing/paraHisian';
 import { ProtocolSession, type ProtocolConfig } from '../core/pacing/ProtocolSession';
 import type { ArrhythmiaId, CaseOptions, CureCheck } from '../core/types';
 import type { ApSite } from '../core/params';
@@ -265,6 +266,13 @@ export function answerApSite(engine: SimulationEngine, id: ArrhythmiaId, value: 
   if (!actual) return null;
   recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: AP_SITE_QUESTION, value, correct: value === actual });
   return value === actual;
+}
+
+/** para-Hisian 刺激の設問：逆行性伝導の経路（房室結節か副伝導路か）を答える */
+export function answerParaHisian(engine: SimulationEngine, id: ArrhythmiaId, value: 'node' | 'ap'): boolean {
+  const correct = value === retrogradeRoute(engine);
+  recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: PARA_HISIAN_QUESTION, value, correct });
+  return correct;
 }
 
 /** 定期的に呼ぶ（Scene）：ゴールを判定し、新しく達成したら UI に知らせる */
