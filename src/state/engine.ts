@@ -231,8 +231,8 @@ function updateEntrainment() {
   if (entrainment.done) useSim.getState().bumpProtocol();
 }
 
-/** エントレインメントの設問：AVNRT か AVRT かを答える */
-export function answerEntrainment(engine: SimulationEngine, id: ArrhythmiaId, value: 'avnrt' | 'avrt'): boolean {
+/** エントレインメントの設問：AVNRT・AVRT・AT のどれかを答える */
+export function answerEntrainment(engine: SimulationEngine, id: ArrhythmiaId, value: 'avnrt' | 'avrt' | 'at'): boolean {
   const correct = value === tachycardiaMechanism(id);
   recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: ENTRAINMENT_QUESTION, value, correct });
   return correct;

@@ -7,10 +7,10 @@ import type { LearningGoal } from '../types';
 /** 学習の設問の id（answer の question） */
 export const ENTRAINMENT_QUESTION = 'entrainment';
 
-/** 学習ゴール（AVNRT・WPW）：頻拍中の右室刺激の後の PPI − TCL・SA − VA から、AVNRT か AVRT かを答える */
+/** 学習ゴール（AVNRT・WPW・AT）：頻拍中の右室刺激の後の反応（V-A-V／V-A-A-V）と PPI − TCL・SA − VA から、AVNRT・AVRT・AT のどれかを答える */
 export const entrainmentGoal: LearningGoal = {
   id: 'entrainment',
-  label: '頻拍中の右室刺激（エントレインメント）で、AVNRT か AVRT かを見分ける',
-  hint: '頻拍を誘発し、刺激パネルの「エントレインメント」で頻拍周期より 20〜40 ms 短く右室から刺激する。止めた後の PPI − TCL と SA − VA を目安と比べる',
+  label: '頻拍中の右室刺激（エントレインメント）で、AVNRT・AVRT・AT を見分ける',
+  hint: '頻拍を誘発し、刺激パネルの「エントレインメント」で頻拍周期より 20〜40 ms 短く右室から刺激する。止めた後の反応（V-A-V か V-A-A-V か）と、PPI − TCL・SA − VA を目安と比べる',
   achieved: ({ events }) => events.some((e) => e.kind === 'answer' && e.question === ENTRAINMENT_QUESTION && e.correct),
 };

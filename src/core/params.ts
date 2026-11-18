@@ -398,3 +398,15 @@ export const ABLATION = {
   sinusNodeWarningMm: 5,
   phrenicWarningMm: 5,
 };
+
+/**
+ * 巣状の心房頻拍（AT、docs/DESIGN.md §4.2・§5）。仮定値（教育用近似）：
+ *  - 巣は RA の分界稜の中ほど（巣状 AT のよくある部位）の 1 頂点。周期 380 ms（± 10 ms）で発火し、外からの興奮でリセットされる
+ *  - triggered activity として扱い、巣の頂点が連結期 300 ms 以下で 2 回続けて興奮する（HRA からのバースト・短い期外刺激）と発火を始める
+ *  - 逆行伝導は AVNRT の症例と同じ良い逆行（AV_NODE.retrograde.avnrt。頻拍中の心室刺激で心房が追従し、V-A-A-V が出るように）
+ */
+export const AT_SUBSTRATE = {
+  minClMs: 370,
+  maxClMs: 390,
+  triggerCouplingMs: 300,
+};

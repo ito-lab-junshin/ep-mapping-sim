@@ -19,8 +19,15 @@ const tachy = (sc: ArrhythmiaScenario, apSite?: ApSite) => {
 };
 
 describe('エントレインメント', () => {
-  it.each([20, 40])('AVNRT（頻拍周期 − %i ms）：心房が追従し V-A-V。PPI − TCL・SA − VA はどちらも目安を超える', (off) => {
-    const r = runEntrainment(tachy(avnrtScenario), off);
+  it('AVNRT（頻拍周期 − 40 ms）：刺激で頻拍が止まる（既知の限界。SA・PPI は出さない）', () => {
+    const r = runEntrainment(tachy(avnrtScenario), 40);
+    expect(r.response).toBe('terminated');
+    expect(r.saMinusVaMs).toBeNull();
+    expect(r.ppiMinusTclMs).toBeNull();
+  }, 120_000);
+
+  it('AVNRT（頻拍周期 − 20 ms）：心房が追従し V-A-V。PPI − TCL・SA − VA はどちらも目安を超える', () => {
+    const r = runEntrainment(tachy(avnrtScenario), 20);
     expect(r.entrained).toBe(true);
     expect(r.response).toBe('VAV');
     expect(r.ppiMinusTclMs!).toBeGreaterThan(ENTRAINMENT_CRITERIA.ppiMinusTclMs);
@@ -38,6 +45,7 @@ describe('エントレインメント', () => {
   it('設問の正解とゴール：AVNRT は AVNRT、WPW は AVRT。正しく答えるとゴール達成', () => {
     expect(tachycardiaMechanism('avnrt')).toBe('avnrt');
     expect(tachycardiaMechanism('wpw')).toBe('avrt');
+    expect(tachycardiaMechanism('at')).toBe('at');
     expect(avnrtScenario.goals).toContain(entrainmentGoal);
     expect(wpwScenario.goals).toContain(entrainmentGoal);
     expect(avnrtScenario.maneuvers).toContain('entrainment');

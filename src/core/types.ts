@@ -10,7 +10,7 @@ import type { AfType, ApSite } from './params';
 export type MappingSystemId = 'carto' | 'ensite' | 'opal';
 
 /** 不整脈シナリオ */
-export type ArrhythmiaId = 'af' | 'afl_cti' | 'afl_cti_cw' | 'avnrt' | 'wpw';
+export type ArrhythmiaId = 'af' | 'afl_cti' | 'afl_cti_cw' | 'avnrt' | 'wpw' | 'at';
 
 /** 心腔（BIATRIAL = LA と RA を連結した 1 つのメッシュ） */
 export type ChamberId = 'LA' | 'RA' | 'LV' | 'RV' | 'CS' | 'BIATRIAL';
@@ -314,7 +314,7 @@ export type LearningEvent =
   | { kind: 'answer'; time: number; question: 'afl-direction'; value: 'ccw' | 'cw'; correct: boolean }
   | { kind: 'answer'; time: number; question: 'ap-site'; value: ApSite; correct: boolean }
   | { kind: 'answer'; time: number; question: 'para-hisian'; value: 'node' | 'ap'; correct: boolean }
-  | { kind: 'answer'; time: number; question: 'entrainment'; value: 'avnrt' | 'avrt'; correct: boolean }
+  | { kind: 'answer'; time: number; question: 'entrainment'; value: 'avnrt' | 'avrt' | 'at'; correct: boolean }
   /** 再伝導の確認（浮腫・再伝導）：待機時間（分）またはアデノシン負荷。lesionCount はそのときの病変の数 */
   | { kind: 'wait'; time: number; minutes: number; lesionCount: number }
   | { kind: 'adenosine'; time: number; lesionCount: number };

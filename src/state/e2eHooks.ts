@@ -8,6 +8,7 @@ import { acquireNow, getAcquisition, getEngine, getGoalTracker, getPoints, place
 import { ctiLinePoints, pvRingPoints } from '../core/research/strategies';
 import { svcRingPoints, svcVertices } from '../core/arrhythmia/svc';
 import { channelCutPoints, roofSubstrate } from '../core/arrhythmia/persistent';
+import { atFocusVertex } from '../core/arrhythmia/at';
 
 /**
  * E2E テスト用の口（docs/DESIGN.md §13）。URL に ?e2e=1 を付けたときだけ window.__ep に出す。
@@ -107,6 +108,11 @@ const api = {
       return e.query.closestPoint({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }).point;
     },
     apVertices: () => [...(engine().conduction.ap?.vertices ?? [])],
+    /** 心房頻拍の巣の頂点と、RA の壁に散らばる n 点の頂点（最早期部位のマッピング用。巣が先頭） */
+    atMapping: (n = 5) => {
+      const e = engine(), ra = e.mesh.parts![1];
+      return [atFocusVertex(e), ...Array.from({ length: n }, (_, i) => ra.vertexStart + Math.floor(((i + 0.5) * ra.vertexCount) / n))];
+    },
     /** 僧帽弁輪の縁の頂点のうち、側方（+x）から順に n 点（間隔 every 頂点。WPW の最早期部位のマッピング用） */
     mitralLateral: (n = 6, every = 3) => {
       const e = engine(), p = e.mesh.positions;

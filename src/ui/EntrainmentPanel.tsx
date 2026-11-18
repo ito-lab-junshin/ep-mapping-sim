@@ -28,9 +28,9 @@ export function EntrainmentPanel() {
   const running = !!mine && !mine.done;
   const protocolRunning = !!currentSession() && currentSession()!.engine === engine && !currentSession()!.done;
   const r = mine?.result ?? null;
-  const answer = (v: 'avnrt' | 'avrt') => {
+  const answer = (v: 'avnrt' | 'avrt' | 'at') => {
     const ok = answerEntrainment(engine, arrhythmia, v);
-    setFeedback(ok ? '正解です' : '違います。PPI − TCL（心室から回路までの距離）と SA − VA（刺激の後の心房までの時間と頻拍中の VA の差）を目安と見比べましょう');
+    setFeedback(ok ? '正解です' : '違います。止めた後の反応（V-A-V か V-A-A-V か）、PPI − TCL（心室から回路までの距離）、SA − VA（刺激の後の心房までの時間と頻拍中の VA の差）を見直しましょう');
   };
   const over = (x: number | null, th: number) => (x === null ? '' : x > th ? '（目安を超える）' : '（目安以下）');
   return (
@@ -41,7 +41,7 @@ export function EntrainmentPanel() {
       <button style={{ borderColor: theme.colors.accent }} disabled={rhythm !== 'tachycardia' || running || protocolRunning}
         onClick={() => { startEntrainment(engine, offset); setFeedback(null); }}>エントレインメントを行う</button>
       {rhythm !== 'tachycardia' && !running && <p className="note">頻拍中にだけ行えます。</p>}
-      {running && <p className="note map-message">刺激中（刺激周期 {mine!.pclMs} ms）…</p>}
+      {running && <p className="note map-message">{mine!.pacing ? `刺激中（刺激周期 ${mine!.pclMs} ms）…` : '頻拍を観察中（頻拍中の VA を測っています）…'}</p>}
       {r && (
         <>
           <table className="stim-table">
@@ -58,11 +58,13 @@ export function EntrainmentPanel() {
           {r.response === 'terminated'
             ? <p className="note">刺激で頻拍が止まりました。誘発し直し、頻拍周期との差を変えて試しましょう（このシミュレータでは、症例によって刺激で止まりやすいことがあります）。</p>
             : !r.entrained && <p className="note">心房が刺激の周期に追従していません。差を大きくして試しましょう。</p>}
+          <p className="note">心房の時刻（SA・VA）は His 部位の心房で測ります。止めた後の反応が V-A-A-V なら心房頻拍（AT）を考えます。</p>
           <p className="note">目安：SA − VA &gt; {ENTRAINMENT_CRITERIA.saMinusVaMs} ms・PPI − TCL &gt; {ENTRAINMENT_CRITERIA.ppiMinusTclMs} ms なら AVNRT（{ENTRAINMENT_CRITERIA.source}）</p>
-          <p className="note">この頻拍は AVNRT と AVRT のどちらですか。</p>
+          <p className="note">この頻拍は AVNRT・AVRT・AT のどれですか。</p>
           <div className="row">
             <button onClick={() => answer('avnrt')}>AVNRT</button>
             <button onClick={() => answer('avrt')}>AVRT</button>
+            <button onClick={() => answer('at')}>AT</button>
           </div>
           {feedback && <p className="note">{feedback}</p>}
         </>

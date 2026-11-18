@@ -34,7 +34,21 @@ export const PACING_SITE_LABEL: Record<PacingSite, string> = {
 };
 
 /** 異所性興奮の焦点（AF の PV トリガーなど）：周期 minCl〜maxCl ms でランダムに発火 */
-export interface Focus { vertex: number; minClMs: number; maxClMs: number; next: number; rng: () => number }
+export interface Focus {
+  vertex: number; minClMs: number; maxClMs: number; next: number; rng: () => number;
+  /**
+   * 巣状 AT の巣（AT_SUBSTRATE）：外からの興奮で巣の頂点が興奮したら、そこから周期を数え直す（リセット）。
+   * triggerCouplingMs があれば、はじめは休んでいて、巣の頂点が連結期 triggerCouplingMs 以下で 2 回続けて興奮すると発火を始める
+   * （triggered activity。焼けて興奮しなくなると休みに戻り、浮腫が引いて生き返っても、もう一度誘発するまで発火しない）。
+   * 未設定の巣（AF の PV トリガー）は決まった予定で発火し、リセットされない
+   */
+  resetOnCapture?: boolean;
+  triggerCouplingMs?: number;
+  /** 発火中か（triggerCouplingMs のある巣だけ使う） */
+  active?: boolean;
+  /** 最後に見た巣の頂点の興奮 */
+  lastSeen?: number;
+}
 
 /**
  * 1 症例ぶんのシミュレーション（UI 非依存）。
@@ -214,6 +228,7 @@ export class SimulationEngine {
     }
     // 異所性興奮の焦点（PV トリガーなど）
     for (const f of this.foci) {
+      if (f.resetOnCapture && !this.updateResettableFocus(f)) continue;
       while (f.next <= until) {
         ca.excite(f.vertex, f.next);
         f.next += f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
@@ -340,6 +355,30 @@ export class SimulationEngine {
     this.stimulator.schedule(times.map((time) => ({ time, target, label })));
   }
 
+  /** リセットのある巣の状態を進める。発火しない（休み・焼けた）なら false */
+  private updateResettableFocus(f: Focus): boolean {
+    const t = this.ca.tissue, v = f.vertex;
+    if (t.viability[v] <= 0) { f.active = f.triggerCouplingMs === undefined; f.next = Infinity; f.lastSeen = undefined; return false; }
+    const la = t.lastActivation[v];
+    if (la >= 0 && (f.lastSeen === undefined || la > f.lastSeen + 0.5)) {
+      const prev = f.lastSeen;
+      f.lastSeen = la;
+      if (f.triggerCouplingMs !== undefined && !f.active) {
+        if (prev !== undefined && la - prev <= f.triggerCouplingMs) f.active = true;
+      }
+      if (f.active !== false) f.next = la + f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
+    }
+    if (f.active === false) return false;
+    if (!Number.isFinite(f.next)) f.next = this.ca.time + f.minClMs;
+    return true;
+  }
+
+  /** 巣状 AT の巣を加える（AT_SUBSTRATE。外からの興奮でリセット、triggerCouplingMs があれば誘発で始まる） */
+  addResettableFocus(vertex: number, minClMs: number, maxClMs: number, triggerCouplingMs?: number, seed = 1) {
+    const rng = seededRandom(seed);
+    this.foci.push({ vertex, minClMs, maxClMs, rng, next: Infinity, resetOnCapture: true, triggerCouplingMs, active: triggerCouplingMs === undefined });
+  }
+
   /** 異所性興奮の焦点を加える（seed で乱数を固定） */
   addFocus(vertex: number, minClMs: number, maxClMs: number, seed = 1) {
     const rng = seededRandom(seed);
@@ -402,7 +441,10 @@ export class SimulationEngine {
     this.lastMonitorSeen = -1;
     this.lastVSeen = -Infinity;
     this.rhythm.reset();
-    for (const f of this.foci) f.next = f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
+    for (const f of this.foci) {
+      if (f.resetOnCapture) { f.next = Infinity; f.lastSeen = undefined; f.active = f.triggerCouplingMs === undefined; }
+      else f.next = f.minClMs + f.rng() * (f.maxClMs - f.minClMs);
+    }
     this.ecg.reset();
     this.acc = 0;
     this.lastSinus = -Infinity;

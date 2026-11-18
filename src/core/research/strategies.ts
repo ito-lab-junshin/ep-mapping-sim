@@ -1,4 +1,5 @@
 import { afTypeOf } from '../arrhythmia/af';
+import { atFocusVertex } from '../arrhythmia/at';
 import { svcRingPoints } from '../arrhythmia/svc';
 import { channelCutPoints } from '../arrhythmia/persistent';
 import type { ArrhythmiaId, Vec3 } from '../types';
@@ -97,6 +98,7 @@ function applyPvOrOther(e: SimulationEngine, scenario: ArrhythmiaId, plan: Ablat
     case 'af': for (const pv of PV_NAMES) for (const p of pvRingPoints(e, pv, plan.spacingMm ?? 5)) rfAt(e, p, plan); break;
     case 'afl_cti': case 'afl_cti_cw': for (const p of ctiLinePoints(e, plan.spacingMm ?? 4)) rfAt(e, p, plan); break;
     case 'avnrt': rfAt(e, anchors.slowPathway.point, plan); break;
+    case 'at': rfAt(e, e.query.position(atFocusVertex(e)), plan); break;
     case 'wpw': {
       const ap = e.conduction.ap!.vertices;
       rfAt(e, e.query.position(ap[Math.floor(ap.length / 2)]), plan);

@@ -247,10 +247,10 @@ const paraHisianStep: TutorialStep = {
   done: (c) => c.goals.isAchieved('para-hisian'),
 };
 
-/** （任意）エントレインメントで AVNRT か AVRT かを見分ける（4-B。学習ゴール entrainment の達成で完了） */
+/** （任意）エントレインメントで頻拍の機序を見分ける（4-B。学習ゴール entrainment の達成で完了） */
 const entrainmentStep = (before: string, extraHint: string): TutorialStep => ({
-  id: 'entrainment', title: '（任意）エントレインメントで AVNRT か AVRT かを見分ける', target: 'stimulation', optional: true,
-  instruction: `${before}刺激パネルの「エントレインメント（頻拍中の右室刺激）」で、頻拍周期より 20 ms 短い周期で右室から刺激します。止めた後の PPI − TCL と SA − VA を、画面の目安と比べて答えます。`,
+  id: 'entrainment', title: '（任意）エントレインメントで頻拍の機序を見分ける', target: 'stimulation', optional: true,
+  instruction: `${before}刺激パネルの「エントレインメント（頻拍中の右室刺激）」で、頻拍周期より 20 ms 短い周期で右室から刺激します。止めた後の反応（V-A-V か V-A-A-V か）と PPI − TCL・SA − VA を、画面の目安と比べて AVNRT・AVRT・AT のどれかを答えます。`,
   hint: `刺激で頻拍が止まったら誘発し直し、頻拍周期との差を変えて試します。${extraHint}`,
   done: (c) => c.goals.isAchieved('entrainment'),
 });
@@ -515,7 +515,53 @@ export const WPW_TUTORIAL: Tutorial = {
   ],
 };
 
-export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, CRYO_TUTORIAL, PFA_TUTORIAL, SVC_TUTORIAL, PERSISTENT_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL];
+export const AT_TUTORIAL: Tutorial = {
+  id: 'at', title: '心房頻拍（巣状 AT）', scenario: 'at',
+  steps: [
+    chooseScenario('at', '心房頻拍（巣状 AT、分界稜）', 'RA のどこかに、速く発火する巣がある症例です。'),
+    buildOptional('RA', 'RA の側壁（分界稜のあたり）・中隔・天蓋'),
+    {
+      id: 'induce', title: '頻拍を誘発する', target: 'stimulation',
+      instruction: '刺激の方法を「バースト」、部位を「HRA」にして刺激を始めます。刺激をやめた後も頻拍が続けば誘発です。',
+      hint: '刺激パネルの結果の表と、操作パネルの上の調律の表示（頻拍・周期長）を見ます。',
+      done: (c) => c.goals.isAchieved('induced'),
+    },
+    look('activation', '頻拍の心房の興奮順序を見る', 'goals',
+      '頻拍中の EGM で、HRA・His・CS の心房の興奮の順序と、A と V の関係を見ます。HRA が His・CS より早く、CS は近位から遠位へ興奮します。A から次の V までが短く、V から次の A までが長い頻拍（long RP）です。',
+      'EGM パネルをフリーズして、キャリパーで A と V の間隔を測ってもかまいません。'),
+    {
+      id: 'adenosine-at', title: '（任意）アデノシン負荷で房室ブロックを見る', target: 'ablation', optional: true,
+      instruction: '頻拍中に、通電欄の「アデノシン負荷」を押します。房室結節が数秒止まって心室の拍がなくなっても、心房の頻拍が続くことを確かめます（房室結節を回路に含む AVNRT・AVRT なら止まる）。',
+      hint: 'アデノシン負荷の後に、EGM で A が続き V が抜けることを見て「確認した」を押します。臨床では、アデノシンで止まる巣状 AT もあります。',
+      confirmLabel: '確認した',
+      ready: (c) => c.goals.context(c.engine, c.points).events.some((e) => e.kind === 'adenosine'),
+      done: (c) => c.ui.confirmed.has('adenosine-at'),
+    },
+    entrainmentStep('頻拍が続いているあいだに行います。', '止めた後に、心室の前に心房が何回興奮するか（V-A-V か V-A-A-V か）を見ます。'),
+    {
+      id: 'earliest', title: '心房の最早期部位を見つける', target: 'map',
+      instruction: '頻拍中に、ABL か多極カテーテルで RA の壁を広く 5 点以上取得し、LAT マップで最も早い部位を見つけます。そこから興奮が同心円状に広がります。',
+      hint: '早い部位が見つかったら、そのまわりを細かく取ります。最早期の点が巣です。',
+      done: (c) => c.goals.isAchieved('earliest'),
+    },
+    {
+      id: 'focus-ablation', title: '巣を焼く', target: 'ablation',
+      instruction: '最早期の部位に ABL を置き、頻拍中に RF で通電します。通電中に頻拍が止まるのが良い所見です。',
+      hint: '巣は 1 点なので、最早期の点に正確に当てます。頻拍が止まらなければ、マップを見直して最早期の部位を探し直します。',
+      done: (c) => c.goals.isAchieved('focus-ablation'),
+    },
+    {
+      id: 'noninducible', title: '非誘発を確かめる', target: 'stimulation',
+      instruction: '通電の後に、HRA からもう一度バーストを行い、頻拍が誘発されないことを確かめます。',
+      hint: '刺激の方法は「バースト」、部位は「HRA」です。',
+      done: (c) => c.goals.isAchieved('noninducible'),
+    },
+    reconnection,
+    cure,
+  ],
+};
+
+export const TUTORIALS: Tutorial[] = [PVI_TUTORIAL, CRYO_TUTORIAL, PFA_TUTORIAL, SVC_TUTORIAL, PERSISTENT_TUTORIAL, AFL_CCW_TUTORIAL, AFL_CW_TUTORIAL, AVNRT_TUTORIAL, WPW_TUTORIAL, AT_TUTORIAL];
 
 /**
  * 現在の手順 index から、完了している手順をとばして次の未完了の手順へ進める（順番に、とばさずに判定する）。

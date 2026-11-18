@@ -277,9 +277,16 @@ test('チュートリアル：AVNRT', async ({ page }) => {
   await expectStep(page, '（任意）para-Hisian 刺激で逆行の経路を見る');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, 'AH ジャンプを確かめる');
-  await runStim(page, 'extrastimulus', 'HRA');
+  // 最初の S1 が洞調律の直後に当たると、S1 の列で誘発されて AH ジャンプが記録されないことがある（刺激を始める位相は実時間で変わる）。
+  // そのときは、学習者と同じくアデノシンで止めてやり直す
+  for (let k = 0; k < 3; k++) {
+    await runStim(page, 'extrastimulus', 'HRA');
+    if ((await state(page)).achievedGoals.includes('ah-jump')) break;
+    await page.getByRole('button', { name: 'アデノシン負荷' }).click();
+    await advance(page, 12000);
+  }
   // （任意）エントレインメント：頻拍中に右室から刺激し、AVNRT と答える
-  await expectStep(page, '（任意）エントレインメントで AVNRT か AVRT かを見分ける');
+  await expectStep(page, '（任意）エントレインメントで頻拍の機序を見分ける');
   await expect.poll(async () => (await state(page)).rhythm).toBe('tachycardia');
   const en = page.locator('.entrainment');
   await en.getByRole('button', { name: 'エントレインメントを行う' }).click();
@@ -317,7 +324,7 @@ test('チュートリアル：WPW（左側自由壁）', async ({ page }) => {
   await ph.getByRole('button', { name: '副伝導路' }).click();
   await expectStep(page, '（任意）収集モードで LA の形を作る');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
-  await expectStep(page, '（任意）エントレインメントで AVNRT か AVRT かを見分ける');
+  await expectStep(page, '（任意）エントレインメントで頻拍の機序を見分ける');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, '心房の最早期部位を見つける');
   // RV 刺激中に、ABL で僧帽弁輪の側方を 8 点取る（画面の「点を取得」ボタン）
@@ -338,6 +345,47 @@ test('チュートリアル：WPW（左側自由壁）', async ({ page }) => {
   await expectStep(page, 'デルタ波の消失と非誘発を確かめる');
   await advance(page, 3000);
   await runStim(page, 'extrastimulus', 'CS_DIST');
+  await reconnectionAndCure(page);
+  expectNoErrors(o);
+});
+
+test('チュートリアル：心房頻拍（巣状 AT）', async ({ page }) => {
+  const o = await open(page);
+  await startTutorial(page, '心房頻拍（巣状 AT）');
+  await chooseCase(page, 'at');
+  await beginCase(page);
+  await expectStep(page, '（任意）収集モードで RA の形を作る');
+  await page.getByRole('button', { name: 'とばす（任意）' }).click();
+  await expectStep(page, '頻拍を誘発する');
+  expect(await runStim(page, 'burst', 'HRA')).toContain('誘発されました');
+  await expectStep(page, '頻拍の心房の興奮順序を見る');
+  await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
+  // （任意）アデノシン：房室ブロックでも頻拍が続く
+  await expectStep(page, '（任意）アデノシン負荷で房室ブロックを見る');
+  await page.getByRole('button', { name: 'アデノシン負荷' }).click();
+  await advance(page, 8000);
+  expect((await state(page)).rhythm).toBe('tachycardia');
+  await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
+  // （任意）エントレインメント：V-A-A-V を見て AT と答える
+  await expectStep(page, '（任意）エントレインメントで頻拍の機序を見分ける');
+  const en = page.locator('.entrainment');
+  await en.getByRole('button', { name: 'エントレインメントを行う' }).click();
+  await advance(page, 12000);
+  await expect(en.locator('tr', { hasText: '止めた後の反応' })).toContainText('V-A-A-V');
+  await en.getByRole('button', { name: 'AT', exact: true }).click();
+  // 頻拍中に、巣と RA の壁の 5 点を取る
+  await expectStep(page, '心房の最早期部位を見つける');
+  const pts: number[] = await page.evaluate(() => (window as any).__ep.points.atMapping(5));
+  for (const v of pts) {
+    await page.evaluate((x) => (window as any).__ep.place('abl', { vertex: x }), v);
+    await advance(page, 1200);
+    await page.getByRole('button', { name: /を取得$/ }).click();
+  }
+  await expectStep(page, '巣を焼く');
+  await page.evaluate((v) => { const ep = (window as any).__ep; ep.ablateRf([ep.engine().query.position(v)], 30, 30); }, pts[0]);
+  await expectStep(page, '非誘発を確かめる');
+  await advance(page, 5000);
+  await runStim(page, 'burst', 'HRA');
   await reconnectionAndCure(page);
   expectNoErrors(o);
 });
