@@ -239,6 +239,22 @@ const buildOptional = (chamber: 'LA' | 'RA', what: string): TutorialStep => ({
   done: (c) => c.ui.geometryMode === 'acquire' && c.ui.coveragePct[chamber] >= c.ui.coverageTargetPct,
 });
 
+/** （任意）para-Hisian 刺激で逆行性伝導の経路を見る（4-A。学習ゴール para-hisian の達成で完了） */
+const paraHisianStep: TutorialStep = {
+  id: 'para-hisian', title: '（任意）para-Hisian 刺激で逆行の経路を見る', target: 'stimulation', optional: true,
+  instruction: '刺激パネルの「para-Hisian 刺激を行う」を押し、高出力（His と心室を捕捉、狭い QRS）と低出力（心室だけ、広い QRS）で、HRA・His 部位・CS 遠位の S-A を比べます。逆行性伝導の経路（房室結節か副伝導路か）を答えます。',
+  hint: '房室結節を逆行するなら、低出力では His まで心室を回る分だけ S-A が延びます。副伝導路を逆行するなら、その付着部に近い部位の S-A は変わりません。部位によって変わり方が違うこともあります。',
+  done: (c) => c.goals.isAchieved('para-hisian'),
+};
+
+/** （任意）エントレインメントで AVNRT か AVRT かを見分ける（4-B。学習ゴール entrainment の達成で完了） */
+const entrainmentStep = (before: string, extraHint: string): TutorialStep => ({
+  id: 'entrainment', title: '（任意）エントレインメントで AVNRT か AVRT かを見分ける', target: 'stimulation', optional: true,
+  instruction: `${before}刺激パネルの「エントレインメント（頻拍中の右室刺激）」で、頻拍周期より 20 ms 短い周期で右室から刺激します。止めた後の PPI − TCL と SA − VA を、画面の目安と比べて答えます。`,
+  hint: `刺激で頻拍が止まったら誘発し直し、頻拍周期との差を変えて試します。${extraHint}`,
+  done: (c) => c.goals.isAchieved('entrainment'),
+});
+
 /** 症例を選ぶ手順 */
 const chooseScenario = (id: ArrhythmiaId, label: string, why: string): TutorialStep => ({
   id: 'scenario', title: '症例を選ぶ', target: 'scenario',
@@ -425,6 +441,7 @@ export const AVNRT_TUTORIAL: Tutorial = {
       done: (c) => c.goals.isAchieved('his'),
     },
     buildOptional('RA', 'Koch 三角（His 部位・CS 口・三尖弁輪の中隔側）'),
+    paraHisianStep,
     {
       id: 'ah-jump', title: 'AH ジャンプを確かめる', target: 'stimulation',
       instruction: '刺激の方法を「期外刺激」、部位を「HRA」にして刺激を始めます。S2 を短くしていくと、速伝導路の不応期で AH が 50 ms 以上延びます（遅伝導路への乗り換え）。',
@@ -437,6 +454,7 @@ export const AVNRT_TUTORIAL: Tutorial = {
       hint: '誘発されなかったら、S3 を加えるか、期外刺激をもう一度行います。',
       done: (c) => protocolEvents(c.goals.context(c.engine, c.points)).some((e) => e.status === 'induced'),
     },
+    entrainmentStep('頻拍が続いているあいだに行います。', '刺激で頻拍が止まらないときは、通電の前に「アデノシン負荷」で止めます（遅伝導路の通電は洞調律が標準）。'),
     {
       id: 'junctional', title: '遅伝導路で通電する', target: 'ablation',
       instruction: 'ABL を Koch 三角の後下方（CS 口と三尖弁輪の間、「遅伝導路部位」の領域の中）に置き、RF で通電します。洞調律で通電するのが標準で、通電中の接合部調律が目印です。接合部調律のときに VA ブロック（房室ブロックの兆候）が出たら、すぐ通電を止めます。',
@@ -471,7 +489,9 @@ export const WPW_TUTORIAL: Tutorial = {
       hint: '期外刺激でもバーストでもかまいません。',
       done: (c) => protocolEvents(c.goals.context(c.engine, c.points), ['RV']).length > 0,
     },
+    paraHisianStep,
     buildOptional('LA', '僧帽弁輪（とくに側方）と、そのまわりの LA の壁'),
+    entrainmentStep('まず刺激の部位を「CS 遠位（1-2）」にして期外刺激で AVRT を誘発し、頻拍が続いているあいだに行います。', '目安（Michaud ら）は、非典型 AVNRT と中隔の副伝導路の AVRT を比べた研究の値です。次の手順の最早期部位は、AVRT 中に取ってもかまいません。'),
     {
       id: 'earliest', title: '心房の最早期部位を見つける', target: 'map',
       instruction: 'RV 刺激中（または頻拍中）に、ABL か多極カテーテルで僧帽弁輪の側方を中心に 5 点以上取得し、LAT マップで最早期の部位を見つけます。',

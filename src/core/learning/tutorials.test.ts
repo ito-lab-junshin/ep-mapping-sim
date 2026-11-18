@@ -98,6 +98,8 @@ import { avnrtScenario } from '../arrhythmia/avnrt';
 import { wpwScenario } from '../arrhythmia/wpw';
 import { tryInduce } from '../arrhythmia/common';
 import { flutterDirection } from './flutter';
+import { runEntrainment, ENTRAINMENT_CRITERIA } from '../pacing/entrainment';
+import { paraHisianResponse } from '../pacing/paraHisian';
 import { runProtocol, defaultProtocol } from '../pacing/ProtocolSession';
 import { REGION_ID } from '../geometry/regions';
 import type { ArrhythmiaScenario, LearningEvent, MapPoint } from '../types';
@@ -206,11 +208,21 @@ describe('チュートリアル：AVNRT', () => {
       }
       r.ui.coveragePct = { LA: 0, RA: acq.coveragePct(ra.vertexStart, ra.vertexCount) };
     }
+    expect(r.step()).toBe('para-hisian');
+    r.skip(); // （任意）para-Hisian 刺激はとばす
     expect(r.step()).toBe('ah-jump');
     const n0 = e.lesions.length, st = protocolStartState(e, 'HRA');
     const session = runProtocol(e, { ...defaultProtocol('extrastimulus', 'HRA'), s1Beats: 4, s2StartMs: 360, observeMs: 1200 });
     r.goals.record(protocolEvent(e, session, n0, st));
     expect(session.status).toBe('induced');
+    // （任意）エントレインメント：頻拍中に右室から刺激し、目安を超えたので AVNRT と答えると進む
+    expect(r.step()).toBe('entrainment');
+    e.tick(2000);
+    const en = runEntrainment(e, 20);
+    expect(en.ppiMinusTclMs!).toBeGreaterThan(ENTRAINMENT_CRITERIA.ppiMinusTclMs);
+    r.goals.record({ kind: 'answer', time: e.time, question: 'entrainment', value: 'avrt', correct: false });
+    expect(r.step()).toBe('entrainment');
+    r.goals.record({ kind: 'answer', time: e.time, question: 'entrainment', value: 'avnrt', correct: true });
     expect(r.step()).toBe('junctional');
     e.setPlacement('abl', { kind: 'free', point: e.model.anatomy.anchors.slowPathway.point, heightMm: 1, rotationDeg: 0 });
     e.ablation.speed = 5;
@@ -240,8 +252,15 @@ describe('チュートリアル：WPW', () => {
     r.confirmed.add('delta');
     expect(r.step()).toBe('rv-pacing');
     r.protocol('RV', 'noninducible');
+    // （任意）para-Hisian 刺激：CS 遠位の S-A は出力によらず同じ → 副伝導路と答えると進む
+    expect(r.step()).toBe('para-hisian');
+    const ph = paraHisianResponse(e, wpwScenario);
+    expect(Math.abs(ph.low.saCsDistMs! - ph.high.saCsDistMs!)).toBeLessThanOrEqual(5);
+    r.goals.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: 'ap', correct: true });
     expect(r.step()).toBe('build-la');
     r.skip(); // （任意）LA の収集はとばす
+    expect(r.step()).toBe('entrainment');
+    r.skip(); // （任意）エントレインメントはとばす
     expect(r.step()).toBe('earliest');
     const ap = e.conduction.ap!.vertices;
     const pt = (v: number, lat: number, id: number): MapPoint => ({ id, position: e.query.position(v), vertex: v, latMs: lat, voltageMv: 1, catheterId: 'abl', signal: 'bipolar', referenceTime: 0 });

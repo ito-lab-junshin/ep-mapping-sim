@@ -274,8 +274,18 @@ test('チュートリアル：AVNRT', async ({ page }) => {
   // His カテーテルは最初から His 部位にあるので、His の手順はすぐ終わる。（任意）RA の収集はとばす
   await expectStep(page, '（任意）収集モードで RA の形を作る');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
+  await expectStep(page, '（任意）para-Hisian 刺激で逆行の経路を見る');
+  await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, 'AH ジャンプを確かめる');
   await runStim(page, 'extrastimulus', 'HRA');
+  // （任意）エントレインメント：頻拍中に右室から刺激し、AVNRT と答える
+  await expectStep(page, '（任意）エントレインメントで AVNRT か AVRT かを見分ける');
+  await expect.poll(async () => (await state(page)).rhythm).toBe('tachycardia');
+  const en = page.locator('.entrainment');
+  await en.getByRole('button', { name: 'エントレインメントを行う' }).click();
+  await advance(page, 8000);
+  await expect(en.locator('tr', { hasText: 'PPI − TCL' })).toContainText('目安を超える');
+  await en.getByRole('button', { name: 'AVNRT', exact: true }).click();
   await expectStep(page, '遅伝導路で通電する');
   await page.evaluate(() => { const ep = (window as any).__ep; ep.place('abl', { anchor: 'slowPathway' }); });
   await select(page, '通電の時計').selectOption('5');
@@ -299,7 +309,15 @@ test('チュートリアル：WPW（左側自由壁）', async ({ page }) => {
   await page.locator('.tutorial').getByRole('button', { name: '確認した' }).click();
   await expectStep(page, 'RV 刺激で偏心性の心房興奮を見る');
   await runStim(page, 'extrastimulus', 'RV');
+  // （任意）para-Hisian 刺激：副伝導路と答える
+  await expectStep(page, '（任意）para-Hisian 刺激で逆行の経路を見る');
+  const ph = page.locator('.para-hisian');
+  await ph.getByRole('button', { name: 'para-Hisian 刺激を行う' }).click();
+  await expect(ph.locator('table')).toContainText('CS 遠位');
+  await ph.getByRole('button', { name: '副伝導路' }).click();
   await expectStep(page, '（任意）収集モードで LA の形を作る');
+  await page.getByRole('button', { name: 'とばす（任意）' }).click();
+  await expectStep(page, '（任意）エントレインメントで AVNRT か AVRT かを見分ける');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, '心房の最早期部位を見つける');
   // RV 刺激中に、ABL で僧帽弁輪の側方を 8 点取る（画面の「点を取得」ボタン）
