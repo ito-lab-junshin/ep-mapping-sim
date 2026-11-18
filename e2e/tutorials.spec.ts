@@ -277,14 +277,7 @@ test('チュートリアル：AVNRT', async ({ page }) => {
   await expectStep(page, '（任意）para-Hisian 刺激で逆行の経路を見る');
   await page.getByRole('button', { name: 'とばす（任意）' }).click();
   await expectStep(page, 'AH ジャンプを確かめる');
-  // 最初の S1 が洞調律の直後に当たると、S1 の列で誘発されて AH ジャンプが記録されないことがある（刺激を始める位相は実時間で変わる）。
-  // そのときは、学習者と同じくアデノシンで止めてやり直す
-  for (let k = 0; k < 3; k++) {
-    await runStim(page, 'extrastimulus', 'HRA');
-    if ((await state(page)).achievedGoals.includes('ah-jump')) break;
-    await page.getByRole('button', { name: 'アデノシン負荷' }).click();
-    await advance(page, 12000);
-  }
+  await runStim(page, 'extrastimulus', 'HRA');
   // （任意）エントレインメント：頻拍中に右室から刺激し、AVNRT と答える
   await expectStep(page, '（任意）エントレインメントで頻拍の機序を見分ける');
   await expect.poll(async () => (await state(page)).rhythm).toBe('tachycardia');

@@ -4,6 +4,7 @@ import { SimulationEngine } from '../sim/SimulationEngine';
 import { defaultProtocol, runProtocol, ProtocolSession } from './ProtocolSession';
 import { RhythmMonitor } from '../rhythm/RhythmMonitor';
 import { PROTOCOL } from '../params';
+import { avnrtScenario } from '../arrhythmia/avnrt';
 
 const model = loadParametricSync('normal');
 
@@ -25,6 +26,32 @@ describe('刺激プロトコル（§5.6）', () => {
     expect(d[2] - d[1]).toBe(PROTOCOL.s1Ms);
     expect(d[3] - d[2]).toBe(400);
   });
+
+  it('最初の刺激は、刺激部位の最後の興奮（洞調律）から S1 の周期だけ空ける（どの位相で始めても早期の興奮にならない。QA_LOG 所見 31）', () => {
+    for (let ph = 0; ph < 800; ph += 100) {
+      const eng = new SimulationEngine(model);
+      eng.tick(2000 + ph);
+      const target = eng.siteTarget('HRA');
+      if (target.kind !== 'atrium') throw new Error('HRA は心房');
+      const la0 = eng.ca.tissue.lastActivation[target.vertex];
+      new ProtocolSession(eng, { ...defaultProtocol('extrastimulus', 'HRA'), s1Beats: 2 });
+      eng.tick(1500);
+      const first = eng.stimulator.delivered[0];
+      expect(first, `位相 ${ph} ms`).toBeGreaterThanOrEqual(la0 + PROTOCOL.s1Ms - 1);
+    }
+  });
+
+  it('AVNRT の症例：どの位相で始めても、最初の列（S2 500 ms）では誘発されない', () => {
+    for (let ph = 0; ph < 800; ph += 200) {
+      const eng = new SimulationEngine(model);
+      avnrtScenario.setupSubstrate(eng);
+      eng.tick(2000 + ph);
+      const s = new ProtocolSession(eng, defaultProtocol('extrastimulus', 'HRA'));
+      while (s.results.length < 1) { eng.tick(20); s.update(); }
+      expect(s.results[0].captured, `位相 ${ph} ms`).toBe(true);
+      expect(s.results[0].echo, `位相 ${ph} ms`).toBe(false);
+    }
+  }, 120_000);
 
   it('正常の心房（頻拍の基質なし）：S2 を短くすると AH が延び、房室結節の ERP でブロック、心房の ERP で捕捉されなくなり非誘発', () => {
     const eng = new SimulationEngine(model);

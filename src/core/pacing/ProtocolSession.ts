@@ -84,7 +84,13 @@ export class ProtocolSession {
 
   private scheduleTrain() {
     const c = this.config, e = this.engine;
-    const t0 = e.time + 50;
+    // 最初の刺激は、刺激部位の最後の興奮（洞調律の拍など）から最初の間隔（S1・バーストの周期）だけ空ける。
+    // 洞調律の直後に当たると早期の興奮になり、S1 の列で AVNRT が誘発されて AH ジャンプが記録されなかった（QA_LOG 所見 31）
+    const first = c.kind === 'extrastimulus' ? c.s1Ms : this.coupling;
+    const last = this.targetVertex !== null
+      ? e.ca.tissue.lastActivation[this.targetVertex]
+      : Math.max(-Infinity, ...e.conduction.vBeats.map((b) => b.time));
+    const t0 = Math.max(e.time + 50, last >= 0 ? last + first : -Infinity);
     const times: number[] = [];
     if (c.kind === 'extrastimulus') {
       for (let i = 0; i < c.s1Beats; i++) times.push(t0 + i * c.s1Ms);
