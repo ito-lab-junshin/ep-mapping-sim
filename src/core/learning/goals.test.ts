@@ -77,6 +77,7 @@ describe('学習ゴール：AF（PVI）', () => {
     t.update(e);
     // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
     if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
+    if (t.activeGoals().some((g) => g.id === 'entrainment')) t.record({ kind: 'answer', time: e.time, question: 'entrainment', value: 'avnrt', correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);
@@ -156,6 +157,7 @@ describe('学習ゴール：AVNRT', () => {
     t.update(e);
     // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
     if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
+    if (t.activeGoals().some((g) => g.id === 'entrainment')) t.record({ kind: 'answer', time: e.time, question: 'entrainment', value: 'avnrt', correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);
@@ -185,6 +187,7 @@ describe('学習ゴール：WPW', () => {
     t.update(e);
     // para-Hisian 刺激の設問（4-A）：逆行性伝導の経路を答える（AVNRT・WPW のゴール）
     if (t.activeGoals().some((g) => g.id === 'para-hisian')) t.record({ kind: 'answer', time: e.time, question: 'para-hisian', value: retrogradeRoute(e), correct: true });
+    if (t.activeGoals().some((g) => g.id === 'entrainment')) t.record({ kind: 'answer', time: e.time, question: 'entrainment', value: 'avnrt', correct: true });
     // 再伝導の確認（浮腫・再伝導）：最後の通電の後に 20 分待機
     expect(t.isAchieved('reconnection')).toBe(false);
     waitAndRecord(t, e);

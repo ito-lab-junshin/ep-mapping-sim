@@ -1,4 +1,5 @@
 import { paraHisianGoal } from '../pacing/paraHisianGoal';
+import { entrainmentGoal } from '../pacing/entrainmentGoal';
 import type { ArrhythmiaScenario } from '../types';
 import { slowPathway } from '../conduction/AvNode';
 import { distance, protocolEvents, protocolsAfterLastLesion } from '../learning/conditions';
@@ -47,6 +48,9 @@ export const avnrtScenario: ArrhythmiaScenario = {
   setupSubstrate(engine) {
     const c = engine.conduction;
     c.pathways = c.pathways.slice(0, 1);
+    // 心室刺激の逆行の回復を短くする（周期 286 ms の旋回と同じ速伝導路を、その周期で逆行できる。4-B、先生と決定）
+    const ra = AV_NODE.retrograde.avnrt;
+    c.pathways[0].params = { ...c.pathways[0].params, retroRecoveryMs: ra.recoveryMs, retroDecrementMaxMs: ra.decrementMaxMs, retroDecrementTauMs: ra.decrementTauMs };
     const sp = slowPathway(engine.model.anatomy.anchors.slowPathway.vertex);
     sp.region = slowPathwayRegion(engine);
     c.pathways.push(sp);
@@ -61,7 +65,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
     }];
   },
   energies: ['rf'],
-  maneuvers: ['paraHisian'],
+  maneuvers: ['paraHisian', 'entrainment'],
   goals: [
     {
       id: 'his', label: 'His 束電位を記録し Koch 三角の範囲を把握する',
@@ -89,6 +93,7 @@ export const avnrtScenario: ArrhythmiaScenario = {
         && slowPathwayAblatedFraction(ctx.engine) >= AV_NODE.slowRegion.modifyFraction,
     },
     paraHisianGoal,
+    entrainmentGoal,
     reconnectionGoal(() => avnrtScenario),
   ],
 };

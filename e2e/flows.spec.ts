@@ -207,3 +207,23 @@ test('para-Hisian 刺激：後中隔の副伝導路で、高出力と低出力�
   await expect(page.locator('.goals li.ok', { hasText: 'para-Hisian' })).toHaveCount(1);
   expectNoErrors(o);
 });
+
+test('エントレインメント：誘発した AVNRT に右室から刺激し、PPI − TCL・SA − VA が目安を超え、AVNRT と答えるとゴールに ✓', async ({ page }) => {
+  const o = await open(page, 'case=avnrt');
+  const panel = page.locator('.entrainment');
+  await expect(panel.getByRole('button', { name: 'エントレインメントを行う' })).toBeDisabled();
+  await page.getByRole('button', { name: '刺激を開始' }).click();
+  expect(await runProtocol(page)).toContain('誘発されました');
+  await expect.poll(async () => (await state(page)).rhythm).toBe('tachycardia');
+  await advance(page, 2000);
+  await panel.getByRole('button', { name: 'エントレインメントを行う' }).click();
+  await advance(page, 6000);
+  const table = panel.locator('table');
+  await expect(table.locator('tr', { hasText: 'PPI − TCL' })).toContainText('目安を超える');
+  await expect(table.locator('tr', { hasText: 'SA − VA' })).toContainText('目安を超える');
+  await expect(panel).toContainText('Michaud GF ら');
+  await panel.getByRole('button', { name: 'AVNRT', exact: true }).click();
+  await expect(panel).toContainText('正解です');
+  await expect(page.locator('.goals li.ok', { hasText: 'エントレインメント' })).toHaveCount(1);
+  expectNoErrors(o);
+});

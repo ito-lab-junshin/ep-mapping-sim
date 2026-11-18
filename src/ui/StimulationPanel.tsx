@@ -6,6 +6,7 @@ import { defaultProtocol, type ProtocolConfig, type ProtocolKind } from '../core
 import { PACING_SITE_LABEL, type PacingSite } from '../core/sim/SimulationEngine';
 import { Slider } from './CatheterTray';
 import { ParaHisianPanel } from './ParaHisianPanel';
+import { EntrainmentPanel } from './EntrainmentPanel';
 
 const STATUS_LABEL: Record<string, string> = {
   running: '刺激中', waiting: '速い興奮が続いている（持続を判定中）', induced: '誘発されました（頻拍が持続）',
@@ -93,6 +94,7 @@ export function StimulationPanel() {
         </>
       )}
       <ParaHisianPanel />
+      <EntrainmentPanel />
     </div>
   );
 }

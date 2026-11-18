@@ -16,6 +16,10 @@ export interface PathwayParams {
   /** 逆行伝導（共通路 → 入口頂点）の時間と ERP。未設定なら逆行しない */
   retroMs?: number;
   retroErpMs?: number;
+  /** 心室刺激の逆行伝導の回復時間 ms と減衰（AV_NODE.retrograde。未設定なら既定。AVNRT の症例は回復が短く減衰が小さい） */
+  retroRecoveryMs?: number;
+  retroDecrementMaxMs?: number;
+  retroDecrementTauMs?: number;
 }
 
 export interface PathwayState {
@@ -24,6 +28,8 @@ export interface PathwayState {
   vertex: number;
   /** 最後に興奮した時刻（順行・逆行のどちらでも） */
   last: number;
+  /** 心室刺激の逆行伝導が終わった時刻（逆行の回復時間の起点） */
+  retroEnd?: number;
   /** 入口の領域の頂点（遅伝導路。AV_NODE.slowRegion）。なければ入口頂点だけ */
   region?: number[];
   /** 領域の頂点のうち焼けた割合（エンジンが毎刻み更新する） */

@@ -134,6 +134,17 @@ describe('ConductionSystem（心室刺激での房室結節の逆行伝導：VA 
     expect(before[before.length - 1] - before[0]).toBeGreaterThan(10);
   });
 
+  it('AVNRT の症例の速伝導路（回復が短く減衰が小さい）：刺激周期 300 ms でも 1:1 で逆行する（頻拍中の心室刺激に追従する）', () => {
+    const c = new ConductionSystem(7);
+    const ra = AV_NODE.retrograde.avnrt;
+    c.pathways[0].params = { ...c.pathways[0].params, retroRecoveryMs: ra.recoveryMs, retroDecrementMaxMs: ra.decrementMaxMs, retroDecrementTauMs: ra.decrementTauMs };
+    const times = Array.from({ length: 10 }, (_, i) => 100 + i * 300);
+    for (const t of times) c.paceVentricle(t);
+    const exits = run(c, 100 + 10 * 300 + 500).filter((e) => e.via === 'fast');
+    const r = times.map((t) => exits.find((x) => x.time > t && x.time <= t + 300));
+    expect(r.every((x) => x !== undefined)).toBe(true);
+  });
+
   it('His の不応期中（直前に順行の興奮が His を通った）は逆行しない（衝突）。房室伝導を止めていても逆行しない', () => {
     const c2 = new ConductionSystem(7);
     c2.blocked = true;
@@ -141,7 +152,7 @@ describe('ConductionSystem（心室刺激での房室結節の逆行伝導：VA 
     expect(run(c2, 600).filter((e) => e.via === 'fast')).toHaveLength(0);
     const c3 = new ConductionSystem(7);
     c3.lastH = 100;
-    c3.paceVentricle(110); // His への逆行の到着は 150 ms（His の不応期 250 ms の中）
+    c3.paceVentricle(110); // His への逆行の到着は 150 ms（His の不応期 210 ms の中）
     expect(run(c3, 600).filter((e) => e.via === 'fast')).toHaveLength(0);
   });
 });

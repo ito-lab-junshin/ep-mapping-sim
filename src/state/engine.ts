@@ -1,4 +1,5 @@
 import { PARA_HISIAN_QUESTION, retrogradeRoute } from '../core/pacing/paraHisian';
+import { ENTRAINMENT_QUESTION, EntrainmentSession, tachycardiaMechanism } from '../core/pacing/entrainment';
 import { ProtocolSession, type ProtocolConfig } from '../core/pacing/ProtocolSession';
 import type { ArrhythmiaId, CaseOptions, CureCheck } from '../core/types';
 import type { ApSite } from '../core/params';
@@ -183,6 +184,7 @@ export function stopProtocol() {
 
 /** 毎フレーム呼ぶ（Scene） */
 export function updateProtocol() {
+  updateEntrainment();
   if (!session || session.done) return;
   const before = session.results.length + session.status;
   session.update();
@@ -209,6 +211,31 @@ export function checkCure(engine: SimulationEngine, id: ArrhythmiaId): CureCheck
   });
   useSim.getState().setCureChecks(checks);
   return checks;
+}
+
+// ───────────── 頻拍中の心室刺激（エントレインメント、4-B） ─────────────
+
+let entrainment: EntrainmentSession | null = null;
+
+export function currentEntrainment(): EntrainmentSession | null { return entrainment; }
+
+/** 頻拍中に、表示中のエンジンで右室から「頻拍周期 − offsetMs」で刺激する（画面で刺激と心内電位が見える） */
+export function startEntrainment(engine: SimulationEngine, offsetMs: number) {
+  entrainment = new EntrainmentSession(engine, offsetMs);
+  useSim.getState().bumpProtocol();
+}
+
+function updateEntrainment() {
+  if (!entrainment || entrainment.done) return;
+  entrainment.step();
+  if (entrainment.done) useSim.getState().bumpProtocol();
+}
+
+/** エントレインメントの設問：AVNRT か AVRT かを答える */
+export function answerEntrainment(engine: SimulationEngine, id: ArrhythmiaId, value: 'avnrt' | 'avrt'): boolean {
+  const correct = value === tachycardiaMechanism(id);
+  recordLearningEvent(engine, id, { kind: 'answer', time: engine.time, question: ENTRAINMENT_QUESTION, value, correct });
+  return correct;
 }
 
 // ───────────── 学習ゴール（Phase 6） ─────────────

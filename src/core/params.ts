@@ -10,7 +10,7 @@ export const AH_MS = 80;             // 房室結節部位の心房興奮 → Hi
 export const HV_MS = 45;             // His → 心室興奮開始（正常 35〜55 ms）
 export const QRS_MS = 90;            // QRS 幅
 export const QT_MS = 380;            // QRS 開始 → T 波終末
-export const VENTRICLE_ERP_MS = 250; // 心室 ERP（1 コンパートメント）
+export const VENTRICLE_ERP_MS = 210; // 心室 ERP（1 コンパートメント）。4-B で 250 → 210（周期 260〜300 ms の頻拍を 20〜40 ms 速く刺激して捕捉できるように。仮定値、先生と決定）
 
 /** 電極間隔 mm（電極中心間の近似。教育用近似） */
 export const SPACING_MM = {
@@ -124,12 +124,19 @@ export const AV_NODE = {
   fast: { ahMs: AH_MS, erpMs: 320, decrementMaxMs: 40, decrementTauMs: 60, retroMs: 60, retroErpMs: 200 },
   slow: { ahMs: 200, erpMs: 200, decrementMaxMs: 40, decrementTauMs: 60 },
   /**
-   * 心室刺激での逆行伝導（VA 伝導、Phase 7 の追補。仮定値・教育用近似）：心室 → His（vhMs）→ 共通路 → 速伝導路を逆行して心房へ。
-   * 結節の逆行時間 = baseMs + decrementMaxMs × exp(−(c − erpMs) / decrementTauMs)。c は His への到着から前回の逆行伝導の
-   * 終わりまでの回復時間（c < erpMs でブロック）。伝導が延びるほど次の回復時間が短くなり、逆行性 Wenckebach が出る。
-   * 刺激周期 600 ms で VA 約 130 ms、400 ms で VA が延びてから途絶える（逆行性 Wenckebach）、380 ms で 3:2
+   * 心室刺激での逆行伝導（VA 伝導、Phase 7 の追補。4-B で作り直し。仮定値・教育用近似）：
+   * 心室 → His（vhMs）→ 下部共通路（lowerCommonMs）→ 逆行できる経路（速伝導路、retroMs）を逆行して心房へ。
+   * 経路の逆行時間 = retroMs + decrementMaxMs × exp(−(c − 回復) / decrementTauMs)。c は His への到着から、その経路の前回の
+   * 逆行伝導の終わりまでの回復時間（c < 回復でブロック）。回復は経路ごと（PathwayParams.retroRecoveryMs、既定 erpMs）。
+   * 経路の状態（最後の興奮）は AVNRT の旋回と共有するので、心室刺激が旋回に入り込める（エントレインメント）。
+   * 既定（正常・WPW・AF・AFL）：刺激周期 600 ms で VA 約 130 ms（40 + 28 + 60）、400 ms で延びてから途絶える（逆行性 Wenckebach）。
+   * AVNRT の症例は回復が短く減衰が小さい（avnrt）：周期 286 ms で旋回できる患者は、その周期で逆行できるはず（先生と決定）
    */
-  retrograde: { vhMs: 40, baseMs: 88, decrementMaxMs: 70, decrementTauMs: 70, erpMs: 245 },
+  retrograde: {
+    vhMs: 40, lowerCommonMs: 28, decrementMaxMs: 70, decrementTauMs: 70, erpMs: 245,
+    /** AVNRT の症例の速伝導路の逆行：回復 110 ms、減衰は小さく（最大 40 ms・時定数 60 ms）。頻拍周期 − 20〜40 ms の心室刺激に 1:1 で追従する */
+    avnrt: { recoveryMs: 110, decrementMaxMs: 40, decrementTauMs: 60 },
+  },
   /**
    * 遅伝導路の領域（QA の追補、先生と決定）：遅伝導路は 1 点ではなく、Koch 三角の後下方（CS 口と三尖弁輪の間）の数 mm の領域。
    * 入口は遅伝導路の目印から半径 radiusMm の頂点の集まり（表示の「遅伝導路部位」も同じ半径）。
@@ -156,7 +163,8 @@ export const ACCESSORY_PATHWAY = {
   /** 心房付着部 ↔ 心室付着部の伝導時間 */
   conductionMs: 15,
   antegradeErpMs: 280,
-  retrogradeErpMs: 250,
+  /** 逆行の ERP。4-B で 250 → 220（頻拍中の心室刺激で副伝導路が 1:1 で逆行できるように。仮定値、先生と決定） */
+  retrogradeErpMs: 220,
   /**
    * 部位ごとの値（仮定値・教育用近似）。
    * ventricularDelayMs：心室の興奮開始（QRS 開始）から副伝導路の心室付着部までの心室内伝導時間。VA = これ + conductionMs。

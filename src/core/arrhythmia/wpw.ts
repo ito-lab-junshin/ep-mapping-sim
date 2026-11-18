@@ -1,4 +1,5 @@
 import { paraHisianGoal } from '../pacing/paraHisianGoal';
+import { entrainmentGoal } from '../pacing/entrainmentGoal';
 import type { ArrhythmiaScenario, CaseOptions, InductionMethod, LearningGoal } from '../types';
 import type { SimulationEngine } from '../sim/SimulationEngine';
 import { AP_SITE_IDS, WPW_AP_VERTICES, WPW_AV_NODE_ERP_MS, type ApSite } from '../params';
@@ -148,6 +149,6 @@ export const wpwScenario: ArrhythmiaScenario = {
     ];
   },
   energies: ['rf'],
-  maneuvers: ['paraHisian'],
-  goals: [...goals, paraHisianGoal, reconnectionGoal(() => wpwScenario)],
+  maneuvers: ['paraHisian', 'entrainment'],
+  goals: [...goals, paraHisianGoal, entrainmentGoal, reconnectionGoal(() => wpwScenario)],
 };

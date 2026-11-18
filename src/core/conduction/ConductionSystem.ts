@@ -60,8 +60,6 @@ export class ConductionSystem {
 
   lastH = -Infinity;
   lastV = -Infinity;
-  /** 心室からの逆行の結節伝導が終わった時刻（逆行の回復時間の起点） */
-  private retroNodeEnd = -Infinity;
   /** 入口頂点の心房興奮時刻（伝導しなかったものも含む） */
   aTimes: number[] = [];
   hTimes: number[] = [];
@@ -188,21 +186,26 @@ export class ConductionSystem {
   }
 
   /**
-   * His に逆行して届いた心室の興奮：His の不応期（順行の興奮と衝突）→ 結節の逆行（減衰伝導・逆行性 Wenckebach）→ 心房へ。
-   * 出口は逆行できる経路（速伝導路）の入口頂点
+   * His に逆行して届いた心室の興奮：His の不応期（順行の興奮と衝突）→ 下部共通路 → 逆行できる経路（速伝導路）を逆行して心房へ。
+   * 回復・減衰伝導（逆行性 Wenckebach）は経路ごと（AV_NODE.retrograde、PathwayParams.retroRecoveryMs）。
+   * 経路の最後の興奮（last）は順行・AVNRT のエコーと共有する（4-B：心室刺激が AVNRT の旋回に入り込める）
    */
   private onHisRetro(t: number) {
     if (this.blocked || this.nodeBlocked(t) || t - this.lastH < this.hisErpMs) return;
     this.lastH = t;
     const r = AV_NODE.retrograde;
-    const c = t - this.retroNodeEnd;
-    if (c < r.erpMs) return;
-    const p = this.pathways.find((x) => x.params.retroMs !== undefined);
-    if (!p) return;
-    const conduct = r.baseMs + r.decrementMaxMs * Math.exp(-(c - r.erpMs) / r.decrementTauMs);
-    this.retroNodeEnd = t + conduct;
-    p.last = t;
-    this.addExit({ time: t + conduct, vertex: p.vertex, via: p.params.name });
+    const tc = t + r.lowerCommonMs;
+    for (const p of this.pathways) {
+      if (p.params.retroMs === undefined || pathwayStatus(p) === 'blocked') continue;
+      const recovery = p.params.retroRecoveryMs ?? r.erpMs;
+      const c = t - (p.retroEnd ?? -Infinity);
+      if (c < recovery) continue;
+      if (tc - p.last < (p.params.retroErpMs ?? p.params.erpMs)) continue;
+      const conduct = p.params.retroMs + (p.params.retroDecrementMaxMs ?? r.decrementMaxMs) * Math.exp(-(c - recovery) / (p.params.retroDecrementTauMs ?? r.decrementTauMs));
+      p.last = tc;
+      p.retroEnd = tc + conduct;
+      this.addExit({ time: tc + conduct, vertex: p.vertex, via: p.params.name });
+    }
   }
 
   private onApRetro(t: number) {
@@ -231,11 +234,10 @@ export class ConductionSystem {
   }
 
   reset() {
-    for (const p of this.pathways) p.last = -Infinity;
+    for (const p of this.pathways) { p.last = -Infinity; p.retroEnd = -Infinity; }
     if (this.ap) this.ap.last = -Infinity;
     this.lastH = this.lastV = -Infinity;
     this.nodeBlockUntil = -Infinity;
-    this.retroNodeEnd = -Infinity;
     this.aTimes = []; this.hTimes = []; this.vBeats = [];
     this.queue = []; this.exits = []; this.exitLog = [];
   }

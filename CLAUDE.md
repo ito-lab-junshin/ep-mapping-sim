@@ -60,7 +60,7 @@ npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリ�
 - 浮腫・再伝導：`LesionField` に浮腫（可逆的な傷害）と処置の時計、待機（10・20・30 分）とアデノシン負荷、根治判定・学習ゴール・全チュートリアルに再伝導の確認、一括実行に待機後の結果。
 - 品質固め：Playwright の E2E（`e2e/`、23 本、`npm run e2e`、CI は `e2e.yml`）とチュートリアルの通し操作。見つかった不具合（症例の作り直し後に古いエンジンが進む、ABL で点が取れない、AFL の両方向性ブロックと WPW のデルタ波消失の判定の抜け、表示の崩れ）を直し、`docs/QA_LOG.md` に記録。QA の回答を反映（遅伝導路の領域：60 % で離断・20 % で修飾、副伝導路は付着部の 1 点で途絶、頻拍中の通電は禁止せず症例ごとに案内）。アデノシン負荷で房室結節を 6 秒止め、AVNRT・AVRT を停止できる。QA の使い勝手（所見 6〜8・11・12）：設問の正解を達成した行に残す、チュートリアルの「前の手順 ✓」、手順 1 は「この症例で始める」で完了、3D の視点のプリセット（AP・PA・LAO・RAO・LL・RL・上、`src/state/viewPresets.ts`）、「隙間のヒント」（`pvGaps`、既定オフ、教育用の補助。PVI のチュートリアルと AF の通電の欄から）。
 - Phase 6 の拡張：PVI（クライオバルーン・PFA）・AF（SVC トリガー）・持続性 AF のチュートリアル（形の収集なし、既定の形で始める。SVC・持続性は PVI を 1 手順でエネルギー自由、`Tutorial.caseOptions` で AF の型）、AFL・AVNRT（RA）・WPW（LA）のチュートリアルに任意の「収集モードで形を作る」（`TutorialContext.ui.coveragePct` は LA・RA）、隙間のヒントを症例の `gapHints` に一般化（AF の PV・SVC（pvSvc）・AFL の CTI の線、`src/core/arrhythmia/gaps.ts`・`GapHintPanel`）。
-- 電気生理の範囲の拡張 4-A：para-Hisian 刺激（`src/core/pacing/paraHisian.ts`・`ParaHisianPanel`、刺激部位 `PARA_HIS_HIGH`／`PARA_HIS_LOW`、AVNRT・WPW の学習ゴール `para-hisian`）。4-B（頻拍中の心室刺激・エントレインメント）は試算を先生に報告してから作る。
+- 電気生理の範囲の拡張 4-A：para-Hisian 刺激（`src/core/pacing/paraHisian.ts`・`ParaHisianPanel`、刺激部位 `PARA_HIS_HIGH`／`PARA_HIS_LOW`、AVNRT・WPW の学習ゴール `para-hisian`）。4-B：エントレインメント（`src/core/pacing/entrainment.ts`・`EntrainmentPanel`、頻拍中に RV から頻拍周期 − 20 ms で 20 拍、PPI − TCL・SA − VA と Michaud らの目安を並べる、学習ゴール `entrainment`）と、そのための逆行伝導の作り直し（心室刺激の逆行と回路の逆行を同じ経路の状態で扱う）。
 - 次は **Phase 7-5（専門家レビューの反映。指摘を受けてから `docs/REVIEW_LOG.md` に記録して対応）**。
 
 ## 決定済み事項（再確認不要）
@@ -73,7 +73,8 @@ npm run export-gltf -- normal 出力.glb 出力.labels.json   # パラメトリ�
 - 体表 ECG：誘導数を 1／3／12 から選択可能（12 誘導は Phase 7 で実装済み）。QRS の形は拍の種類ごとの典型的な形。副伝導路の部位（4 か所）はデルタ波の典型的な極性（I・aVL・下壁・V1・移行帯）だけを扱い、精密な局在アルゴリズムは対象外。胸部誘導は近接補正（教育用の経験的補正、係数は `PROXIMITY_GAIN` の 1 か所）で正常洞調律の V2〜V4 の R 波 1〜2 mV・移行帯 V3〜V4 に合わせる。極性は変えない。心房成分（P 波・粗動波）は 40 Hz・2 段の低域通過フィルタ（`ATRIAL_ECG_FILTER_HZ`、メッシュの離散化によるギザギザを除く。先生と決定）。
 - 刺激プロトコル：教科書的既定値（S1 600 ms × 8、S2 は 10 ms 刻み。設計書 §5.6）。
 - para-Hisian 刺激：高出力は His＋心室を捕捉（狭い QRS）、低出力は心室だけ（His に 50 ms 後に逆行、広い QRS）。副伝導路の心室付着部まで刺激から 前中隔 10・後中隔 25・右側自由壁 50・左側自由壁 70 ms（仮定値、中隔は短く側壁は長い。先生と決定）。洞調律を止めて 1 発ずつで S-A を測り、判定は学習者に任せる。
-- VA 伝導：心室刺激で His（40 ms）→ 速伝導路を逆行して求心性に心房へ。刺激周期 600 ms で VA 約 130 ms、400 ms で逆行性 Wenckebach。全症例。逆行の遅伝導路・para-Hisian・心室エントレインメントは範囲外。
+- VA 伝導：心室刺激で His（40 ms）→ 下部共通路（28 ms）→ 速伝導路を逆行して求心性に心房へ。刺激周期 600 ms で VA 約 130 ms、400 ms で逆行性 Wenckebach。全症例。**例外：AVNRT の症例は速伝導路の逆行が良く（回復 110 ms・減衰 40 ms／60 ms）、300 ms でも 1:1**（先生と決定）。心室・His の ERP 210 ms、副伝導路の逆行の ERP 220 ms（4-B で変更、先生と決定）。逆行の遅伝導路は範囲外。
+- エントレインメント：頻拍中に RV から頻拍周期 − 差（既定 20 ms）で 20 拍。目安は「SA−VA > 85 ms・PPI−TCL > 115 ms なら AVNRT（Michaud GF ら、J Am Coll Cardiol 2001;38:1163-7。抄録で確認、原文は未確認）」を画面に出し、判定は学習者に任せる。中隔の副伝導路の AVRT は刺激で止まることがある（既知の限界として受け入れる、先生と決定）。心房頻拍の症例はないので V-A-A-V は教えない。
 - AFL の V1 の粗動波（反時計回りで陽性にならない）は保留。
 - AF の型：pv（既定・PVI チュートリアル）と pvSvc。SVC は afRemodeled だけ RA から先 20 mm（normal・AFL は 12 mm）、スリーブ・トリガーは PV と同じ値（0.5 mm/ms・ERP 180 ms・周期 150〜250 ms）。SVC 隔離の判定は接合部から 6 mm 以上上のスリーブ。洞結節・右横隔神経（模式の線）の注意は 5 mm。SVC は RF だけ。
 - 持続性 AF：低電位領域は天蓋（後壁は PV の間が最大 6.8 mm で入らない。先生と決定）。瘢痕 半径 6 mm → channel 外半径 13 mm（0.25 mm/ms・ERP 160 ms・電位係数 0.08〜0.15）→ 線維化の輪 2.5 mm（出口 6 mm、右向き）。持続性の型だけ心房筋の ERP 150〜240 ms・なめらかさ 2 回。旋回は規則的（約 195 ms）、心房全体は不規則で（持続性の型には PV のトリガーを置かない。トリガーが旋回を約 10 秒で消していたため、先生と決定）、これを「持続性 AF（局所の駆動源と細動様伝導）」として扱う（先生と決定）。根治は channel を横切る通電か領域の隔離。後壁隔離（box）は扱わない。追加の通電は RF だけ。

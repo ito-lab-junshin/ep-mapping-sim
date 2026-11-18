@@ -313,7 +313,9 @@ test('チュートリアル：WPW（左側自由壁）', async ({ page }) => {
     await page.getByRole('button', { name: /を取得$/ }).click();
   }
   await expectStep(page, '副伝導路を焼く');
-  await page.locator('.stim').getByRole('button', { name: '停止', exact: true }).click();
+  // バーストがまだ続いていれば止める（心室・His の ERP 210 ms で、バーストが早く終わることがある）
+  const stop = page.locator('.stim').getByRole('button', { name: '停止', exact: true });
+  if (await stop.isEnabled()) await stop.click();
   await page.evaluate(() => { const ep = (window as any).__ep; ep.ablateRf([ep.points.apMid()], 30, 30); });
   await expectStep(page, 'デルタ波の消失と非誘発を確かめる');
   await advance(page, 3000);
