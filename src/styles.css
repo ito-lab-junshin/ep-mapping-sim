@@ -77,6 +77,8 @@ html, body, #root { margin: 0; height: 100%; }
 .stim-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
 .stim-table th, .stim-table td { text-align: left; padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .stim-table tr.induced td { font-weight: 600; }
+.para-hisian .note, .entrainment .note { margin: 4px 0 0; line-height: 1.5; }
+.para-hisian, .entrainment { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .checks { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.6; }
 .checks .ok { color: #5fd38d; }
 .checks .ng { opacity: 0.85; }
